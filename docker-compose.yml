@@ -4,9 +4,13 @@ services:
     # Or build it yourself from this repository:
     # build: .
     restart: unless-stopped
+    # Port 2757 ("BRKR" on a phone keypad) is the default; change PORT below to move it.
     ports:
-      - "8080:8080"
+      - "2757:2757"
+    # Or share the host's network instead of mapping ports (then only PORT matters):
+    # network_mode: host
     environment:
+      PORT: "2757"
       # The address people use to reach the app. Needed for invite links, QR codes and SSO.
       PUBLIC_URL: "https://breakers.example.com"
       # Set when running behind a reverse proxy (Caddy, Nginx, Traefik…).

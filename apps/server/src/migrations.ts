@@ -116,4 +116,49 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX audit_at ON audit_log (at);
   CREATE INDEX audit_location_path ON audit_log (location_path);
   `,
+  `
+  CREATE TABLE panels (
+    id                  INTEGER PRIMARY KEY,
+    location_id         INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    name                TEXT NOT NULL,
+    layout              TEXT NOT NULL CHECK (layout IN ('residential', 'commercial', 'single')),
+    spaces              INTEGER NOT NULL,
+    main_amps           INTEGER,
+    main_type           TEXT NOT NULL DEFAULT 'breaker' CHECK (main_type IN ('breaker', 'lugs')),
+    voltage             TEXT NOT NULL DEFAULT '',
+    manufacturer        TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT '',
+    fed_from_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    version             INTEGER NOT NULL DEFAULT 1,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+  );
+  CREATE INDEX panels_location ON panels (location_id);
+  CREATE INDEX panels_fed_from ON panels (fed_from_breaker_id);
+
+  CREATE TABLE breakers (
+    id         INTEGER PRIMARY KEY,
+    panel_id   INTEGER NOT NULL REFERENCES panels (id) ON DELETE CASCADE,
+    position   INTEGER NOT NULL,
+    slot       TEXT NOT NULL DEFAULT 'full' CHECK (slot IN ('full', 'A', 'B')),
+    poles      INTEGER NOT NULL CHECK (poles BETWEEN 1 AND 3),
+    amps       INTEGER NOT NULL,
+    protection TEXT NOT NULL DEFAULT 'standard' CHECK (protection IN ('standard', 'gfci', 'afci', 'dual')),
+    label      TEXT NOT NULL DEFAULT '',
+    notes      TEXT NOT NULL DEFAULT '',
+    is_spare   INTEGER NOT NULL DEFAULT 0,
+    critical   INTEGER NOT NULL DEFAULT 0,
+    backup     TEXT NOT NULL DEFAULT 'none' CHECK (backup IN ('none', 'ups', 'generator'))
+  );
+  CREATE INDEX breakers_panel ON breakers (panel_id);
+
+  CREATE TABLE breaker_serves (
+    breaker_id  INTEGER NOT NULL REFERENCES breakers (id) ON DELETE CASCADE,
+    location_id INTEGER NOT NULL REFERENCES locations (id) ON DELETE CASCADE,
+    note        TEXT NOT NULL DEFAULT '',
+    PRIMARY KEY (breaker_id, location_id)
+  );
+  CREATE INDEX breaker_serves_location ON breaker_serves (location_id);
+  `,
 ];

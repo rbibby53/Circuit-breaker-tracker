@@ -38,9 +38,9 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Start the image and check it is healthy
         run: |
-          docker run -d --name cbt -p 8080:8080 circuit-breaker-tracker:ci
+          docker run -d --name cbt -p 2757:2757 circuit-breaker-tracker:ci
           for i in $(seq 1 30); do
-            if curl -sf http://localhost:8080/healthz; then exit 0; fi
+            if curl -sf http://localhost:2757/healthz; then exit 0; fi
             sleep 1
           done
           docker logs cbt

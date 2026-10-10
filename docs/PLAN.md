@@ -263,7 +263,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
 ## Docker
 
 - A multi-stage `Dockerfile` (build on `node:22`, run on `node:22-slim`). It runs as a
-  non-root user, listens on port `8080` and has a `HEALTHCHECK` on `/healthz`.
+  non-root user, listens on port `2757` and has a `HEALTHCHECK` on `/healthz`.
 - A volume at `/data` holds `breakers.db` and the generated session secret.
 - An example `docker-compose.yml`, plus notes for Caddy, Nginx and Traefik.
 - **Environment:**

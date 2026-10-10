@@ -1,0 +1,114 @@
+import { MAX_SPACES, MIN_SPACES, type FeedCandidate, type PanelDetail } from '@cbt/core';
+import { useQuery } from '@tanstack/react-query';
+import { api } from '../api';
+import type { EditPanel } from './state';
+
+export function PanelSettings({
+  doc,
+  server,
+  onChange,
+  onDelete,
+}: {
+  doc: EditPanel;
+  server: PanelDetail;
+  onChange: (patch: Partial<Omit<EditPanel, 'breakers'>>, coalesce?: string) => void;
+  onDelete: () => void;
+}) {
+  const candidates = useQuery({
+    queryKey: ['feed-candidates', server.id],
+    queryFn: () => api.get<FeedCandidate[]>(`/api/panels/${server.id}/feed-candidates`),
+  });
+  const known = new Set((candidates.data ?? []).map((c) => c.breakerId));
+  const byPanel = new Map<number, FeedCandidate[]>();
+  for (const c of candidates.data ?? []) byPanel.set(c.panelId, [...(byPanel.get(c.panelId) ?? []), c]);
+
+  return (
+    <section className="panel stack" aria-label="Panel settings">
+      <h2 className="h-caps">Panel settings</h2>
+      <div className="settings-grid">
+        <label className="field">
+          <span className="field-label">Name</span>
+          <input value={doc.name} onChange={(e) => onChange({ name: e.target.value }, 'name')} />
+        </label>
+        <label className="field">
+          <span className="field-label">Spaces</span>
+          <select value={doc.spaces} onChange={(e) => onChange({ spaces: Number(e.target.value) })}>
+            {Array.from({ length: (MAX_SPACES - MIN_SPACES) / 2 + 1 }, (_, i) => MIN_SPACES + i * 2).map((n) => (
+              <option key={n} value={n}>
+                {n}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label">Main</span>
+          <select value={doc.mainType} onChange={(e) => onChange({ mainType: e.target.value as EditPanel['mainType'] })}>
+            <option value="breaker">Main breaker</option>
+            <option value="lugs">Main lugs only (fed from elsewhere)</option>
+          </select>
+        </label>
+        {doc.mainType === 'breaker' && (
+          <label className="field">
+            <span className="field-label">Main breaker amps</span>
+            <input
+              type="number"
+              min={1}
+              value={doc.mainAmps ?? ''}
+              onChange={(e) => onChange({ mainAmps: e.target.value ? Number(e.target.value) : null }, 'mainAmps')}
+            />
+          </label>
+        )}
+        <label className="field">
+          <span className="field-label">Voltage</span>
+          <input value={doc.voltage} placeholder="120/240 V split-phase" onChange={(e) => onChange({ voltage: e.target.value }, 'voltage')} />
+        </label>
+        <label className="field">
+          <span className="field-label">Manufacturer</span>
+          <input value={doc.manufacturer} onChange={(e) => onChange({ manufacturer: e.target.value }, 'manufacturer')} />
+        </label>
+        <label className="field">
+          <span className="field-label">Model</span>
+          <input value={doc.model} onChange={(e) => onChange({ model: e.target.value }, 'model')} />
+        </label>
+        <label className="field span-2">
+          <span className="field-label">Fed from</span>
+          <select
+            value={doc.fedFromBreakerId ?? ''}
+            onChange={(e) => onChange({ fedFromBreakerId: e.target.value ? Number(e.target.value) : null })}
+          >
+            <option value="">The utility service (this is a main panel)</option>
+            {doc.fedFromBreakerId !== null && !known.has(doc.fedFromBreakerId) && (
+              <option value={doc.fedFromBreakerId}>
+                {server.feedChain[0] ? `${server.feedChain[0].panelName} · ${server.feedChain[0].circuit} ${server.feedChain[0].label}` : 'Current feeder'}
+              </option>
+            )}
+            {[...byPanel.entries()].map(([panelId, list]) => (
+              <optgroup key={panelId} label={`${list[0]!.panelName} (${list[0]!.locationPath})`}>
+                {list.map((c) => (
+                  <option key={c.breakerId} value={c.breakerId}>
+                    {c.circuit} {c.label || 'Unlabelled'} ({c.amps}A)
+                  </option>
+                ))}
+              </optgroup>
+            ))}
+          </select>
+        </label>
+        <label className="field span-2">
+          <span className="field-label">Notes</span>
+          <textarea rows={2} value={doc.notes} onChange={(e) => onChange({ notes: e.target.value }, 'notes')} />
+        </label>
+      </div>
+      <div>
+        <button
+          type="button"
+          className="btn btn-danger"
+          onClick={() => {
+            if (confirm(`Delete ${server.name} and all its breakers? This cannot be undone.`)) onDelete();
+          }}
+        >
+          Delete panel
+        </button>
+      </div>
+    </section>
+  );
+}

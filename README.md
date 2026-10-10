@@ -4,9 +4,9 @@ A self-hosted web app for recreating your electrical panels, labelling what ever
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
 
-> **Status:** milestone 1 of 5 is done: accounts, single sign-on, the location tree, scoped
-> access, invites, view-as and the activity log. The panel editor and PDF export come next.
-> See [docs/PLAN.md](docs/PLAN.md) for the whole plan.
+> **Status:** milestones 1 and 2 of 5 are done: accounts, single sign-on, scoped access and the
+> panel editor for residential load centers. Commercial 3-phase panels and PDF export come
+> next. See [docs/PLAN.md](docs/PLAN.md) for the whole plan.
 
 ## What works today
 
@@ -22,6 +22,21 @@ as a single Docker container with its data in one SQLite file.
   is needed.
 - **View as user:** admins can see the app exactly as someone else sees it, read-only.
 - **Activity log:** every change is recorded. Managers see the changes inside their scope.
+- **Panel editor** for residential load centers (120/240 V split-phase):
+  - Odd spaces on the left, even on the right. Click an empty space to add a breaker, drag
+    to move it, and pick 1-pole, 2-pole or tandem (21A / 21B).
+  - Set amps, protection (standard, GFCI, AFCI, dual function), a **critical** flag,
+    **backup power** (UPS or generator) and spare.
+  - Tag what each breaker **serves**: rooms on any floor, a whole floor or building, or
+    the whole site.
+  - Changes save automatically, with undo and redo (Ctrl+Z / Ctrl+Shift+Z). If two people
+    edit at once, the second save is refused instead of silently overwriting.
+  - **History** shows every change in plain words.
+- **Sub-panels:** set which breaker feeds a panel. Anyone who can see a panel also sees
+  what feeds it, all the way up to the service, even when the upstream panels are outside
+  their access.
+- **Breakers serving a room:** each room and floor page lists every breaker that serves it,
+  from any panel, including whole-floor and whole-site tags.
 
 ## Run it
 
@@ -32,7 +47,7 @@ services:
     image: ghcr.io/rbibby53/circuit-breaker-tracker:latest
     restart: unless-stopped
     ports:
-      - "8080:8080"
+      - "2757:2757"
     environment:
       PUBLIC_URL: "https://breakers.example.com"
       TRUST_PROXY: "true"
@@ -46,6 +61,16 @@ volumes:
 docker compose up -d
 ```
 
+The app listens on port **2757** by default (it spells "BRKR" on a phone keypad, and little
+else uses it). To run with the host's network instead of port mapping, and pick any free port:
+
+```sh
+docker run -d --name breakers --network host -e PORT=2757 -v breakers-data:/data \
+  ghcr.io/rbibby53/circuit-breaker-tracker:latest
+```
+
+With `--network host`, `-p` mappings are ignored and `PORT` decides where it listens.
+
 Open the app and create the first admin account on the setup screen. To build the image
 yourself, use `docker build -t circuit-breaker-tracker .` or set `build: .` in the compose
 file.
@@ -57,7 +82,7 @@ file.
 | `PUBLIC_URL` | (none) | The address people use, e.g. `https://breakers.example.com`. Used for invite and reset links. Required for SSO. |
 | `TRUST_PROXY` | `false` | Set to `true` behind a reverse proxy so client IPs and HTTPS are detected. |
 | `COOKIE_SECURE` | `true` if `PUBLIC_URL` is https | Send the session cookie over HTTPS only. |
-| `PORT` | `8080` | Port to listen on. |
+| `PORT` | `2757` | Port to listen on. |
 | `DATA_DIR` | `/data` | Where `breakers.db` lives. Mount a volume here. |
 | `SESSION_DAYS` | `30` | How long a sign-in lasts. |
 | `ADMIN_USERNAME`, `ADMIN_PASSWORD` | (none) | Create the first admin at startup instead of using the setup screen. Ignored once any user exists. |
@@ -67,13 +92,13 @@ file.
 
 ### Behind a reverse proxy
 
-Point the proxy at port 8080 and set `TRUST_PROXY=true`.
+Point the proxy at port 2757 and set `TRUST_PROXY=true`.
 
 Caddy:
 
 ```
 breakers.example.com {
-  reverse_proxy breakers:8080
+  reverse_proxy breakers:2757
 }
 ```
 
@@ -81,7 +106,7 @@ Nginx:
 
 ```nginx
 location / {
-  proxy_pass http://breakers:8080;
+  proxy_pass http://breakers:2757;
   proxy_set_header Host $host;
   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
   proxy_set_header X-Forwarded-Proto $scheme;
@@ -126,7 +151,7 @@ Requirements: Node 22 and pnpm 10 (`corepack enable`).
 
 ```sh
 pnpm install
-pnpm dev        # API on :8080 (data in apps/server/data), web on :5173 with a proxy to the API
+pnpm dev        # API on :2757 (data in apps/server/data), web on :5173 with a proxy to the API
 pnpm test       # unit tests (core access rules) and API tests (server)
 pnpm typecheck
 pnpm build

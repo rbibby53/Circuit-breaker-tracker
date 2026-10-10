@@ -10,6 +10,7 @@ import { HttpError } from './errors';
 import { accessRoutes } from './routes/access';
 import { authRoutes } from './routes/auth';
 import { locationRoutes } from './routes/locations';
+import { panelRoutes } from './routes/panels';
 import { loadAuth } from './sessions';
 
 export const CSRF_HEADER = 'x-cbt-csrf';
@@ -61,6 +62,7 @@ export async function buildApp(config: Config, db: DB, opts: { logger?: boolean 
   authRoutes(app, db, config);
   locationRoutes(app, db);
   accessRoutes(app, db, config);
+  panelRoutes(app, db);
 
   const webDist = config.webDist;
   if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {
