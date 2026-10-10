@@ -1,5 +1,8 @@
 import path from 'node:path';
 
+// Replaced at build time by esbuild (see build.mjs); undefined when running from source.
+declare const __APP_VERSION__: string | undefined;
+
 export interface Config {
   port: number;
   host: string;
@@ -13,6 +16,7 @@ export interface Config {
   bootstrapAdmin: { username: string; password: string } | null;
   oidc: { issuer: string; clientId: string; clientSecret: string; label: string } | null;
   logLevel: string;
+  version: string;
 }
 
 function bool(v: string | undefined, fallback: boolean): boolean {
@@ -49,5 +53,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
           }
         : null,
     logLevel: env.LOG_LEVEL ?? 'info',
+    version: env.APP_VERSION || (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'),
   };
 }

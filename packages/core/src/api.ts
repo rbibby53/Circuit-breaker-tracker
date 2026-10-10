@@ -24,6 +24,7 @@ export interface MeResponse {
 
 export interface AuthConfig {
   needsSetup: boolean;
+  version: string;
   oidc: { enabled: boolean; label: string };
 }
 
@@ -215,4 +216,22 @@ export interface PanelHistoryItem {
   actingAs: string | null;
   summary: string;
   details: string[];
+}
+
+export interface SearchResponse {
+  locations: { id: number; name: string; kind: LocationKind; path: string }[];
+  panels: { id: number; name: string; path: string }[];
+  breakers: {
+    breakerId: number;
+    panelId: number;
+    panelName: string;
+    panelPath: string;
+    canViewPanel: boolean;
+    circuit: string;
+    label: string;
+    amps: number;
+    critical: boolean;
+    /** Why it matched when the label did not: the room or area it serves. */
+    serves: string | null;
+  }[];
 }

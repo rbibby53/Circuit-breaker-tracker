@@ -11,12 +11,30 @@ import { accessRoutes } from './routes/access';
 import { authRoutes } from './routes/auth';
 import { locationRoutes } from './routes/locations';
 import { panelRoutes } from './routes/panels';
+import { searchRoutes } from './routes/search';
 import { loadAuth } from './sessions';
 
 export const CSRF_HEADER = 'x-cbt-csrf';
 
 /** Writes still allowed while viewing as someone else: leaving that mode, and signing out. */
 const READ_ONLY_ALLOWED = new Set(['/api/admin/view-as', '/api/auth/logout']);
+
+/**
+ * The web app is served from this origin with self-hosted fonts and no inline scripts, so a
+ * strict policy fits. Inline styles are allowed because React sets element styles.
+ */
+const CSP = [
+  "default-src 'self'",
+  "script-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
+  "img-src 'self' data:",
+  "font-src 'self' data:",
+  "connect-src 'self'",
+  "object-src 'none'",
+  "base-uri 'self'",
+  "form-action 'self'",
+  "frame-ancestors 'none'",
+].join('; ');
 
 export async function buildApp(config: Config, db: DB, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
   const app = Fastify({
@@ -28,6 +46,17 @@ export async function buildApp(config: Config, db: DB, opts: { logger?: boolean 
   await app.register(rateLimit, { global: false });
 
   app.decorateRequest('auth', null);
+
+  app.addHook('onSend', async (req, reply) => {
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'same-origin');
+    reply.header('X-Frame-Options', 'DENY');
+    reply.header('Cross-Origin-Opener-Policy', 'same-origin');
+    reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
+    reply.header('Content-Security-Policy', CSP);
+    if (config.cookieSecure) reply.header('Strict-Transport-Security', 'max-age=15552000');
+    if (req.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
+  });
 
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
@@ -65,10 +94,21 @@ export async function buildApp(config: Config, db: DB, opts: { logger?: boolean 
   locationRoutes(app, db);
   accessRoutes(app, db, config);
   panelRoutes(app, db);
+  searchRoutes(app, db);
 
   const webDist = config.webDist;
   if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {
-    await app.register(fastifyStatic, { root: webDist, wildcard: false });
+    await app.register(fastifyStatic, {
+      root: webDist,
+      wildcard: false,
+      // Built assets have content hashes in their names; everything else must revalidate.
+      setHeaders: (res, filePath) => {
+        res.setHeader(
+          'Cache-Control',
+          filePath.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
+        );
+      },
+    });
     app.setNotFoundHandler((req, reply) => {
       if (req.method === 'GET' && !req.url.startsWith('/api/')) return reply.sendFile('index.html');
       return reply.code(404).send({ error: 'not_found', message: 'Not found.' });

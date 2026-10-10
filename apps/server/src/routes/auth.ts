@@ -25,6 +25,7 @@ const strictLimit = { rateLimit: { max: 10, timeWindow: '1 minute' } };
 export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
   app.get('/api/auth/config', async (): Promise<AuthConfig> => ({
     needsSetup: countUsers(db) === 0,
+    version: config.version,
     oidc: { enabled: !!config.oidc, label: config.oidc?.label ?? '' },
   }));
 

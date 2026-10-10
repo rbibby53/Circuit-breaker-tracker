@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { buildApp } from './app';
+import { purgeExpired } from './cleanup';
 import { loadConfig } from './config';
 import { openDatabase } from './db';
 import { countUsers } from './repo';
@@ -19,6 +20,13 @@ if (config.bootstrapAdmin && countUsers(db) === 0) {
 }
 
 const app = await buildApp(config, db);
+
+const purge = () => {
+  const removed = purgeExpired(db);
+  if (Object.values(removed).some((n) => n > 0)) app.log.info({ removed }, 'Removed expired records');
+};
+purge();
+setInterval(purge, 60 * 60_000).unref();
 
 const shutdown = async () => {
   await app.close();
