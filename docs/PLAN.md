@@ -281,8 +281,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    - pnpm workspace, Docker image and compose file, database and migrations.
    - Auth: first-run admin, local login, sessions, Entra ID / OIDC sign-in, reset links.
    - Location tree (company → room), scoped grants with invite limits, invites.
-   - Permission checks with tests for every scope rule, including feed-chain and
-     serves visibility.
+   - Permission checks with tests for every scope rule.
    - View as user (read-only).
    - Sites screen and Users & access screen.
    - Audit log plumbing.
@@ -291,6 +290,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    - Add, edit, move and resize breakers: 1- and 2-pole, tandem, spare.
    - Flags. A "serves" picker that spans floors.
    - Validation, autosave and undo, conflict detection, panel history.
+   - Read-only feed-chain and "serves my location" visibility, with tests.
 3. **Commercial 3-phase**
    - Phase labels, 3-pole breakers, 277/480 V, 42/84 circuits.
    - Sub-panel feed links.
