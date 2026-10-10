@@ -20,7 +20,11 @@ export function InvitePage() {
   const navigate = useNavigate();
   const config = useAuthConfig();
   const me = useMe();
-  const info = useQuery({ queryKey: ['invite', token], queryFn: () => api.get<InviteInfo>(`/api/invites/${token}`), retry: false });
+  const info = useQuery({
+    queryKey: ['invite', token],
+    queryFn: () => api.get<InviteInfo>(`/api/invites/${token}`),
+    retry: false,
+  });
   const [form, setForm] = useState({ username: '', displayName: '', password: '' });
 
   const accept = useMutation({
@@ -32,7 +36,12 @@ export function InvitePage() {
     },
   });
 
-  if (info.isLoading) return <AuthShell><div className="auth-card">Checking your invite…</div></AuthShell>;
+  if (info.isLoading)
+    return (
+      <AuthShell>
+        <div className="auth-card">Checking your invite…</div>
+      </AuthShell>
+    );
   if (info.error) {
     const msg = info.error instanceof ApiError ? info.error.message : 'This invite link is not valid.';
     return (
@@ -73,10 +82,15 @@ export function InvitePage() {
         {signedIn ? (
           <div className="stack">
             <p>
-              You're signed in as <strong>{me.data!.realUser.displayName}</strong>. Accepting adds this access to your account.
+              You're signed in as <strong>{me.data!.realUser.displayName}</strong>. Accepting adds this access to your
+              account.
             </p>
             <ErrorNote error={accept.error} />
-            <button className="btn btn-primary btn-block btn-lg" onClick={() => accept.mutate({})} disabled={accept.isPending}>
+            <button
+              className="btn btn-primary btn-block btn-lg"
+              onClick={() => accept.mutate({})}
+              disabled={accept.isPending}
+            >
               Accept invite
             </button>
           </div>
@@ -84,7 +98,10 @@ export function InvitePage() {
           <>
             {config.data?.oidc.enabled && (
               <>
-                <a className="btn btn-outline btn-block btn-lg" href={`/api/auth/oidc/start?invite=${encodeURIComponent(token)}`}>
+                <a
+                  className="btn btn-outline btn-block btn-lg"
+                  href={`/api/auth/oidc/start?invite=${encodeURIComponent(token)}`}
+                >
                   <MicrosoftIcon />
                   Accept with a Microsoft work account
                 </a>
@@ -95,13 +112,30 @@ export function InvitePage() {
             )}
             <form onSubmit={submit} className="stack">
               <Field label="Your name">
-                <input required value={form.displayName} onChange={(e) => setForm({ ...form, displayName: e.target.value })} autoComplete="name" />
+                <input
+                  required
+                  value={form.displayName}
+                  onChange={(e) => setForm({ ...form, displayName: e.target.value })}
+                  autoComplete="name"
+                />
               </Field>
               <Field label="Choose a username">
-                <input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="username" />
+                <input
+                  required
+                  value={form.username}
+                  onChange={(e) => setForm({ ...form, username: e.target.value })}
+                  autoComplete="username"
+                />
               </Field>
               <Field label="Create a password" hint="At least 10 characters.">
-                <input required type="password" minLength={10} value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="new-password" />
+                <input
+                  required
+                  type="password"
+                  minLength={10}
+                  value={form.password}
+                  onChange={(e) => setForm({ ...form, password: e.target.value })}
+                  autoComplete="new-password"
+                />
               </Field>
               <ErrorNote error={accept.error} />
               <button className="btn btn-primary btn-block btn-lg" disabled={accept.isPending}>
@@ -109,7 +143,9 @@ export function InvitePage() {
               </button>
             </form>
             <p className="muted small">
-              Already have an account? <a href={`/login?next=${encodeURIComponent(`/invite/${token}`)}`}>Sign in first</a>, then come back to this link.
+              Already have an account?{' '}
+              <a href={`/login?next=${encodeURIComponent(`/invite/${token}`)}`}>Sign in first</a>, then come back to
+              this link.
             </p>
           </>
         )}

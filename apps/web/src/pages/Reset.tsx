@@ -42,7 +42,14 @@ export function ResetPage() {
               </p>
             )}
             <Field label="New password" hint="At least 10 characters. You'll be signed out everywhere else.">
-              <input required type="password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+              <input
+                required
+                type="password"
+                minLength={10}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+              />
             </Field>
             <ErrorNote error={reset.error} />
             <button className="btn btn-primary btn-block btn-lg" disabled={reset.isPending || !info.data}>

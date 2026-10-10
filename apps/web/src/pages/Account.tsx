@@ -84,11 +84,24 @@ export function AccountPage() {
         <h2 className="h-caps">{me.hasPassword ? 'Change password' : 'Add a password'}</h2>
         {me.hasPassword && (
           <Field label="Current password">
-            <input type="password" required value={pw.currentPassword} onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })} autoComplete="current-password" />
+            <input
+              type="password"
+              required
+              value={pw.currentPassword}
+              onChange={(e) => setPw({ ...pw, currentPassword: e.target.value })}
+              autoComplete="current-password"
+            />
           </Field>
         )}
         <Field label="New password" hint="At least 10 characters.">
-          <input type="password" required minLength={10} value={pw.newPassword} onChange={(e) => setPw({ ...pw, newPassword: e.target.value })} autoComplete="new-password" />
+          <input
+            type="password"
+            required
+            minLength={10}
+            value={pw.newPassword}
+            onChange={(e) => setPw({ ...pw, newPassword: e.target.value })}
+            autoComplete="new-password"
+          />
         </Field>
         <ErrorNote error={changePw.error} />
         <div>

@@ -83,15 +83,33 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes, created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(id, body.name, body.layout, body.spaces, body.mainAmps, body.mainType, body.voltage, body.manufacturer, body.model, body.notes, t, t);
+      .run(
+        id,
+        body.name,
+        body.layout,
+        body.spaces,
+        body.mainAmps,
+        body.mainType,
+        body.voltage,
+        body.manufacturer,
+        body.model,
+        body.notes,
+        t,
+        t,
+      );
     const panelId = Number(r.lastInsertRowid);
-    audit(db, auth, {
-      action: 'panel.create',
-      entity: 'panel',
-      entityId: panelId,
-      locationId: id,
-      summary: `Added panel ${body.name} (${body.spaces} spaces)`,
-    }, access);
+    audit(
+      db,
+      auth,
+      {
+        action: 'panel.create',
+        entity: 'panel',
+        entityId: panelId,
+        locationId: id,
+        summary: `Added panel ${body.name} (${body.spaces} spaces)`,
+      },
+      access,
+    );
     return { id: panelId };
   });
 
@@ -120,7 +138,13 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     const shape = { layout: body.layout, spaces: body.spaces };
     const issue = validateLayout(
       shape,
-      body.breakers.map((b) => ({ key: b.clientKey, position: b.position, slot: b.slot, poles: b.poles, label: b.label })),
+      body.breakers.map((b) => ({
+        key: b.clientKey,
+        position: b.position,
+        slot: b.slot,
+        poles: b.poles,
+        label: b.label,
+      })),
     )[0];
     if (issue) throw badRequest(issue.message);
 
@@ -140,7 +164,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         if (!node || visible.get(s.locationId)?.access !== 'full') {
           throw badRequest('A breaker is tagged with a location you cannot see.');
         }
-        if (!site || !isWithin(node, site)) throw badRequest(`${locationName(access, s.locationId)} is in a different site.`);
+        if (!site || !isWithin(node, site))
+          throw badRequest(`${locationName(access, s.locationId)} is in a different site.`);
       }
     }
     const before = servesOf(db, [...existingIds]);
@@ -153,7 +178,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       if (fedFrom !== null) {
         const feeder = getBreaker(db, fedFrom);
         const feederPanel = feeder ? getPanel(db, feeder.panel_id) : undefined;
-        if (!feeder || !feederPanel || !canViewPanel(actor, access, feederPanel)) throw badRequest('Feeder breaker not found.');
+        if (!feeder || !feederPanel || !canViewPanel(actor, access, feederPanel))
+          throw badRequest('Feeder breaker not found.');
         if (isDownstream(db, panel.id, feederPanel.id)) {
           throw badRequest('A panel cannot be fed from itself or from a panel it feeds.');
         }
@@ -176,10 +202,23 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const clearServes = db.prepare('DELETE FROM breaker_serves WHERE breaker_id = ?');
-      const addServe = db.prepare('INSERT OR REPLACE INTO breaker_serves (breaker_id, location_id, note) VALUES (?, ?, ?)');
+      const addServe = db.prepare(
+        'INSERT OR REPLACE INTO breaker_serves (breaker_id, location_id, note) VALUES (?, ?, ?)',
+      );
 
       for (const b of body.breakers) {
-        const values = [b.position, b.slot, b.poles, b.amps, b.protection, b.label, b.notes, b.isSpare ? 1 : 0, b.critical ? 1 : 0, b.backup] as const;
+        const values = [
+          b.position,
+          b.slot,
+          b.poles,
+          b.amps,
+          b.protection,
+          b.label,
+          b.notes,
+          b.isSpare ? 1 : 0,
+          b.critical ? 1 : 0,
+          b.backup,
+        ] as const;
         let id: number;
         if (b.id !== undefined) {
           update.run(...values, b.id);
@@ -196,24 +235,48 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       db.prepare(
         `UPDATE panels SET name = ?, layout = ?, spaces = ?, main_amps = ?, main_type = ?, voltage = ?, manufacturer = ?,
            model = ?, notes = ?, fed_from_breaker_id = ? WHERE id = ?`,
-      ).run(body.name, body.layout, body.spaces, body.mainAmps, body.mainType, body.voltage, body.manufacturer, body.model, body.notes, fedFrom, panel.id);
+      ).run(
+        body.name,
+        body.layout,
+        body.spaces,
+        body.mainAmps,
+        body.mainType,
+        body.voltage,
+        body.manufacturer,
+        body.model,
+        body.notes,
+        fedFrom,
+        panel.id,
+      );
 
       const afterPanel = getPanel(db, panel.id)!;
       const afterBreakers = breakersOf(db, panel.id);
-      const afterSnap = snapshot(afterPanel, afterBreakers, servesOf(db, afterBreakers.map((x) => x.id)));
+      const afterSnap = snapshot(
+        afterPanel,
+        afterBreakers,
+        servesOf(
+          db,
+          afterBreakers.map((x) => x.id),
+        ),
+      );
       if (JSON.stringify(afterSnap) === JSON.stringify(beforeSnap)) return; // nothing changed: no new version
 
       db.prepare('UPDATE panels SET version = version + 1, updated_at = ? WHERE id = ?').run(now(), panel.id);
       const details = describeChanges(shape, beforeSnap, afterSnap, (id) => locationName(access, id));
-      audit(db, auth, {
-        action: 'panel.update',
-        entity: 'panel',
-        entityId: panel.id,
-        locationId: panel.location_id,
-        summary: `Edited panel ${afterPanel.name}${details.length ? `: ${details.slice(0, 2).join('; ')}${details.length > 2 ? ` and ${details.length - 2} more` : ''}` : ''}`,
-        before: beforeSnap,
-        after: { ...afterSnap, details },
-      }, access);
+      audit(
+        db,
+        auth,
+        {
+          action: 'panel.update',
+          entity: 'panel',
+          entityId: panel.id,
+          locationId: panel.location_id,
+          summary: `Edited panel ${afterPanel.name}${details.length ? `: ${details.slice(0, 2).join('; ')}${details.length > 2 ? ` and ${details.length - 2} more` : ''}` : ''}`,
+          before: beforeSnap,
+          after: { ...afterSnap, details },
+        },
+        access,
+      );
     })();
 
     return { panel: panelDetail(db, actor, access, getPanel(db, panel.id)!), idMap };
@@ -226,14 +289,26 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     const panel = visiblePanel(actor, access, idParam((req.params as { id: string }).id));
     requireEdit(actor, access, panel.location_id);
     const breakers = breakersOf(db, panel.id);
-    audit(db, auth, {
-      action: 'panel.delete',
-      entity: 'panel',
-      entityId: panel.id,
-      locationId: panel.location_id,
-      summary: `Deleted panel ${panel.name} and its ${breakers.length} breakers`,
-      before: snapshot(panel, breakers, servesOf(db, breakers.map((b) => b.id))),
-    }, access);
+    audit(
+      db,
+      auth,
+      {
+        action: 'panel.delete',
+        entity: 'panel',
+        entityId: panel.id,
+        locationId: panel.location_id,
+        summary: `Deleted panel ${panel.name} and its ${breakers.length} breakers`,
+        before: snapshot(
+          panel,
+          breakers,
+          servesOf(
+            db,
+            breakers.map((b) => b.id),
+          ),
+        ),
+      },
+      access,
+    );
     db.prepare('DELETE FROM panels WHERE id = ?').run(panel.id);
     return { ok: true };
   });
@@ -248,7 +323,14 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         `SELECT id, at, user_name, acting_as_name, summary, after FROM audit_log
          WHERE entity = 'panel' AND entity_id = ? ORDER BY id DESC LIMIT 200`,
       )
-      .all(panel.id) as { id: number; at: string; user_name: string | null; acting_as_name: string | null; summary: string; after: string | null }[];
+      .all(panel.id) as {
+      id: number;
+      at: string;
+      user_name: string | null;
+      acting_as_name: string | null;
+      summary: string;
+      after: string | null;
+    }[];
     return rows.map((r) => {
       let details: string[] = [];
       try {
@@ -256,7 +338,14 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       } catch {
         details = [];
       }
-      return { id: r.id, at: r.at, user: r.user_name ?? 'System', actingAs: r.acting_as_name, summary: r.summary, details };
+      return {
+        id: r.id,
+        at: r.at,
+        user: r.user_name ?? 'System',
+        actingAs: r.acting_as_name,
+        summary: r.summary,
+        details,
+      };
     });
   });
 

@@ -113,7 +113,11 @@ export function locationRoutes(app: FastifyInstance, db: DB): void {
     if (body.sortOrder !== undefined) assertCheck(canCreateChild(actor, parentNode, access.grants));
 
     const before = { name: node.name, notes: node.notes, sortOrder: node.sort_order };
-    const next = { name: body.name ?? node.name, notes: body.notes ?? node.notes, sortOrder: body.sortOrder ?? node.sort_order };
+    const next = {
+      name: body.name ?? node.name,
+      notes: body.notes ?? node.notes,
+      sortOrder: body.sortOrder ?? node.sort_order,
+    };
     db.prepare('UPDATE locations SET name = ?, notes = ?, sort_order = ?, updated_at = ? WHERE id = ?').run(
       next.name,
       next.notes,

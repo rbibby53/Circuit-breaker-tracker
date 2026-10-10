@@ -21,15 +21,15 @@ UI mockups: https://claude.ai/artifact/2uQ3SfWmCnL1UuWPbkVchY
 TypeScript end to end, so the panel layout and validation rules live in one place and run in
 both the browser and the server.
 
-| Part | Choice | Why |
-| --- | --- | --- |
-| Frontend | React + Vite, TanStack Router and Query, dnd-kit | Mature, fast, good drag-and-drop for moving breakers |
-| Backend | Fastify on Node 22 | Small, fast, schema-validated routes |
-| Database | SQLite (better-sqlite3) with plain SQL migrations | One file on a volume, easy backups; the tree queries are hand-written SQL anyway |
-| Validation | Zod schemas shared by client and server | One definition of what a valid panel is |
-| PDF | PDFKit driven by the shared layout engine | Vector output that matches the screen, no headless Chrome (image stays ~150 MB) |
-| Auth | Local accounts (argon2id), DB-backed sessions; OIDC later | Works out of the box; SSO can be added without a rewrite |
-| Tests | Vitest (core + API), Playwright (one end-to-end smoke test) | |
+| Part       | Choice                                                      | Why                                                                              |
+| ---------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
+| Frontend   | React + Vite, TanStack Router and Query, dnd-kit            | Mature, fast, good drag-and-drop for moving breakers                             |
+| Backend    | Fastify on Node 22                                          | Small, fast, schema-validated routes                                             |
+| Database   | SQLite (better-sqlite3) with plain SQL migrations           | One file on a volume, easy backups; the tree queries are hand-written SQL anyway |
+| Validation | Zod schemas shared by client and server                     | One definition of what a valid panel is                                          |
+| PDF        | PDFKit driven by the shared layout engine                   | Vector output that matches the screen, no headless Chrome (image stays ~150 MB)  |
+| Auth       | Local accounts (argon2id), DB-backed sessions; OIDC later   | Works out of the box; SSO can be added without a rewrite                         |
+| Tests      | Vitest (core + API), Playwright (one end-to-end smoke test) |                                                                                  |
 
 ### Repo layout
 
@@ -91,15 +91,15 @@ read-only, so they can find the right breaker:
   breakers that serve it (label, number, panel name and location), even when the panel sits
   outside their scope.
 
-| Role | Can |
-| --- | --- |
-| **Viewer** | See panels, search, print PDFs |
-| **Editor** | Viewer + edit breakers, labels and flags; add, rename or remove locations and panels inside their scope |
+| Role        | Can                                                                                                             |
+| ----------- | --------------------------------------------------------------------------------------------------------------- |
+| **Viewer**  | See panels, search, print PDFs                                                                                  |
+| **Editor**  | Viewer + edit breakers, labels and flags; add, rename or remove locations and panels inside their scope         |
 | **Manager** | Editor + invite people and manage grants, **only inside their own scope** and **only up to their invite limit** |
-| **Admin** | A user-level flag, not a grant. Everything, everywhere: all companies, all users, backups and restore |
+| **Admin**   | A user-level flag, not a grant. Everything, everywhere: all companies, all users, backups and restore           |
 
-**Invite limit.** Every Manager grant carries a limit: *Viewers only*, *Viewers and editors*,
-or *Up to managers*. A Manager can only:
+**Invite limit.** Every Manager grant carries a limit: _Viewers only_, _Viewers and editors_,
+or _Up to managers_. A Manager can only:
 
 - grant access at locations inside their own Manager scope;
 - hand out roles up to their invite limit;
@@ -108,14 +108,14 @@ or *Up to managers*. A Manager can only:
 
 How the examples map:
 
-| Who | Grant |
-| --- | --- |
-| You | Admin |
-| KSU supervisor | Manager on **KSU** (company), invite limit *Viewers and editors*. They can add coworkers anywhere in KSU and never see Personal. |
-| Coworkers | Viewer or Editor on the KSU campus, one building, or one floor |
-| A contractor | Viewer on a single room, e.g. one electrical room |
-| Roommates | Editor on **Personal › Apartment** |
-| Parents | Viewer on **Personal › Parents' house** |
+| Who            | Grant                                                                                                                            |
+| -------------- | -------------------------------------------------------------------------------------------------------------------------------- |
+| You            | Admin                                                                                                                            |
+| KSU supervisor | Manager on **KSU** (company), invite limit _Viewers and editors_. They can add coworkers anywhere in KSU and never see Personal. |
+| Coworkers      | Viewer or Editor on the KSU campus, one building, or one floor                                                                   |
+| A contractor   | Viewer on a single room, e.g. one electrical room                                                                                |
+| Roommates      | Editor on **Personal › Apartment**                                                                                               |
+| Parents        | Viewer on **Personal › Parents' house**                                                                                          |
 
 ### View as user
 
@@ -211,12 +211,12 @@ Notes:
 
 ## Panel layouts
 
-| Layout | Use | Rules |
-| --- | --- | --- |
-| Residential load center | Homes, apartments | 120/240 V split-phase, 2 columns, odd numbers left and even right, 1- and 2-pole, tandems |
-| Commercial panelboard | KSU and other commercial buildings | 120/208 V or 277/480 V 3-phase, A/B/C phase per row, 1-, 2- and 3-pole, 30–84 circuits |
-| Single column | Small sub-panels, disconnects | Sequential numbering |
-| DIN rail (later) | Non-US units | Modules on rails |
+| Layout                  | Use                                | Rules                                                                                     |
+| ----------------------- | ---------------------------------- | ----------------------------------------------------------------------------------------- |
+| Residential load center | Homes, apartments                  | 120/240 V split-phase, 2 columns, odd numbers left and even right, 1- and 2-pole, tandems |
+| Commercial panelboard   | KSU and other commercial buildings | 120/208 V or 277/480 V 3-phase, A/B/C phase per row, 1-, 2- and 3-pole, 30–84 circuits    |
+| Single column           | Small sub-panels, disconnects      | Sequential numbering                                                                      |
+| DIN rail (later)        | Non-US units                       | Modules on rails                                                                          |
 
 The shared `core` package turns a panel and its breakers into positioned boxes. The editor,
 the thumbnails and the PDF all draw from that one layout. The validation rules live in

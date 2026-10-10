@@ -4,7 +4,11 @@ import { api, ApiError } from '../api';
 import { ErrorNote, formatDate } from '../components/ui';
 
 export function ActivityPage() {
-  const items = useQuery({ queryKey: ['activity'], queryFn: () => api.get<ActivityItem[]>('/api/activity?limit=200'), retry: false });
+  const items = useQuery({
+    queryKey: ['activity'],
+    queryFn: () => api.get<ActivityItem[]>('/api/activity?limit=200'),
+    retry: false,
+  });
 
   if (items.error instanceof ApiError && items.error.status === 403) {
     return (

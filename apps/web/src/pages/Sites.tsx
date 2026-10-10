@@ -69,7 +69,9 @@ function Overview({
       {roots.length === 0 && (
         <div className="empty">
           {isAdmin ? (
-            <p>Start by adding a company. Use one for your own places (for example "Personal") and one per organisation.</p>
+            <p>
+              Start by adding a company. Use one for your own places (for example "Personal") and one per organisation.
+            </p>
           ) : (
             <p>You don't have access to anything yet. Ask whoever invited you to share a location.</p>
           )}
@@ -101,10 +103,17 @@ function ChildCards({ nodes, onSelect }: { nodes: TreeNode[]; onSelect: (id: num
         const kids = shownChildren(n);
         const kidKind = kids[0]?.kind;
         return (
-          <button key={n.id} type="button" className={`card card-btn${n.access === 'breadcrumb' ? ' is-crumb' : ''}`} onClick={() => onSelect(n.id)}>
+          <button
+            key={n.id}
+            type="button"
+            className={`card card-btn${n.access === 'breadcrumb' ? ' is-crumb' : ''}`}
+            onClick={() => onSelect(n.id)}
+          >
             <span className="eyebrow">{KIND_LABELS[n.kind]}</span>
             <span className="card-title">{n.name}</span>
-            <span className="muted small">{kidKind ? plural(kidKind, kids.length) : n.kind === 'room' ? 'Room' : 'Empty'}</span>
+            <span className="muted small">
+              {kidKind ? plural(kidKind, kids.length) : n.kind === 'room' ? 'Room' : 'Empty'}
+            </span>
           </button>
         );
       })}
@@ -175,7 +184,9 @@ function LocationView({
           <span className="eyebrow">{KIND_LABELS[node.kind]}</span>
           <h1>{node.name}</h1>
           {node.notes && <p className="notes">{node.notes}</p>}
-          {crumbOnly && <p className="muted">You only have access to parts inside this {KIND_LABELS[node.kind].toLowerCase()}.</p>}
+          {crumbOnly && (
+            <p className="muted">You only have access to parts inside this {KIND_LABELS[node.kind].toLowerCase()}.</p>
+          )}
         </div>
         <div className="toolbar">
           {canRename && !editing && (

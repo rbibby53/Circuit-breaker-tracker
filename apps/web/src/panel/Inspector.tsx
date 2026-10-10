@@ -38,7 +38,11 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
   const sizes: { value: Size; label: string; disabled?: string }[] = [
     { value: '1', label: '1-pole' },
     { value: '2', label: '2-pole' },
-    { value: '3', label: '3-pole', disabled: maxPoles(doc) < 3 ? 'Split-phase panels have no 3-pole breakers' : undefined },
+    {
+      value: '3',
+      label: '3-pole',
+      disabled: maxPoles(doc) < 3 ? 'Split-phase panels have no 3-pole breakers' : undefined,
+    },
     { value: 'tandem', label: 'Tandem' },
   ];
 
@@ -56,11 +60,14 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
           <dd>{PROTECTION_LABELS[b.protection]}</dd>
           <dt>Flags</dt>
           <dd>
-            {[b.critical && 'Critical', b.backup !== 'none' && `On ${BACKUP_LABELS[b.backup]}`, b.isSpare && 'Spare'].filter(Boolean).join(', ') || 'None'}
+            {[b.critical && 'Critical', b.backup !== 'none' && `On ${BACKUP_LABELS[b.backup]}`, b.isSpare && 'Spare']
+              .filter(Boolean)
+              .join(', ') || 'None'}
           </dd>
           <dt>Serves</dt>
           <dd>
-            {groups.flatMap((g) => g.items.map((i) => (g.floor ? `${g.floor} · ${i.label}` : i.label))).join(', ') || 'Not tagged'}
+            {groups.flatMap((g) => g.items.map((i) => (g.floor ? `${g.floor} · ${i.label}` : i.label))).join(', ') ||
+              'Not tagged'}
             {hidden > 0 && ` (+${hidden} outside your access)`}
           </dd>
         </dl>
@@ -79,7 +86,12 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
 
       <label className="field">
         <span className="field-label">Label</span>
-        <input value={b.label} autoFocus={!b.label} placeholder="What does it power?" onChange={(e) => onPatch({ label: e.target.value }, `label:${b.key}`)} />
+        <input
+          value={b.label}
+          autoFocus={!b.label}
+          placeholder="What does it power?"
+          onChange={(e) => onPatch({ label: e.target.value }, `label:${b.key}`)}
+        />
       </label>
 
       <fieldset className="field">
@@ -146,7 +158,10 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
         </label>
         <label className="field">
           <span className="field-label">Protection</span>
-          <select value={b.protection} onChange={(e) => onPatch({ protection: e.target.value as EditBreaker['protection'] })}>
+          <select
+            value={b.protection}
+            onChange={(e) => onPatch({ protection: e.target.value as EditBreaker['protection'] })}
+          >
             {PROTECTIONS.map((p) => (
               <option key={p} value={p}>
                 {PROTECTION_LABELS[p]}
@@ -224,7 +239,9 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
         type="button"
         className="btn btn-danger"
         onClick={() => {
-          const warn = feeds.length ? ` It feeds ${feeds.map((f) => f.panelName).join(', ')}, which will be unlinked.` : '';
+          const warn = feeds.length
+            ? ` It feeds ${feeds.map((f) => f.panelName).join(', ')}, which will be unlinked.`
+            : '';
           if (confirm(`Remove ${b.label || 'this breaker'}?${warn}`)) onRemove();
         }}
       >

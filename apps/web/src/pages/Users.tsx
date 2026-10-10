@@ -17,7 +17,8 @@ export function UsersPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] });
 
   const resetLink = useMutation({
-    mutationFn: (u: UserListItem) => api.post<CreatedLink>(`/api/users/${u.id}/reset-link`).then((l) => ({ name: u.displayName, link: l })),
+    mutationFn: (u: UserListItem) =>
+      api.post<CreatedLink>(`/api/users/${u.id}/reset-link`).then((l) => ({ name: u.displayName, link: l })),
     onSuccess: setLink,
   });
   const update = useMutation({
@@ -46,7 +47,9 @@ export function UsersPage() {
         <div>
           <h1>People</h1>
           <p className="muted">
-            {me.user.isAdmin ? 'Everyone with an account.' : 'People with access somewhere you manage. You only see their access inside your scope.'}
+            {me.user.isAdmin
+              ? 'Everyone with an account.'
+              : 'People with access somewhere you manage. You only see their access inside your scope.'}
           </p>
         </div>
         <Link className="btn btn-dark" to="/access">
@@ -93,7 +96,11 @@ export function UsersPage() {
                     </span>
                   </div>
                 </td>
-                <td>{[u.hasPassword ? 'Password' : null, u.identities.length ? 'Microsoft' : null].filter(Boolean).join(' + ') || '—'}</td>
+                <td>
+                  {[u.hasPassword ? 'Password' : null, u.identities.length ? 'Microsoft' : null]
+                    .filter(Boolean)
+                    .join(' + ') || '—'}
+                </td>
                 <td>
                   {u.isAdmin ? (
                     'Everywhere'
@@ -124,10 +131,16 @@ export function UsersPage() {
                   )}
                   {isAdmin && u.id !== me.realUser.id && (
                     <>
-                      <button className="btn btn-sm" onClick={() => update.mutate({ id: u.id, body: { isAdmin: !u.isAdmin } })}>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => update.mutate({ id: u.id, body: { isAdmin: !u.isAdmin } })}
+                      >
                         {u.isAdmin ? 'Remove admin' : 'Make admin'}
                       </button>
-                      <button className="btn btn-sm" onClick={() => update.mutate({ id: u.id, body: { disabled: !u.disabled } })}>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => update.mutate({ id: u.id, body: { disabled: !u.disabled } })}
+                      >
                         {u.disabled ? 'Enable' : 'Disable'}
                       </button>
                       <button

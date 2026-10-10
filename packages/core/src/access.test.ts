@@ -153,7 +153,9 @@ describe('granting', () => {
     const m: Actor = { id: 20, isAdmin: false };
     expect(canGrant(m, N(11), { userId: 9, role: 'manager', inviteLimit: 'manager' }, g).ok).toBe(true);
     const limited: GrantLike[] = [{ userId: 21, locationId: 10, role: 'manager', inviteLimit: 'editor' }];
-    expect(canGrant({ id: 21, isAdmin: false }, N(11), { userId: 9, role: 'manager', inviteLimit: 'viewer' }, limited).ok).toBe(false);
+    expect(
+      canGrant({ id: 21, isAdmin: false }, N(11), { userId: 9, role: 'manager', inviteLimit: 'viewer' }, limited).ok,
+    ).toBe(false);
   });
 
   it('non-managers cannot grant at all', () => {
@@ -201,7 +203,15 @@ describe('users', () => {
       { userId: 30, locationId: 2, role: 'viewer', inviteLimit: null },
     ];
     const t = { id: 30, isAdmin: false };
-    expect(canResetUser(supervisor, t, mixed.filter((g) => g.userId === 30), nodes, mixed).ok).toBe(false);
+    expect(
+      canResetUser(
+        supervisor,
+        t,
+        mixed.filter((g) => g.userId === 30),
+        nodes,
+        mixed,
+      ).ok,
+    ).toBe(false);
     expect(canResetUser(supervisor, admin, [], nodes, grants).ok).toBe(false);
   });
 });

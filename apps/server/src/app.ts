@@ -38,7 +38,9 @@ export async function buildApp(config: Config, db: DB, opts: { logger?: boolean 
     }
     req.auth = loadAuth(db, req);
     if (mutating && req.auth?.readOnly && !READ_ONLY_ALLOWED.has(req.url.split('?')[0]!)) {
-      return reply.code(403).send({ error: 'read_only', message: 'You are viewing as someone else. Exit to make changes.' });
+      return reply
+        .code(403)
+        .send({ error: 'read_only', message: 'You are viewing as someone else. Exit to make changes.' });
     }
   });
 

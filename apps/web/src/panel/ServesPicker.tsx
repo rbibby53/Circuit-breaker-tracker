@@ -19,7 +19,11 @@ export function ServesPicker({
   const [filter, setFilter] = useState('');
   const chosen = new Set(serves.map((s) => s.locationId));
   const toggle = (id: number) =>
-    onChange(chosen.has(id) ? serves.filter((s) => s.locationId !== id) : [...serves, { locationId: id, note: '', hidden: false }]);
+    onChange(
+      chosen.has(id)
+        ? serves.filter((s) => s.locationId !== id)
+        : [...serves, { locationId: id, note: '', hidden: false }],
+    );
 
   const rows: { node: TreeNode; depth: number }[] = [];
   const walk = (n: TreeNode, depth: number) => {
@@ -42,14 +46,20 @@ export function ServesPicker({
             <label className="check">
               <input type="checkbox" checked={chosen.has(node.id)} onChange={() => toggle(node.id)} />
               <span className={node.kind === 'room' ? '' : 'strong'}>
-                {node.kind === 'room' ? node.name : node.kind === 'site' ? `Whole site (${node.name})` : `Whole ${KIND_LABELS[node.kind].toLowerCase()}: ${node.name}`}
+                {node.kind === 'room'
+                  ? node.name
+                  : node.kind === 'site'
+                    ? `Whole site (${node.name})`
+                    : `Whole ${KIND_LABELS[node.kind].toLowerCase()}: ${node.name}`}
               </span>
             </label>
           </li>
         ))}
         {shown.length === 0 && <li className="muted small">No matches.</li>}
       </ul>
-      {hiddenBuilding(site) === null && rows.length <= 1 && <p className="muted small">Add floors and rooms to this site to tag them here.</p>}
+      {hiddenBuilding(site) === null && rows.length <= 1 && (
+        <p className="muted small">Add floors and rooms to this site to tag them here.</p>
+      )}
     </div>
   );
 }

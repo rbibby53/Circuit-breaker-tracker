@@ -15,7 +15,7 @@ as a single Docker container with its data in one SQLite file.
 - **Scoped access:** give someone **Viewer**, **Editor** or **Manager** on any location. A
   grant covers everything inside that location, and nothing outside it.
 - **Manager invite limits:** a manager can only invite people inside their own scope, and
-  only up to their limit (*Viewers only*, *Viewers and editors*, or *Up to managers*).
+  only up to their limit (_Viewers only_, _Viewers and editors_, or _Up to managers_).
 - **Two ways to sign in:** Microsoft Entra ID (or any OIDC provider), and local accounts
   with passwords for family, roommates and anyone without a work account.
 - **Invite and reset links:** one-time links you copy and send yourself, so no email server
@@ -47,10 +47,10 @@ services:
     image: ghcr.io/rbibby53/circuit-breaker-tracker:latest
     restart: unless-stopped
     ports:
-      - "2757:2757"
+      - '2757:2757'
     environment:
-      PUBLIC_URL: "https://breakers.example.com"
-      TRUST_PROXY: "true"
+      PUBLIC_URL: 'https://breakers.example.com'
+      TRUST_PROXY: 'true'
     volumes:
       - breakers-data:/data
 volumes:
@@ -77,18 +77,18 @@ file.
 
 ### Configuration
 
-| Variable | Default | Purpose |
-| --- | --- | --- |
-| `PUBLIC_URL` | (none) | The address people use, e.g. `https://breakers.example.com`. Used for invite and reset links. Required for SSO. |
-| `TRUST_PROXY` | `false` | Set to `true` behind a reverse proxy so client IPs and HTTPS are detected. |
-| `COOKIE_SECURE` | `true` if `PUBLIC_URL` is https | Send the session cookie over HTTPS only. |
-| `PORT` | `2757` | Port to listen on. |
-| `DATA_DIR` | `/data` | Where `breakers.db` lives. Mount a volume here. |
-| `SESSION_DAYS` | `30` | How long a sign-in lasts. |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | (none) | Create the first admin at startup instead of using the setup screen. Ignored once any user exists. |
-| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | (none) | Turn on single sign-on (see below). |
-| `OIDC_LABEL` | `Sign in with Microsoft` | Text on the SSO button. |
-| `LOG_LEVEL` | `info` | `debug`, `info`, `warn` or `error`. |
+| Variable                                              | Default                         | Purpose                                                                                                         |
+| ----------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
+| `PUBLIC_URL`                                          | (none)                          | The address people use, e.g. `https://breakers.example.com`. Used for invite and reset links. Required for SSO. |
+| `TRUST_PROXY`                                         | `false`                         | Set to `true` behind a reverse proxy so client IPs and HTTPS are detected.                                      |
+| `COOKIE_SECURE`                                       | `true` if `PUBLIC_URL` is https | Send the session cookie over HTTPS only.                                                                        |
+| `PORT`                                                | `2757`                          | Port to listen on.                                                                                              |
+| `DATA_DIR`                                            | `/data`                         | Where `breakers.db` lives. Mount a volume here.                                                                 |
+| `SESSION_DAYS`                                        | `30`                            | How long a sign-in lasts.                                                                                       |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD`                    | (none)                          | Create the first admin at startup instead of using the setup screen. Ignored once any user exists.              |
+| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | (none)                          | Turn on single sign-on (see below).                                                                             |
+| `OIDC_LABEL`                                          | `Sign in with Microsoft`        | Text on the SSO button.                                                                                         |
+| `LOG_LEVEL`                                           | `info`                          | `debug`, `info`, `warn` or `error`.                                                                             |
 
 ### Behind a reverse proxy
 
@@ -117,7 +117,7 @@ location / {
 
 1. In the Entra admin center, go to **App registrations** and choose **New registration**.
    - **Supported account types:** accounts in this organizational directory only.
-   - **Redirect URI:** platform *Web*, value `https://breakers.example.com/api/auth/oidc/callback`.
+   - **Redirect URI:** platform _Web_, value `https://breakers.example.com/api/auth/oidc/callback`.
 2. Under **Certificates & secrets**, create a client secret.
 3. Set the environment variables, then restart:
    ```

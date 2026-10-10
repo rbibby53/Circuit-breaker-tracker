@@ -56,7 +56,12 @@ export function Layout() {
       {me.viewingAs && (
         <div className="viewas" role="status">
           <svg width="20" height="20" viewBox="0 0 20 20" aria-hidden="true">
-            <path d="M1.5 10S5 3.5 10 3.5 18.5 10 18.5 10 15 16.5 10 16.5 1.5 10 1.5 10z" fill="none" stroke="currentColor" strokeWidth="1.8" />
+            <path
+              d="M1.5 10S5 3.5 10 3.5 18.5 10 18.5 10 15 16.5 10 16.5 1.5 10 1.5 10z"
+              fill="none"
+              stroke="currentColor"
+              strokeWidth="1.8"
+            />
             <circle cx="10" cy="10" r="2.8" fill="currentColor" />
           </svg>
           <strong>Viewing as {me.user.displayName}</strong>

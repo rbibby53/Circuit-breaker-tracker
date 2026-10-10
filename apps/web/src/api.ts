@@ -34,5 +34,4 @@ export const api = {
   del: <T = { ok: true }>(url: string) => request<T>('DELETE', url),
 };
 
-export const errorMessage = (err: unknown): string =>
-  err instanceof Error ? err.message : 'Something went wrong.';
+export const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : 'Something went wrong.');

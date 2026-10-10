@@ -12,7 +12,13 @@ import {
 } from './panel';
 
 const res: PanelShape = { layout: 'residential', spaces: 24 };
-const b = (key: string, position: number, poles = 1, slot: BreakerShape['slot'] = 'full', label = key): BreakerShape => ({
+const b = (
+  key: string,
+  position: number,
+  poles = 1,
+  slot: BreakerShape['slot'] = 'full',
+  label = key,
+): BreakerShape => ({
   key,
   position,
   poles,
@@ -43,7 +49,15 @@ describe('geometry', () => {
 
 describe('validateLayout', () => {
   it('accepts the mockup panel', () => {
-    const breakers = [b('range', 1, 2), b('dryer', 2, 2), b('heat', 6, 2), b('5', 5), b('21a', 21, 1, 'A'), b('21b', 21, 1, 'B'), b('24', 24)];
+    const breakers = [
+      b('range', 1, 2),
+      b('dryer', 2, 2),
+      b('heat', 6, 2),
+      b('5', 5),
+      b('21a', 21, 1, 'A'),
+      b('21b', 21, 1, 'B'),
+      b('24', 24),
+    ];
     expect(validateLayout(res, breakers)).toEqual([]);
   });
 

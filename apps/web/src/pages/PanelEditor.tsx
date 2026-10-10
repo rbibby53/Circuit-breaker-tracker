@@ -244,7 +244,8 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
             <h1>{doc.name}</h1>
             <p className="muted">
               {LAYOUT_LABELS[doc.layout]}
-              {doc.voltage && ` · ${doc.voltage}`} · {doc.spaces} spaces · {doc.mainType === 'lugs' ? 'main lugs' : `${doc.mainAmps ?? '?'} A main`}
+              {doc.voltage && ` · ${doc.voltage}`} · {doc.spaces} spaces ·{' '}
+              {doc.mainType === 'lugs' ? 'main lugs' : `${doc.mainAmps ?? '?'} A main`}
               {(doc.manufacturer || doc.model) && ` · ${[doc.manufacturer, doc.model].filter(Boolean).join(' ')}`}
             </p>
             <FeedLine panel={server} />
@@ -253,10 +254,24 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
             {!readOnly && <SaveBadge state={saveState} />}
             {!readOnly && (
               <>
-                <button type="button" className="btn" onClick={undo} disabled={stacks.current.past.length === 0} aria-label="Undo" title="Undo (Ctrl+Z)">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={undo}
+                  disabled={stacks.current.past.length === 0}
+                  aria-label="Undo"
+                  title="Undo (Ctrl+Z)"
+                >
                   Undo
                 </button>
-                <button type="button" className="btn" onClick={redo} disabled={stacks.current.future.length === 0} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={redo}
+                  disabled={stacks.current.future.length === 0}
+                  aria-label="Redo"
+                  title="Redo (Ctrl+Shift+Z)"
+                >
                   Redo
                 </button>
               </>
@@ -265,14 +280,21 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
               History
             </button>
             {!readOnly && (
-              <button type="button" className="btn btn-dark" aria-expanded={showSettings} onClick={() => setShowSettings((v) => !v)}>
+              <button
+                type="button"
+                className="btn btn-dark"
+                aria-expanded={showSettings}
+                onClick={() => setShowSettings((v) => !v)}
+              >
                 Panel settings
               </button>
             )}
           </div>
         </div>
         {readOnly && (
-          <p className="readonly-note">{me.viewingAs ? 'Viewing as someone else: read-only.' : 'You can view this panel but not change it.'}</p>
+          <p className="readonly-note">
+            {me.viewingAs ? 'Viewing as someone else: read-only.' : 'You can view this panel but not change it.'}
+          </p>
         )}
       </div>
 
@@ -329,13 +351,17 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
               new Map(
                 server.breakers.map((b) => [
                   b.id,
-                  [...b.feeds.map((f) => f.panelName), ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more panel${b.hiddenFeeds === 1 ? '' : 's'}`] : [])],
+                  [
+                    ...b.feeds.map((f) => f.panelName),
+                    ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more panel${b.hiddenFeeds === 1 ? '' : 's'}`] : []),
+                  ],
                 ]),
               )
             }
           />
           <p className="panel-stats">
-            {used.size} of {doc.spaces} spaces filled · {doc.breakers.length} breakers · {critical} critical · {onBackup} on backup power
+            {used.size} of {doc.spaces} spaces filled · {doc.breakers.length} breakers · {critical} critical ·{' '}
+            {onBackup} on backup power
           </p>
         </section>
         {selectedBreaker ? (
@@ -372,7 +398,13 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
 }
 
 function SaveBadge({ state }: { state: SaveState }) {
-  const text = { saved: 'All changes saved', pending: 'Unsaved changes…', saving: 'Saving…', error: 'Not saved', conflict: 'Not saved' }[state];
+  const text = {
+    saved: 'All changes saved',
+    pending: 'Unsaved changes…',
+    saving: 'Saving…',
+    error: 'Not saved',
+    conflict: 'Not saved',
+  }[state];
   return (
     <span className={`save-badge is-${state}`} role="status" aria-live="polite">
       {text}
@@ -382,7 +414,11 @@ function SaveBadge({ state }: { state: SaveState }) {
 
 function FeedLine({ panel }: { panel: PanelDetail }) {
   if (panel.feedChain.length === 0) {
-    return <p className="feed-line">Fed from: {panel.mainType === 'lugs' ? 'not set yet (Panel settings → Fed from)' : 'the utility service'}</p>;
+    return (
+      <p className="feed-line">
+        Fed from: {panel.mainType === 'lugs' ? 'not set yet (Panel settings → Fed from)' : 'the utility service'}
+      </p>
+    );
   }
   return (
     <p className="feed-line">
@@ -390,8 +426,8 @@ function FeedLine({ panel }: { panel: PanelDetail }) {
       {panel.feedChain.map((f, i) => (
         <span key={f.breakerId}>
           {i > 0 && <span aria-hidden="true"> ← </span>}
-          {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>} · {f.circuit}{' '}
-          {f.label || 'unlabelled'} ({f.amps}A) <span className="muted">in {f.locationPath}</span>
+          {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>} ·{' '}
+          {f.circuit} {f.label || 'unlabelled'} ({f.amps}A) <span className="muted">in {f.locationPath}</span>
         </span>
       ))}
     </p>

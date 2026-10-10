@@ -55,12 +55,21 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     const chain = new Set(pathIds(node.path));
     const dto = (g: GrantRow) => {
       const gNode = access.node(g.location_id)!;
-      return access.grantDto(g, users.get(g.user_id)!, canManageGrant(actor, gNode, {
-        userId: g.user_id,
-        locationId: g.location_id,
-        role: g.role,
-        inviteLimit: g.invite_limit,
-      }, access.grants).ok);
+      return access.grantDto(
+        g,
+        users.get(g.user_id)!,
+        canManageGrant(
+          actor,
+          gNode,
+          {
+            userId: g.user_id,
+            locationId: g.location_id,
+            role: g.role,
+            inviteLimit: g.invite_limit,
+          },
+          access.grants,
+        ).ok,
+      );
     };
     const l = access.byId.get(id)!;
     return {
@@ -68,7 +77,9 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       applies: access.grantRows
         .filter((g) => chain.has(g.location_id))
         .map((g) => ({ ...dto(g), inherited: g.location_id !== id })),
-      inside: access.grantRows.filter((g) => g.location_id !== id && isWithin(access.node(g.location_id)!, id)).map(dto),
+      inside: access.grantRows
+        .filter((g) => g.location_id !== id && isWithin(access.node(g.location_id)!, id))
+        .map(dto),
       ceiling,
       admins: [...users.values()].filter((u) => u.is_admin && !u.disabled).map(toSummary),
     };
@@ -86,7 +97,16 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     if (!node || !canView(actor, node, access.grants)) throw notFound();
     const target = getUser(db, body.userId);
     // Managers may only pick people they can already see; everyone else is invited by link.
-    if (!target || target.disabled || !canSeeUser(actor, access.grants.filter((g) => g.userId === target.id), access.nodes, access.grants)) {
+    if (
+      !target ||
+      target.disabled ||
+      !canSeeUser(
+        actor,
+        access.grants.filter((g) => g.userId === target.id),
+        access.nodes,
+        access.grants,
+      )
+    ) {
       throw notFound('User not found. Send them an invite link instead.');
     }
     assertCheck(canGrant(actor, node, body, access.grants));
@@ -94,16 +114,23 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       throw conflict(`${target.display_name} already has access here. Edit that grant instead.`);
     }
     const r = db
-      .prepare('INSERT INTO grants (user_id, location_id, role, invite_limit, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)')
+      .prepare(
+        'INSERT INTO grants (user_id, location_id, role, invite_limit, created_by, created_at) VALUES (?, ?, ?, ?, ?, ?)',
+      )
       .run(target.id, id, body.role, body.inviteLimit, auth.user.id, now());
-    audit(db, auth, {
-      action: 'grant.create',
-      entity: 'grant',
-      entityId: Number(r.lastInsertRowid),
-      locationId: id,
-      summary: `Gave ${target.display_name} ${ROLE_LABELS[body.role]} access`,
-      after: body,
-    }, access);
+    audit(
+      db,
+      auth,
+      {
+        action: 'grant.create',
+        entity: 'grant',
+        entityId: Number(r.lastInsertRowid),
+        locationId: id,
+        summary: `Gave ${target.display_name} ${ROLE_LABELS[body.role]} access`,
+        after: body,
+      },
+      access,
+    );
     return { id: Number(r.lastInsertRowid) };
   });
 
@@ -124,15 +151,20 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     assertCheck(canManageGrant(actor, node, existing, access.grants));
     assertCheck(canGrant(actor, node, { userId: g.user_id, ...body }, access.grants));
     db.prepare('UPDATE grants SET role = ?, invite_limit = ? WHERE id = ?').run(body.role, body.inviteLimit, g.id);
-    audit(db, auth, {
-      action: 'grant.update',
-      entity: 'grant',
-      entityId: g.id,
-      locationId: g.location_id,
-      summary: `Changed ${getUser(db, g.user_id)?.display_name ?? 'someone'} to ${ROLE_LABELS[body.role]}`,
-      before: { role: g.role, inviteLimit: g.invite_limit },
-      after: body,
-    }, access);
+    audit(
+      db,
+      auth,
+      {
+        action: 'grant.update',
+        entity: 'grant',
+        entityId: g.id,
+        locationId: g.location_id,
+        summary: `Changed ${getUser(db, g.user_id)?.display_name ?? 'someone'} to ${ROLE_LABELS[body.role]}`,
+        before: { role: g.role, inviteLimit: g.invite_limit },
+        after: body,
+      },
+      access,
+    );
     return { ok: true };
   });
 
@@ -141,16 +173,28 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     const actor = actorOf(auth);
     const access = new AccessData(db);
     const { g, node } = loadGrant(actor, access, idParam((req.params as { id: string }).id));
-    assertCheck(canManageGrant(actor, node, { userId: g.user_id, locationId: g.location_id, role: g.role, inviteLimit: g.invite_limit }, access.grants));
+    assertCheck(
+      canManageGrant(
+        actor,
+        node,
+        { userId: g.user_id, locationId: g.location_id, role: g.role, inviteLimit: g.invite_limit },
+        access.grants,
+      ),
+    );
     db.prepare('DELETE FROM grants WHERE id = ?').run(g.id);
-    audit(db, auth, {
-      action: 'grant.delete',
-      entity: 'grant',
-      entityId: g.id,
-      locationId: g.location_id,
-      summary: `Removed ${getUser(db, g.user_id)?.display_name ?? 'someone'}'s ${ROLE_LABELS[g.role]} access`,
-      before: { userId: g.user_id, role: g.role, inviteLimit: g.invite_limit },
-    }, access);
+    audit(
+      db,
+      auth,
+      {
+        action: 'grant.delete',
+        entity: 'grant',
+        entityId: g.id,
+        locationId: g.location_id,
+        summary: `Removed ${getUser(db, g.user_id)?.display_name ?? 'someone'}'s ${ROLE_LABELS[g.role]} access`,
+        before: { userId: g.user_id, role: g.role, inviteLimit: g.invite_limit },
+      },
+      access,
+    );
     return { ok: true };
   });
 
@@ -172,14 +216,19 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
         'INSERT INTO invites (token_hash, location_id, role, invite_limit, note, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
       .run(hash, id, body.role, body.inviteLimit, body.note ?? null, auth.user.id, now(), expiresAt);
-    audit(db, auth, {
-      action: 'invite.create',
-      entity: 'invite',
-      entityId: Number(r.lastInsertRowid),
-      locationId: id,
-      summary: `Created a ${ROLE_LABELS[body.role]} invite${body.note ? ` for ${body.note}` : ''}`,
-      after: body,
-    }, access);
+    audit(
+      db,
+      auth,
+      {
+        action: 'invite.create',
+        entity: 'invite',
+        entityId: Number(r.lastInsertRowid),
+        locationId: id,
+        summary: `Created a ${ROLE_LABELS[body.role]} invite${body.note ? ` for ${body.note}` : ''}`,
+        after: body,
+      },
+      access,
+    );
     return { url: `${baseUrl(config, req)}/invite/${token}`, expiresAt };
   });
 
@@ -196,7 +245,15 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
          FROM invites i LEFT JOIN users u ON u.id = i.created_by
          WHERE i.location_id = ? AND i.used_at IS NULL AND i.expires_at > ? ORDER BY i.created_at DESC`,
       )
-      .all(id, now()) as { id: number; role: string; invite_limit: string | null; note: string | null; created_at: string; expires_at: string; created_by_name: string | null }[];
+      .all(id, now()) as {
+      id: number;
+      role: string;
+      invite_limit: string | null;
+      note: string | null;
+      created_at: string;
+      expires_at: string;
+      created_by_name: string | null;
+    }[];
     return rows.map((r) => ({
       id: r.id,
       role: r.role,
@@ -213,14 +270,37 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     const actor = actorOf(auth);
     const id = idParam((req.params as { id: string }).id);
     const inv = db.prepare('SELECT * FROM invites WHERE id = ? AND used_at IS NULL').get(id) as
-      | { id: number; location_id: number; role: 'viewer' | 'editor' | 'manager'; invite_limit: 'viewer' | 'editor' | 'manager' | null }
+      | {
+          id: number;
+          location_id: number;
+          role: 'viewer' | 'editor' | 'manager';
+          invite_limit: 'viewer' | 'editor' | 'manager' | null;
+        }
       | undefined;
     const access = new AccessData(db);
     const node = inv ? access.node(inv.location_id) : undefined;
     if (!inv || !node || !canView(actor, node, access.grants)) throw notFound();
-    assertCheck(canManageGrant(actor, node, { userId: -1, locationId: inv.location_id, role: inv.role, inviteLimit: inv.invite_limit }, access.grants));
+    assertCheck(
+      canManageGrant(
+        actor,
+        node,
+        { userId: -1, locationId: inv.location_id, role: inv.role, inviteLimit: inv.invite_limit },
+        access.grants,
+      ),
+    );
     db.prepare('DELETE FROM invites WHERE id = ?').run(id);
-    audit(db, auth, { action: 'invite.revoke', entity: 'invite', entityId: id, locationId: inv.location_id, summary: 'Revoked an invite' }, access);
+    audit(
+      db,
+      auth,
+      {
+        action: 'invite.revoke',
+        entity: 'invite',
+        entityId: id,
+        locationId: inv.location_id,
+        summary: 'Revoked an invite',
+      },
+      access,
+    );
     return { ok: true };
   });
 
@@ -230,16 +310,22 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     const auth = requireAuth(req);
     const actor = actorOf(auth);
     const access = new AccessData(db);
-    if (!actor.isAdmin && managerScopes(actor, access.grants).length === 0) throw forbidden('Only managers can list people.');
+    if (!actor.isAdmin && managerScopes(actor, access.grants).length === 0)
+      throw forbidden('Only managers can list people.');
     const users = [...usersById().values()];
-    const identities = db.prepare('SELECT user_id, provider FROM user_identities').all() as { user_id: number; provider: string }[];
+    const identities = db.prepare('SELECT user_id, provider FROM user_identities').all() as {
+      user_id: number;
+      provider: string;
+    }[];
     const out: UserListItem[] = [];
     for (const u of users) {
       const theirs = access.grantRows.filter((g) => g.user_id === u.id);
       const theirLike = access.grants.filter((g) => g.userId === u.id);
       if (!actor.isAdmin && !canSeeUser(actor, theirLike, access.nodes, access.grants)) continue;
       // Managers only see the grants inside their own scope.
-      const shown = theirs.filter((g) => actor.isAdmin || grantCeiling(actor, access.node(g.location_id)!, access.grants));
+      const shown = theirs.filter(
+        (g) => actor.isAdmin || grantCeiling(actor, access.node(g.location_id)!, access.grants),
+      );
       out.push({
         ...toSummary(u),
         disabled: !!u.disabled,
@@ -247,7 +333,16 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
         hasPassword: !!u.password_hash,
         identities: identities.filter((i) => i.user_id === u.id).map((i) => i.provider),
         grants: shown.map((g) =>
-          access.grantDto(g, u, canManageGrant(actor, access.node(g.location_id)!, { userId: g.user_id, locationId: g.location_id, role: g.role, inviteLimit: g.invite_limit }, access.grants).ok),
+          access.grantDto(
+            g,
+            u,
+            canManageGrant(
+              actor,
+              access.node(g.location_id)!,
+              { userId: g.user_id, locationId: g.location_id, role: g.role, inviteLimit: g.invite_limit },
+              access.grants,
+            ).ok,
+          ),
         ),
         canReset: canResetUser(actor, toActor(u), theirLike, access.nodes, access.grants).ok,
       });
@@ -290,7 +385,12 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       entity: 'user',
       entityId: id,
       summary: `Updated ${next.displayName}`,
-      before: { displayName: user.display_name, email: user.email, isAdmin: !!user.is_admin, disabled: !!user.disabled },
+      before: {
+        displayName: user.display_name,
+        email: user.email,
+        isAdmin: !!user.is_admin,
+        disabled: !!user.disabled,
+      },
       after: next,
     });
     return { ok: true };
@@ -305,7 +405,13 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     if (id === auth.user.id) throw badRequest('You cannot delete yourself.');
     if (user.is_admin && adminCount(db) <= 1) throw badRequest('There must always be at least one active admin.');
     db.prepare('DELETE FROM users WHERE id = ?').run(id);
-    audit(db, auth, { action: 'user.delete', entity: 'user', entityId: id, summary: `Deleted ${user.display_name}`, before: toSummary(user) });
+    audit(db, auth, {
+      action: 'user.delete',
+      entity: 'user',
+      entityId: id,
+      summary: `Deleted ${user.display_name}`,
+      before: toSummary(user),
+    });
     return { ok: true };
   });
 
@@ -315,10 +421,21 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     if (id !== auth.realUser.id || auth.readOnly) requireAdmin(auth);
     const user = getUser(db, id);
     if (!user) throw notFound();
-    const identities = db.prepare('SELECT COUNT(*) AS n FROM user_identities WHERE user_id = ?').get(id) as { n: number };
-    if (!user.password_hash && identities.n <= 1) throw badRequest('Set a password first, or the account cannot sign in.');
-    db.prepare('DELETE FROM user_identities WHERE user_id = ? AND provider = ?').run(id, (req.params as { provider: string }).provider);
-    audit(db, auth, { action: 'user.unlink', entity: 'user', entityId: id, summary: `Unlinked single sign-on from ${user.display_name}` });
+    const identities = db.prepare('SELECT COUNT(*) AS n FROM user_identities WHERE user_id = ?').get(id) as {
+      n: number;
+    };
+    if (!user.password_hash && identities.n <= 1)
+      throw badRequest('Set a password first, or the account cannot sign in.');
+    db.prepare('DELETE FROM user_identities WHERE user_id = ? AND provider = ?').run(
+      id,
+      (req.params as { provider: string }).provider,
+    );
+    audit(db, auth, {
+      action: 'user.unlink',
+      entity: 'user',
+      entityId: id,
+      summary: `Unlinked single sign-on from ${user.display_name}`,
+    });
     return { ok: true };
   });
 
@@ -334,14 +451,15 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     assertCheck(canResetUser(actor, toActor(user), theirs, access.nodes, access.grants));
     const { token, hash } = newToken();
     const expiresAt = hoursFromNow(RESET_HOURS);
-    db.prepare('INSERT INTO reset_tokens (token_hash, user_id, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)').run(
-      hash,
-      id,
-      auth.user.id,
-      now(),
-      expiresAt,
-    );
-    audit(db, auth, { action: 'user.reset_link', entity: 'user', entityId: id, summary: `Created a password reset link for ${user.display_name}` });
+    db.prepare(
+      'INSERT INTO reset_tokens (token_hash, user_id, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
+    ).run(hash, id, auth.user.id, now(), expiresAt);
+    audit(db, auth, {
+      action: 'user.reset_link',
+      entity: 'user',
+      entityId: id,
+      summary: `Created a password reset link for ${user.display_name}`,
+    });
     return { url: `${baseUrl(config, req)}/reset/${token}`, expiresAt };
   });
 
@@ -355,12 +473,16 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     if (!target) throw notFound();
     if (id === auth.realUser.id) throw badRequest('You are already yourself.');
     db.prepare('UPDATE sessions SET acting_as_user_id = ? WHERE id = ?').run(id, auth.sessionId);
-    audit(db, { ...auth, user: auth.realUser, readOnly: false }, {
-      action: 'view_as.start',
-      entity: 'user',
-      entityId: id,
-      summary: `Started viewing as ${target.display_name}`,
-    });
+    audit(
+      db,
+      { ...auth, user: auth.realUser, readOnly: false },
+      {
+        action: 'view_as.start',
+        entity: 'user',
+        entityId: id,
+        summary: `Started viewing as ${target.display_name}`,
+      },
+    );
     return { ok: true };
   });
 
@@ -369,12 +491,16 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     requireRealAdmin(auth);
     db.prepare('UPDATE sessions SET acting_as_user_id = NULL WHERE id = ?').run(auth.sessionId);
     if (auth.readOnly) {
-      audit(db, { ...auth, user: auth.realUser, readOnly: false }, {
-        action: 'view_as.stop',
-        entity: 'user',
-        entityId: auth.user.id,
-        summary: `Stopped viewing as ${auth.user.display_name}`,
-      });
+      audit(
+        db,
+        { ...auth, user: auth.realUser, readOnly: false },
+        {
+          action: 'view_as.stop',
+          entity: 'user',
+          entityId: auth.user.id,
+          summary: `Stopped viewing as ${auth.user.display_name}`,
+        },
+      );
     }
     return { ok: true };
   });
@@ -404,9 +530,7 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       params.push(...scopes.map((s) => `%/${s.locationId}/%`));
     }
     const rows = db
-      .prepare(
-        `SELECT * FROM audit_log ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY id DESC LIMIT ?`,
-      )
+      .prepare(`SELECT * FROM audit_log ${where.length ? `WHERE ${where.join(' AND ')}` : ''} ORDER BY id DESC LIMIT ?`)
       .all(...params, limit) as {
       id: number;
       at: string;

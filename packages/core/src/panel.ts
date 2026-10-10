@@ -142,8 +142,7 @@ export function validateLayout(panel: PanelShape, breakers: readonly BreakerShap
     }
     for (const p of spots) {
       const cell = taken.get(p) ?? {};
-      const clash =
-        b.slot === 'full' ? (cell.full ?? cell.A ?? cell.B) : (cell.full ?? cell[b.slot]);
+      const clash = b.slot === 'full' ? (cell.full ?? cell.A ?? cell.B) : (cell.full ?? cell[b.slot]);
       if (clash) {
         issues.push({ key: b.key, message: `Space ${p} is already used by ${name(clash)}.` });
         break;

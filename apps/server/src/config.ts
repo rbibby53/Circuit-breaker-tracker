@@ -38,9 +38,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sessionDays: Number(env.SESSION_DAYS ?? 30),
     webDist: env.WEB_DIST ? path.resolve(env.WEB_DIST) : null,
     bootstrapAdmin:
-      env.ADMIN_USERNAME && env.ADMIN_PASSWORD
-        ? { username: env.ADMIN_USERNAME, password: env.ADMIN_PASSWORD }
-        : null,
+      env.ADMIN_USERNAME && env.ADMIN_PASSWORD ? { username: env.ADMIN_USERNAME, password: env.ADMIN_PASSWORD } : null,
     oidc:
       oidcIssuer && oidcClientId && oidcClientSecret
         ? {

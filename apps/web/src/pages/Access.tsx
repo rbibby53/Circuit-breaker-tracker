@@ -67,7 +67,8 @@ export function AccessPage() {
           <div>
             <h1>Users &amp; access</h1>
             <p className="muted">
-              Give someone a role on any company, site, building, floor or room. It applies to everything inside it, and nothing else.
+              Give someone a role on any company, site, building, floor or room. It applies to everything inside it, and
+              nothing else.
             </p>
           </div>
         </div>
@@ -163,7 +164,11 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                 </td>
                 <td>
                   {g.canManage && !readOnly ? (
-                    <select aria-label={`Role for ${g.user.displayName}`} value={g.role} onChange={(e) => changeRole(g, e.target.value as Role)}>
+                    <select
+                      aria-label={`Role for ${g.user.displayName}`}
+                      value={g.role}
+                      onChange={(e) => changeRole(g, e.target.value as Role)}
+                    >
                       {choices.concat(choices.includes(g.role) ? [] : [g.role]).map((r) => (
                         <option key={r} value={r}>
                           {ROLE_LABELS[r]}
@@ -181,7 +186,9 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                     <select
                       aria-label={`Invite limit for ${g.user.displayName}`}
                       value={g.inviteLimit ?? 'viewer'}
-                      onChange={(e) => update.mutate({ id: g.id, role: 'manager', inviteLimit: e.target.value as Role })}
+                      onChange={(e) =>
+                        update.mutate({ id: g.id, role: 'manager', inviteLimit: e.target.value as Role })
+                      }
                     >
                       {choices.map((r) => (
                         <option key={r} value={r}>
@@ -196,7 +203,9 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                 <td>
                   <div className="cell-stack">
                     <span className="strong">{g.locationName}</span>
-                    <span className="muted small">{g.inherited ? `Inherited from ${KIND_LABELS[g.locationKind].toLowerCase()}` : 'Granted here'}</span>
+                    <span className="muted small">
+                      {g.inherited ? `Inherited from ${KIND_LABELS[g.locationKind].toLowerCase()}` : 'Granted here'}
+                    </span>
                   </div>
                 </td>
                 <td className="actions">
@@ -249,7 +258,11 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
       {!readOnly && (
         <>
           <InviteForm locationId={locationId} locationName={a.location.name} choices={choices} />
-          <AddExistingForm locationId={locationId} choices={choices} existing={a.applies.filter((g) => !g.inherited).map((g) => g.user.id)} />
+          <AddExistingForm
+            locationId={locationId}
+            choices={choices}
+            existing={a.applies.filter((g) => !g.inherited).map((g) => g.user.id)}
+          />
           <PendingInvites locationId={locationId} />
         </>
       )}
@@ -310,7 +323,15 @@ function RoleFields({
   );
 }
 
-function InviteForm({ locationId, locationName, choices }: { locationId: number; locationName: string; choices: Role[] }) {
+function InviteForm({
+  locationId,
+  locationName,
+  choices,
+}: {
+  locationId: number;
+  locationName: string;
+  choices: Role[];
+}) {
   const qc = useQueryClient();
   const [role, setRole] = useState<Role>('viewer');
   const [limit, setLimit] = useState<Role>('viewer');
@@ -354,7 +375,15 @@ function InviteForm({ locationId, locationName, choices }: { locationId: number;
   );
 }
 
-function AddExistingForm({ locationId, choices, existing }: { locationId: number; choices: Role[]; existing: number[] }) {
+function AddExistingForm({
+  locationId,
+  choices,
+  existing,
+}: {
+  locationId: number;
+  choices: Role[];
+  existing: number[];
+}) {
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<UserListItem[]>('/api/users') });
   const [userId, setUserId] = useState<number | ''>('');
@@ -404,9 +433,16 @@ function PendingInvites({ locationId }: { locationId: number }) {
   const invites = useQuery({
     queryKey: ['invites', locationId],
     queryFn: () =>
-      api.get<{ id: number; role: Role; inviteLimit: Role | null; note: string | null; expiresAt: string; createdBy: string | null }[]>(
-        `/api/locations/${locationId}/invites`,
-      ),
+      api.get<
+        {
+          id: number;
+          role: Role;
+          inviteLimit: Role | null;
+          note: string | null;
+          expiresAt: string;
+          createdBy: string | null;
+        }[]
+      >(`/api/locations/${locationId}/invites`),
   });
   const revoke = useMutation({
     mutationFn: (id: number) => api.del(`/api/invites/${id}`),

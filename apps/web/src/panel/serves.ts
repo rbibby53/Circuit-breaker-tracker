@@ -44,7 +44,10 @@ export function servesSummary(byId: Map<number, TreeNode>, serves: EditServe[], 
 }
 
 /** Group visible serves by floor for chips in the inspector. */
-export function servesByFloor(byId: Map<number, TreeNode>, serves: EditServe[]): { floor: string; items: { locationId: number; label: string }[] }[] {
+export function servesByFloor(
+  byId: Map<number, TreeNode>,
+  serves: EditServe[],
+): { floor: string; items: { locationId: number; label: string }[] }[] {
   const groups = new Map<string, { locationId: number; label: string }[]>();
   for (const s of serves) {
     if (s.hidden || !byId.has(s.locationId)) continue;
