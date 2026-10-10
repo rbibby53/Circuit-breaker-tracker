@@ -25,7 +25,8 @@ export interface InviteRow {
  * expired, and the person who created it still has the right to grant that access.
  */
 export function usableInvite(db: DB, token: string): { invite: InviteRow; access: AccessData } {
-  const invite = db.prepare('SELECT * FROM invites WHERE token_hash = ?').get(hashToken(token)) as InviteRow | undefined;
+  const invite = db.prepare('SELECT * FROM invites WHERE token_hash = ?').get(hashToken(token)) as
+    InviteRow | undefined;
   if (!invite) throw notFound('This invite link is not valid.');
   if (invite.used_at) throw gone('This invite link has already been used.');
   if (isExpired(invite.expires_at)) throw gone('This invite link has expired. Ask for a new one.');
@@ -36,7 +37,8 @@ export function usableInvite(db: DB, token: string): { invite: InviteRow; access
     inviter &&
     !inviter.disabled &&
     node &&
-    canGrant(toActor(inviter), node, { userId: -1, role: invite.role, inviteLimit: invite.invite_limit }, access.grants).ok;
+    canGrant(toActor(inviter), node, { userId: -1, role: invite.role, inviteLimit: invite.invite_limit }, access.grants)
+      .ok;
   if (!stillAllowed) throw gone('This invite is no longer valid. Ask for a new one.');
   return { invite, access };
 }
@@ -54,7 +56,13 @@ export function inviteInfo(db: DB, invite: InviteRow, access: AccessData): Invit
 }
 
 /** Give `userId` the invite's access (keeping any stronger grant they already hold) and use it up. */
-export function applyInvite(db: DB, invite: InviteRow, access: AccessData, userId: number, auth: AuthState | null): void {
+export function applyInvite(
+  db: DB,
+  invite: InviteRow,
+  access: AccessData,
+  userId: number,
+  auth: AuthState | null,
+): void {
   db.transaction(() => {
     const existing = db
       .prepare('SELECT * FROM grants WHERE user_id = ? AND location_id = ?')

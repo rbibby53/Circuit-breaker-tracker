@@ -133,7 +133,10 @@ function replace(doc: EditPanel, next: EditBreaker): Result {
   const exists = doc.breakers.some((b) => b.key === next.key);
   return {
     ok: true,
-    doc: { ...doc, breakers: exists ? doc.breakers.map((b) => (b.key === next.key ? next : b)) : [...doc.breakers, next] },
+    doc: {
+      ...doc,
+      breakers: exists ? doc.breakers.map((b) => (b.key === next.key ? next : b)) : [...doc.breakers, next],
+    },
   };
 }
 

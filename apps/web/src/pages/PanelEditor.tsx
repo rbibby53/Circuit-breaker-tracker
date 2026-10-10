@@ -8,10 +8,11 @@ import {
 } from '@cbt/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, ApiError, errorMessage } from '../api';
 import { useCurrentUser } from '../auth';
 import { ErrorNote, formatDate } from '../components/ui';
+import { useTitle } from '../lib/useTitle';
 import { Inspector } from '../panel/Inspector';
 import { PanelGrid } from '../panel/PanelGrid';
 import { PanelSettings } from '../panel/PanelSettings';
@@ -31,10 +32,12 @@ import {
   type Size,
 } from '../panel/state';
 import { ancestry, buildTree } from '../tree';
-import { useLocations } from './Sites';
+import { useLocations } from '../queries';
 
 export function PanelEditorPage() {
   const { id = '' } = useParams();
+  const [params] = useSearchParams();
+  const breakerParam = params.get('breaker');
   const panelId = Number(id);
   const [reloads, setReloads] = useState(0);
   const detail = useQuery({
@@ -55,7 +58,14 @@ export function PanelEditorPage() {
       </main>
     );
   }
-  return <Editor key={`${panelId}:${reloads}`} initial={detail.data} onReload={() => setReloads((n) => n + 1)} />;
+  return (
+    <Editor
+      key={`${panelId}:${reloads}`}
+      initial={detail.data}
+      initialSelected={breakerParam ? `id-${breakerParam}` : null}
+      onReload={() => setReloads((n) => n + 1)}
+    />
+  );
 }
 
 type SaveState = 'saved' | 'pending' | 'saving' | 'error' | 'conflict';
@@ -63,7 +73,15 @@ const SAVE_DELAY_MS = 700;
 const COALESCE_MS = 1500;
 const MAX_UNDO = 100;
 
-function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => void }) {
+function Editor({
+  initial,
+  initialSelected,
+  onReload,
+}: {
+  initial: PanelDetail;
+  initialSelected: string | null;
+  onReload: () => void;
+}) {
   const me = useCurrentUser();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -74,7 +92,7 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
   const [server, setServer] = useState(initial);
   // Undo/redo stacks live in a ref: they change together with `doc`, which drives re-renders.
   const stacks = useRef<{ past: EditPanel[]; future: EditPanel[] }>({ past: [], future: [] });
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialSelected);
   const [message, setMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -189,11 +207,14 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
   }, [saveState]);
 
   useEffect(() => {
-    if (readOnly) return;
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return;
-      if (!(e.ctrlKey || e.metaKey)) return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.closest('dialog')) return;
+      if (e.key === 'Escape') {
+        setSelected(null);
+        return;
+      }
+      if (readOnly || !(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       if (k === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -206,6 +227,16 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [readOnly, undo, redo]);
+
+  // On narrow screens the details sit below the panel: bring them into view on selection.
+  useEffect(() => {
+    if (!selected || !window.matchMedia('(max-width: 960px)').matches) return;
+    requestAnimationFrame(() =>
+      document.querySelector('.inspector')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
+  }, [selected]);
+
+  useTitle(doc.name);
 
   // ---- Derived -----------------------------------------------------------------------
 
@@ -244,7 +275,8 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
             <h1>{doc.name}</h1>
             <p className="muted">
               {LAYOUT_LABELS[doc.layout]}
-              {doc.voltage && ` · ${doc.voltage}`} · {doc.spaces} spaces · {doc.mainType === 'lugs' ? 'main lugs' : `${doc.mainAmps ?? '?'} A main`}
+              {doc.voltage && ` · ${doc.voltage}`} · {doc.spaces} spaces ·{' '}
+              {doc.mainType === 'lugs' ? 'main lugs' : `${doc.mainAmps ?? '?'} A main`}
               {(doc.manufacturer || doc.model) && ` · ${[doc.manufacturer, doc.model].filter(Boolean).join(' ')}`}
             </p>
             <FeedLine panel={server} />
@@ -253,10 +285,24 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
             {!readOnly && <SaveBadge state={saveState} />}
             {!readOnly && (
               <>
-                <button type="button" className="btn" onClick={undo} disabled={stacks.current.past.length === 0} aria-label="Undo" title="Undo (Ctrl+Z)">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={undo}
+                  disabled={stacks.current.past.length === 0}
+                  aria-label="Undo"
+                  title="Undo (Ctrl+Z)"
+                >
                   Undo
                 </button>
-                <button type="button" className="btn" onClick={redo} disabled={stacks.current.future.length === 0} aria-label="Redo" title="Redo (Ctrl+Shift+Z)">
+                <button
+                  type="button"
+                  className="btn"
+                  onClick={redo}
+                  disabled={stacks.current.future.length === 0}
+                  aria-label="Redo"
+                  title="Redo (Ctrl+Shift+Z)"
+                >
                   Redo
                 </button>
               </>
@@ -265,14 +311,21 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
               History
             </button>
             {!readOnly && (
-              <button type="button" className="btn btn-dark" aria-expanded={showSettings} onClick={() => setShowSettings((v) => !v)}>
+              <button
+                type="button"
+                className="btn btn-dark"
+                aria-expanded={showSettings}
+                onClick={() => setShowSettings((v) => !v)}
+              >
                 Panel settings
               </button>
             )}
           </div>
         </div>
         {readOnly && (
-          <p className="readonly-note">{me.viewingAs ? 'Viewing as someone else: read-only.' : 'You can view this panel but not change it.'}</p>
+          <p className="readonly-note">
+            {me.viewingAs ? 'Viewing as someone else: read-only.' : 'You can view this panel but not change it.'}
+          </p>
         )}
       </div>
 
@@ -329,13 +382,17 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
               new Map(
                 server.breakers.map((b) => [
                   b.id,
-                  [...b.feeds.map((f) => f.panelName), ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more panel${b.hiddenFeeds === 1 ? '' : 's'}`] : [])],
+                  [
+                    ...b.feeds.map((f) => f.panelName),
+                    ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more panel${b.hiddenFeeds === 1 ? '' : 's'}`] : []),
+                  ],
                 ]),
               )
             }
           />
           <p className="panel-stats">
-            {used.size} of {doc.spaces} spaces filled · {doc.breakers.length} breakers · {critical} critical · {onBackup} on backup power
+            {used.size} of {doc.spaces} spaces filled · {doc.breakers.length} breakers · {critical} critical ·{' '}
+            {onBackup} on backup power
           </p>
         </section>
         {selectedBreaker ? (
@@ -372,7 +429,13 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
 }
 
 function SaveBadge({ state }: { state: SaveState }) {
-  const text = { saved: 'All changes saved', pending: 'Unsaved changes…', saving: 'Saving…', error: 'Not saved', conflict: 'Not saved' }[state];
+  const text = {
+    saved: 'All changes saved',
+    pending: 'Unsaved changes…',
+    saving: 'Saving…',
+    error: 'Not saved',
+    conflict: 'Not saved',
+  }[state];
   return (
     <span className={`save-badge is-${state}`} role="status" aria-live="polite">
       {text}
@@ -382,7 +445,11 @@ function SaveBadge({ state }: { state: SaveState }) {
 
 function FeedLine({ panel }: { panel: PanelDetail }) {
   if (panel.feedChain.length === 0) {
-    return <p className="feed-line">Fed from: {panel.mainType === 'lugs' ? 'not set yet (Panel settings → Fed from)' : 'the utility service'}</p>;
+    return (
+      <p className="feed-line">
+        Fed from: {panel.mainType === 'lugs' ? 'not set yet (Panel settings → Fed from)' : 'the utility service'}
+      </p>
+    );
   }
   return (
     <p className="feed-line">
@@ -390,8 +457,8 @@ function FeedLine({ panel }: { panel: PanelDetail }) {
       {panel.feedChain.map((f, i) => (
         <span key={f.breakerId}>
           {i > 0 && <span aria-hidden="true"> ← </span>}
-          {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>} · {f.circuit}{' '}
-          {f.label || 'unlabelled'} ({f.amps}A) <span className="muted">in {f.locationPath}</span>
+          {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>} ·{' '}
+          {f.circuit} {f.label || 'unlabelled'} ({f.amps}A) <span className="muted">in {f.locationPath}</span>
         </span>
       ))}
     </p>

@@ -75,7 +75,8 @@ export function servesOf(db: DB, breakerIds: number[]): ServesRow[] {
     .all(...breakerIds) as ServesRow[];
 }
 
-export const allPanels = (db: DB) => db.prepare('SELECT * FROM panels ORDER BY name COLLATE NOCASE').all() as PanelRow[];
+export const allPanels = (db: DB) =>
+  db.prepare('SELECT * FROM panels ORDER BY name COLLATE NOCASE').all() as PanelRow[];
 
 export function canViewPanel(actor: Actor, access: AccessData, panel: PanelRow): boolean {
   const node = access.node(panel.location_id);
@@ -164,9 +165,7 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
   );
   const visible = visibleLocations(actor, [...access.nodes.values()], access.grants);
   const fedPanels = db
-    .prepare(
-      `SELECT p.* FROM panels p JOIN breakers b ON b.id = p.fed_from_breaker_id WHERE b.panel_id = ?`,
-    )
+    .prepare(`SELECT p.* FROM panels p JOIN breakers b ON b.id = p.fed_from_breaker_id WHERE b.panel_id = ?`)
     .all(panel.id) as PanelRow[];
   const role = effectiveRole(actor, access.node(panel.location_id)!, access.grants)!;
 
@@ -305,8 +304,7 @@ export function describeChanges(
       );
     }
   }
-  const name = (b: Snapshot['breakers'][number]) =>
-    `${circuitLabel(layout, b)} ${b.label || 'unlabelled'}`.trim();
+  const name = (b: Snapshot['breakers'][number]) => `${circuitLabel(layout, b)} ${b.label || 'unlabelled'}`.trim();
   const beforeById = new Map(before.breakers.map((b) => [b.id, b]));
   const afterById = new Map(after.breakers.map((b) => [b.id, b]));
   for (const b of after.breakers) {
@@ -321,7 +319,9 @@ export function describeChanges(
       if (k === 'position') changes.push(`moved from ${circuitLabel(layout, old)}`);
       else if (k === 'serves') {
         const names = (list: string[]) => list.map((s) => locationName(Number(s.split(':')[0])));
-        changes.push(`serves ${names(old.serves).join(', ') || 'nothing'} → ${names(b.serves).join(', ') || 'nothing'}`);
+        changes.push(
+          `serves ${names(old.serves).join(', ') || 'nothing'} → ${names(b.serves).join(', ') || 'nothing'}`,
+        );
       } else if (k === 'notes') changes.push('notes changed');
       else changes.push(`${label} ${String(old[k])} → ${String(b[k])}`);
     }

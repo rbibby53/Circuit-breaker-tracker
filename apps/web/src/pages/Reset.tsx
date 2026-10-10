@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTitle } from '../lib/useTitle';
 import { api } from '../api';
 import { AuthShell } from '../components/AuthShell';
 import { ErrorNote, Field } from '../components/ui';
 
 export function ResetPage() {
+  useTitle('Reset password');
   const { token = '' } = useParams();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -42,7 +44,14 @@ export function ResetPage() {
               </p>
             )}
             <Field label="New password" hint="At least 10 characters. You'll be signed out everywhere else.">
-              <input required type="password" minLength={10} value={password} onChange={(e) => setPassword(e.target.value)} autoComplete="new-password" />
+              <input
+                required
+                type="password"
+                minLength={10}
+                value={password}
+                onChange={(e) => setPassword(e.target.value)}
+                autoComplete="new-password"
+              />
             </Field>
             <ErrorNote error={reset.error} />
             <button className="btn btn-primary btn-block btn-lg" disabled={reset.isPending || !info.data}>

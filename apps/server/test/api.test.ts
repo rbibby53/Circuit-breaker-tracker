@@ -113,7 +113,9 @@ describe('scoped access', () => {
   it('managers invite inside their scope only, and only up to their limit', async () => {
     const s = await scenario();
     expect((await s.supervisor.post(`/api/locations/${s.apartment}/invites`, { role: 'viewer' })).status).toBe(404);
-    expect((await s.supervisor.post(`/api/locations/${s.bA}/invites`, { role: 'manager', inviteLimit: 'viewer' })).status).toBe(403);
+    expect(
+      (await s.supervisor.post(`/api/locations/${s.bA}/invites`, { role: 'manager', inviteLimit: 'viewer' })).status,
+    ).toBe(403);
     expect((await s.supervisor.post(`/api/locations/${s.bA}/invites`, { role: 'editor' })).status).toBe(200);
   });
 
@@ -146,7 +148,9 @@ describe('scoped access', () => {
     const access = (await s.supervisor.get(`/api/locations/${s.ksu}/access`)).body;
     const own = access.applies.find((g: any) => g.user.username === 'supervisor');
     expect(own.canManage).toBe(false);
-    expect((await s.supervisor.patch(`/api/grants/${own.id}`, { role: 'manager', inviteLimit: 'manager' })).status).toBe(403);
+    expect(
+      (await s.supervisor.patch(`/api/grants/${own.id}`, { role: 'manager', inviteLimit: 'manager' })).status,
+    ).toBe(403);
   });
 
   it('an invite stops working when its creator loses the right to grant it', async () => {
@@ -229,7 +233,13 @@ describe('activity log', () => {
 });
 
 describe('single sign-on', () => {
-  const claims = { issuer: 'https://login.example/tenant/v2.0', subject: 'abc', email: 'sup@ksu.example', name: 'Sup', preferredUsername: 'sup@ksu.example' };
+  const claims = {
+    issuer: 'https://login.example/tenant/v2.0',
+    subject: 'abc',
+    email: 'sup@ksu.example',
+    name: 'Sup',
+    preferredUsername: 'sup@ksu.example',
+  };
 
   it('refuses an unknown identity without an invite', async () => {
     await setupAdmin(app);
@@ -244,7 +254,11 @@ describe('single sign-on', () => {
     const again = await completeOidcLogin(db, claims, { inviteToken: null, linkUserId: null });
     expect(again.userId).toBe(first.userId);
     const users = (await s.admin.get('/api/users')).body as any[];
-    expect(users.find((u) => u.id === first.userId)).toMatchObject({ username: 'sup@ksu.example', hasPassword: false, identities: ['oidc'] });
+    expect(users.find((u) => u.id === first.userId)).toMatchObject({
+      username: 'sup@ksu.example',
+      hasPassword: false,
+      identities: ['oidc'],
+    });
   });
 
   it('does not match accounts by email alone', async () => {

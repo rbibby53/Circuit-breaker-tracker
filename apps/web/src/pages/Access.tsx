@@ -13,15 +13,17 @@ import {
   type UserListItem,
 } from '@cbt/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useCurrentUser } from '../auth';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useTitle } from '../lib/useTitle';
 import { initials } from '../components/Layout';
 import { LocationTree } from '../components/LocationTree';
 import { ErrorNote, Field, LinkBox, formatDate } from '../components/ui';
-import { buildTree } from '../tree';
-import { useLocations } from './Sites';
+import { buildTree, flatten } from '../tree';
+import { useLocations } from '../queries';
 
 const rolesUpTo = (ceiling: EffectiveRole | null): Role[] => ROLES.filter((r) => roleRank(r) <= roleRank(ceiling));
 
@@ -48,6 +50,13 @@ export function AccessPage() {
   const { roots, byId } = buildTree(locations.data ?? []);
   const selected = selectedId ? byId.get(selectedId) : undefined;
   const canManageAnything = me.user.isAdmin || (locations.data ?? []).some((l) => l.role === 'manager');
+  useTitle(selected ? `Access · ${selected.name}` : 'Access');
+
+  // Open on the first place this person manages, rather than an empty page.
+  const firstManaged = flatten(roots).find((n) => n.role === 'manager' || n.role === 'admin')?.id;
+  useEffect(() => {
+    if (!selectedId && firstManaged) setParams({ loc: String(firstManaged) }, { replace: true });
+  }, [selectedId, firstManaged, setParams]);
 
   return (
     <div className="with-sidebar">
@@ -67,7 +76,8 @@ export function AccessPage() {
           <div>
             <h1>Users &amp; access</h1>
             <p className="muted">
-              Give someone a role on any company, site, building, floor or room. It applies to everything inside it, and nothing else.
+              Give someone a role on any company, site, building, floor or room. It applies to everything inside it, and
+              nothing else.
             </p>
           </div>
         </div>
@@ -101,6 +111,7 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
   });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['access', locationId] });
   const viewAs = useViewAs();
+  const confirm = useConfirm();
 
   const update = useMutation({
     mutationFn: (v: { id: number; role: Role; inviteLimit: Role | null }) =>
@@ -163,7 +174,11 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                 </td>
                 <td>
                   {g.canManage && !readOnly ? (
-                    <select aria-label={`Role for ${g.user.displayName}`} value={g.role} onChange={(e) => changeRole(g, e.target.value as Role)}>
+                    <select
+                      aria-label={`Role for ${g.user.displayName}`}
+                      value={g.role}
+                      onChange={(e) => changeRole(g, e.target.value as Role)}
+                    >
                       {choices.concat(choices.includes(g.role) ? [] : [g.role]).map((r) => (
                         <option key={r} value={r}>
                           {ROLE_LABELS[r]}
@@ -181,7 +196,9 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                     <select
                       aria-label={`Invite limit for ${g.user.displayName}`}
                       value={g.inviteLimit ?? 'viewer'}
-                      onChange={(e) => update.mutate({ id: g.id, role: 'manager', inviteLimit: e.target.value as Role })}
+                      onChange={(e) =>
+                        update.mutate({ id: g.id, role: 'manager', inviteLimit: e.target.value as Role })
+                      }
                     >
                       {choices.map((r) => (
                         <option key={r} value={r}>
@@ -196,7 +213,9 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                 <td>
                   <div className="cell-stack">
                     <span className="strong">{g.locationName}</span>
-                    <span className="muted small">{g.inherited ? `Inherited from ${KIND_LABELS[g.locationKind].toLowerCase()}` : 'Granted here'}</span>
+                    <span className="muted small">
+                      {g.inherited ? `Inherited from ${KIND_LABELS[g.locationKind].toLowerCase()}` : 'Granted here'}
+                    </span>
                   </div>
                 </td>
                 <td className="actions">
@@ -214,8 +233,14 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                     !readOnly && (
                       <button
                         className="btn btn-sm"
-                        onClick={() => {
-                          if (confirm(`Remove ${g.user.displayName}'s access here?`)) remove.mutate(g.id);
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: `Remove ${g.user.displayName}'s access?`,
+                            message: `They will no longer see ${g.locationName} or anything inside it, unless another grant covers it.`,
+                            confirmLabel: 'Remove access',
+                            danger: true,
+                          });
+                          if (ok) remove.mutate(g.id);
                         }}
                       >
                         Remove
@@ -249,7 +274,11 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
       {!readOnly && (
         <>
           <InviteForm locationId={locationId} locationName={a.location.name} choices={choices} />
-          <AddExistingForm locationId={locationId} choices={choices} existing={a.applies.filter((g) => !g.inherited).map((g) => g.user.id)} />
+          <AddExistingForm
+            locationId={locationId}
+            choices={choices}
+            existing={a.applies.filter((g) => !g.inherited).map((g) => g.user.id)}
+          />
           <PendingInvites locationId={locationId} />
         </>
       )}
@@ -310,7 +339,15 @@ function RoleFields({
   );
 }
 
-function InviteForm({ locationId, locationName, choices }: { locationId: number; locationName: string; choices: Role[] }) {
+function InviteForm({
+  locationId,
+  locationName,
+  choices,
+}: {
+  locationId: number;
+  locationName: string;
+  choices: Role[];
+}) {
   const qc = useQueryClient();
   const [role, setRole] = useState<Role>('viewer');
   const [limit, setLimit] = useState<Role>('viewer');
@@ -354,7 +391,15 @@ function InviteForm({ locationId, locationName, choices }: { locationId: number;
   );
 }
 
-function AddExistingForm({ locationId, choices, existing }: { locationId: number; choices: Role[]; existing: number[] }) {
+function AddExistingForm({
+  locationId,
+  choices,
+  existing,
+}: {
+  locationId: number;
+  choices: Role[];
+  existing: number[];
+}) {
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<UserListItem[]>('/api/users') });
   const [userId, setUserId] = useState<number | ''>('');
@@ -404,9 +449,16 @@ function PendingInvites({ locationId }: { locationId: number }) {
   const invites = useQuery({
     queryKey: ['invites', locationId],
     queryFn: () =>
-      api.get<{ id: number; role: Role; inviteLimit: Role | null; note: string | null; expiresAt: string; createdBy: string | null }[]>(
-        `/api/locations/${locationId}/invites`,
-      ),
+      api.get<
+        {
+          id: number;
+          role: Role;
+          inviteLimit: Role | null;
+          note: string | null;
+          expiresAt: string;
+          createdBy: string | null;
+        }[]
+      >(`/api/locations/${locationId}/invites`),
   });
   const revoke = useMutation({
     mutationFn: (id: number) => api.del(`/api/invites/${id}`),

@@ -1,10 +1,16 @@
 import type { ActivityItem } from '@cbt/core';
 import { useQuery } from '@tanstack/react-query';
+import { useTitle } from '../lib/useTitle';
 import { api, ApiError } from '../api';
 import { ErrorNote, formatDate } from '../components/ui';
 
 export function ActivityPage() {
-  const items = useQuery({ queryKey: ['activity'], queryFn: () => api.get<ActivityItem[]>('/api/activity?limit=200'), retry: false });
+  useTitle('Activity');
+  const items = useQuery({
+    queryKey: ['activity'],
+    queryFn: () => api.get<ActivityItem[]>('/api/activity?limit=200'),
+    retry: false,
+  });
 
   if (items.error instanceof ApiError && items.error.status === 403) {
     return (

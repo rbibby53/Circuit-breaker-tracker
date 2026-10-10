@@ -11,7 +11,9 @@ COPY apps/web/package.json apps/web/
 RUN pnpm install --frozen-lockfile
 COPY packages packages
 COPY apps apps
-RUN pnpm --filter @cbt/web build && pnpm --filter @cbt/server build
+# Shown in the app; CI passes the release tag. Defaults to the version in package.json.
+ARG APP_VERSION=
+RUN APP_VERSION=$APP_VERSION pnpm --filter @cbt/web build && APP_VERSION=$APP_VERSION pnpm --filter @cbt/server build
 
 # ---- Install only the native modules the bundle keeps external --------------------------
 FROM node:22-bookworm-slim AS native

@@ -25,6 +25,7 @@ const strictLimit = { rateLimit: { max: 10, timeWindow: '1 minute' } };
 export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
   app.get('/api/auth/config', async (): Promise<AuthConfig> => ({
     needsSetup: countUsers(db) === 0,
+    version: config.version,
     oidc: { enabled: !!config.oidc, label: config.oidc?.label ?? '' },
   }));
 
@@ -42,7 +43,12 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
         .run(body.username, body.displayName, passwordHash, now());
       return getUser(db, Number(r.lastInsertRowid))!;
     })();
-    audit(db, null, { action: 'setup', entity: 'user', entityId: admin.id, summary: `Created first admin ${admin.username}` });
+    audit(db, null, {
+      action: 'setup',
+      entity: 'user',
+      entityId: admin.id,
+      summary: `Created first admin ${admin.username}`,
+    });
     createSession(db, config, reply, admin.id, req.headers['user-agent']);
     return { ok: true };
   });
@@ -96,7 +102,11 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
   app.post('/api/invites/:token/accept', { config: strictLimit }, async (req, reply) => {
     const { token } = req.params as { token: string };
     const { invite, access } = usableInvite(db, token);
-    if (req.auth && !req.auth.readOnly && (req.body === undefined || req.body === null || Object.keys(req.body as object).length === 0)) {
+    if (
+      req.auth &&
+      !req.auth.readOnly &&
+      (req.body === undefined || req.body === null || Object.keys(req.body as object).length === 0)
+    ) {
       // Already signed in: add the access to this account.
       applyInvite(db, invite, access, req.auth.realUser.id, req.auth);
       return { ok: true };
@@ -104,7 +114,12 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     const body = parse(acceptInviteSchema, req.body);
     const user = await createUser(db, body);
     applyInvite(db, invite, access, user.id, null);
-    audit(db, null, { action: 'user.create', entity: 'user', entityId: user.id, summary: `${user.username} joined by invite` });
+    audit(db, null, {
+      action: 'user.create',
+      entity: 'user',
+      entityId: user.id,
+      summary: `${user.username} joined by invite`,
+    });
     createSession(db, config, reply, user.id, req.headers['user-agent']);
     return { ok: true };
   });
@@ -113,8 +128,7 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
 
   const usableReset = (token: string) => {
     const row = db.prepare('SELECT * FROM reset_tokens WHERE token_hash = ?').get(hashToken(token)) as
-      | { id: number; user_id: number; expires_at: string; used_at: string | null }
-      | undefined;
+      { id: number; user_id: number; expires_at: string; used_at: string | null } | undefined;
     if (!row) throw notFound('This reset link is not valid.');
     if (row.used_at) throw gone('This reset link has already been used.');
     if (isExpired(row.expires_at)) throw gone('This reset link has expired.');
@@ -134,7 +148,12 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     db.prepare('UPDATE users SET password_hash = ? WHERE id = ?').run(await hashPassword(password), user.id);
     db.prepare('UPDATE reset_tokens SET used_at = ? WHERE id = ?').run(now(), row.id);
     destroyUserSessions(db, user.id);
-    audit(db, null, { action: 'user.reset', entity: 'user', entityId: user.id, summary: `${user.username} set a new password from a reset link` });
+    audit(db, null, {
+      action: 'user.reset',
+      entity: 'user',
+      entityId: user.id,
+      summary: `${user.username} set a new password from a reset link`,
+    });
     createSession(db, config, reply, user.id, req.headers['user-agent']);
     return { ok: true };
   });
@@ -192,7 +211,12 @@ export async function completeOidcLogin(
       db.prepare(
         'INSERT INTO user_identities (user_id, provider, issuer, subject, email, linked_at) VALUES (?, ?, ?, ?, ?, ?)',
       ).run(state.linkUserId, 'oidc', claims.issuer, claims.subject, claims.email, now());
-      audit(db, null, { action: 'user.link', entity: 'user', entityId: state.linkUserId, summary: 'Linked a single sign-on account' });
+      audit(db, null, {
+        action: 'user.link',
+        entity: 'user',
+        entityId: state.linkUserId,
+        summary: 'Linked a single sign-on account',
+      });
     }
     return { userId: state.linkUserId, redirect: '/account?linked=1' };
   }
@@ -213,7 +237,12 @@ export async function completeOidcLogin(
       db.prepare(
         'INSERT INTO user_identities (user_id, provider, issuer, subject, email, linked_at) VALUES (?, ?, ?, ?, ?, ?)',
       ).run(user.id, 'oidc', claims.issuer, claims.subject, claims.email, now());
-      audit(db, null, { action: 'user.create', entity: 'user', entityId: user.id, summary: `${user.username} joined by invite with single sign-on` });
+      audit(db, null, {
+        action: 'user.create',
+        entity: 'user',
+        entityId: user.id,
+        summary: `${user.username} joined by invite with single sign-on`,
+      });
     }
     applyInvite(db, invite, access, user.id, null);
     return { userId: user.id, redirect: '/' };
@@ -224,4 +253,3 @@ export async function completeOidcLogin(
   }
   return { userId: user.id, redirect: '/' };
 }
-

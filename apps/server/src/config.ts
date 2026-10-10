@@ -1,5 +1,8 @@
 import path from 'node:path';
 
+// Replaced at build time by esbuild (see build.mjs); undefined when running from source.
+declare const __APP_VERSION__: string | undefined;
+
 export interface Config {
   port: number;
   host: string;
@@ -13,6 +16,7 @@ export interface Config {
   bootstrapAdmin: { username: string; password: string } | null;
   oidc: { issuer: string; clientId: string; clientSecret: string; label: string } | null;
   logLevel: string;
+  version: string;
 }
 
 function bool(v: string | undefined, fallback: boolean): boolean {
@@ -38,9 +42,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     sessionDays: Number(env.SESSION_DAYS ?? 30),
     webDist: env.WEB_DIST ? path.resolve(env.WEB_DIST) : null,
     bootstrapAdmin:
-      env.ADMIN_USERNAME && env.ADMIN_PASSWORD
-        ? { username: env.ADMIN_USERNAME, password: env.ADMIN_PASSWORD }
-        : null,
+      env.ADMIN_USERNAME && env.ADMIN_PASSWORD ? { username: env.ADMIN_USERNAME, password: env.ADMIN_PASSWORD } : null,
     oidc:
       oidcIssuer && oidcClientId && oidcClientSecret
         ? {
@@ -51,5 +53,6 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
           }
         : null,
     logLevel: env.LOG_LEVEL ?? 'info',
+    version: env.APP_VERSION || (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'),
   };
 }

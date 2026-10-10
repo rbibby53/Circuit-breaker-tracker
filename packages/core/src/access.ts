@@ -35,7 +35,11 @@ export function effectiveRole(
 ): EffectiveRole | null {
   if (actor.isAdmin) return 'admin';
   const chain = new Set(pathIds(node.path));
-  return strongest(grantsOf(actor, grants).filter((g) => chain.has(g.locationId)).map((g) => g.role));
+  return strongest(
+    grantsOf(actor, grants)
+      .filter((g) => chain.has(g.locationId))
+      .map((g) => g.role),
+  );
 }
 
 export type TreeAccess = 'full' | 'breadcrumb';
@@ -227,4 +231,3 @@ export function canResetUser(
   }
   return OK;
 }
-

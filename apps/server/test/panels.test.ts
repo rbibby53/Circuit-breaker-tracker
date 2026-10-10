@@ -68,7 +68,10 @@ describe('panels', () => {
     const h = await home();
     const r = await save(h.admin, h.main, [
       breaker('range', 1, { poles: 2, amps: 50, serves: [{ locationId: h.kitchen }] }),
-      breaker('bath', 19, { protection: 'gfci', serves: [{ locationId: h.kitchen }, { locationId: h.bath, note: 'outlets' }] }),
+      breaker('bath', 19, {
+        protection: 'gfci',
+        serves: [{ locationId: h.kitchen }, { locationId: h.bath, note: 'outlets' }],
+      }),
       breaker('lights', 21, { slot: 'A', amps: 15 }),
       breaker('network', 21, { slot: 'B', amps: 15, critical: true, backup: 'ups' }),
     ]);
@@ -127,7 +130,9 @@ describe('panels', () => {
     expect(after.breakers[0].label).toBe('renamed');
     expect(after.breakers[0].serves.map((s: any) => s.name).sort()).toEqual(['Hall bath', 'Kitchen']);
     // ...and cannot tag places they cannot see.
-    expect((await save(editor, h.main, [breaker('x', 1, { id, serves: [{ locationId: h.garage }] })])).status).toBe(400);
+    expect((await save(editor, h.main, [breaker('x', 1, { id, serves: [{ locationId: h.garage }] })])).status).toBe(
+      400,
+    );
   });
 
   it('refuses tags in another site', async () => {
@@ -153,9 +158,20 @@ describe('feed chain and served-by', () => {
       breaker('Kitchen counter', 5, { protection: 'gfci', serves: [{ locationId: h.kitchen }] }),
     ]);
     const feeder = main.body.panel.breakers.find((b: any) => b.label === 'Garage sub-panel').id;
-    const sub = await h.admin.post(`/api/locations/${h.garage}/panels`, { name: 'Garage sub-panel', spaces: 12, mainAmps: null, mainType: 'lugs' });
+    const sub = await h.admin.post(`/api/locations/${h.garage}/panels`, {
+      name: 'Garage sub-panel',
+      spaces: 12,
+      mainAmps: null,
+      mainType: 'lugs',
+    });
     const subId = sub.body.id as number;
-    expect((await save(h.admin, subId, [breaker('Garage outlets', 1, { serves: [{ locationId: h.garage }] })], { fedFromBreakerId: feeder })).status).toBe(200);
+    expect(
+      (
+        await save(h.admin, subId, [breaker('Garage outlets', 1, { serves: [{ locationId: h.garage }] })], {
+          fedFromBreakerId: feeder,
+        })
+      ).status,
+    ).toBe(200);
     const garageViewer = await invite(app, h.admin, h.garage, 'viewer', 'garage-viewer');
     return { ...h, feeder, subId, garageViewer };
   }
@@ -190,9 +206,20 @@ describe('feed chain and served-by', () => {
   it('shows what a breaker feeds, and refuses loops', async () => {
     const s = await withSubPanel();
     const main = (await s.admin.get(`/api/panels/${s.main}`)).body;
-    expect(main.breakers.find((b: any) => b.id === s.feeder).feeds).toEqual([{ panelId: s.subId, panelName: 'Garage sub-panel' }]);
+    expect(main.breakers.find((b: any) => b.id === s.feeder).feeds).toEqual([
+      { panelId: s.subId, panelName: 'Garage sub-panel' },
+    ]);
     const subBreaker = (await s.admin.get(`/api/panels/${s.subId}`)).body.breakers[0].id;
-    const loop = await save(s.admin, s.main, main.breakers.map((b: any) => ({ ...b, clientKey: String(b.id), serves: b.serves.map((x: any) => ({ locationId: x.locationId, note: x.note })) })), { fedFromBreakerId: subBreaker });
+    const loop = await save(
+      s.admin,
+      s.main,
+      main.breakers.map((b: any) => ({
+        ...b,
+        clientKey: String(b.id),
+        serves: b.serves.map((x: any) => ({ locationId: x.locationId, note: x.note })),
+      })),
+      { fedFromBreakerId: subBreaker },
+    );
     expect(loop.status).toBe(400);
     const candidates = (await s.admin.get(`/api/panels/${s.main}/feed-candidates`)).body as any[];
     expect(candidates.some((c) => c.panelId === s.subId)).toBe(false);
@@ -203,7 +230,11 @@ describe('feed chain and served-by', () => {
     const main = (await s.admin.get(`/api/panels/${s.main}`)).body;
     const rest = main.breakers
       .filter((b: any) => b.id !== s.feeder)
-      .map((b: any) => ({ ...b, clientKey: String(b.id), serves: b.serves.map((x: any) => ({ locationId: x.locationId, note: x.note })) }));
+      .map((b: any) => ({
+        ...b,
+        clientKey: String(b.id),
+        serves: b.serves.map((x: any) => ({ locationId: x.locationId, note: x.note })),
+      }));
     expect((await save(s.admin, s.main, rest)).status).toBe(200);
     expect((await s.admin.get(`/api/panels/${s.subId}`)).body.feedChain).toEqual([]);
   });

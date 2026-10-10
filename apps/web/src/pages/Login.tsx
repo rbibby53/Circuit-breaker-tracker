@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTitle } from '../lib/useTitle';
 import { api } from '../api';
 import { useAuthConfig } from '../auth';
 import { AuthShell } from '../components/AuthShell';
@@ -23,6 +24,7 @@ export function safeNext(next: string | null): string {
 }
 
 export function LoginPage() {
+  useTitle('Sign in');
   const config = useAuthConfig();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -66,10 +68,21 @@ export function LoginPage() {
         )}
         <form onSubmit={submit} className="stack">
           <Field label="Username or email">
-            <input required value={form.username} onChange={(e) => setForm({ ...form, username: e.target.value })} autoComplete="username" />
+            <input
+              required
+              value={form.username}
+              onChange={(e) => setForm({ ...form, username: e.target.value })}
+              autoComplete="username"
+            />
           </Field>
           <Field label="Password">
-            <input required type="password" value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })} autoComplete="current-password" />
+            <input
+              required
+              type="password"
+              value={form.password}
+              onChange={(e) => setForm({ ...form, password: e.target.value })}
+              autoComplete="current-password"
+            />
           </Field>
           <ErrorNote error={login.error} />
           <button className="btn btn-primary btn-block btn-lg" disabled={login.isPending}>

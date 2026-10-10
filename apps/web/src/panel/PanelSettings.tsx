@@ -1,6 +1,7 @@
 import { MAX_SPACES, MIN_SPACES, type FeedCandidate, type PanelDetail } from '@cbt/core';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
+import { useConfirm } from '../components/ConfirmDialog';
 import type { EditPanel } from './state';
 
 export function PanelSettings({
@@ -14,6 +15,7 @@ export function PanelSettings({
   onChange: (patch: Partial<Omit<EditPanel, 'breakers'>>, coalesce?: string) => void;
   onDelete: () => void;
 }) {
+  const confirm = useConfirm();
   const candidates = useQuery({
     queryKey: ['feed-candidates', server.id],
     queryFn: () => api.get<FeedCandidate[]>(`/api/panels/${server.id}/feed-candidates`),
@@ -42,7 +44,10 @@ export function PanelSettings({
         </label>
         <label className="field">
           <span className="field-label">Main</span>
-          <select value={doc.mainType} onChange={(e) => onChange({ mainType: e.target.value as EditPanel['mainType'] })}>
+          <select
+            value={doc.mainType}
+            onChange={(e) => onChange({ mainType: e.target.value as EditPanel['mainType'] })}
+          >
             <option value="breaker">Main breaker</option>
             <option value="lugs">Main lugs only (fed from elsewhere)</option>
           </select>
@@ -60,11 +65,18 @@ export function PanelSettings({
         )}
         <label className="field">
           <span className="field-label">Voltage</span>
-          <input value={doc.voltage} placeholder="120/240 V split-phase" onChange={(e) => onChange({ voltage: e.target.value }, 'voltage')} />
+          <input
+            value={doc.voltage}
+            placeholder="120/240 V split-phase"
+            onChange={(e) => onChange({ voltage: e.target.value }, 'voltage')}
+          />
         </label>
         <label className="field">
           <span className="field-label">Manufacturer</span>
-          <input value={doc.manufacturer} onChange={(e) => onChange({ manufacturer: e.target.value }, 'manufacturer')} />
+          <input
+            value={doc.manufacturer}
+            onChange={(e) => onChange({ manufacturer: e.target.value }, 'manufacturer')}
+          />
         </label>
         <label className="field">
           <span className="field-label">Model</span>
@@ -79,7 +91,9 @@ export function PanelSettings({
             <option value="">The utility service (this is a main panel)</option>
             {doc.fedFromBreakerId !== null && !known.has(doc.fedFromBreakerId) && (
               <option value={doc.fedFromBreakerId}>
-                {server.feedChain[0] ? `${server.feedChain[0].panelName} · ${server.feedChain[0].circuit} ${server.feedChain[0].label}` : 'Current feeder'}
+                {server.feedChain[0]
+                  ? `${server.feedChain[0].panelName} · ${server.feedChain[0].circuit} ${server.feedChain[0].label}`
+                  : 'Current feeder'}
               </option>
             )}
             {[...byPanel.entries()].map(([panelId, list]) => (
@@ -102,8 +116,14 @@ export function PanelSettings({
         <button
           type="button"
           className="btn btn-danger"
-          onClick={() => {
-            if (confirm(`Delete ${server.name} and all its breakers? This cannot be undone.`)) onDelete();
+          onClick={async () => {
+            const ok = await confirm({
+              title: `Delete ${server.name}?`,
+              message: 'All its breakers and their labels go too. This cannot be undone.',
+              confirmLabel: 'Delete panel',
+              danger: true,
+            });
+            if (ok) onDelete();
           }}
         >
           Delete panel

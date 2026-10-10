@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useCurrentUser } from '../auth';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useTitle } from '../lib/useTitle';
 import { initials } from '../components/Layout';
 import { ErrorNote, LinkBox, relativeTime } from '../components/ui';
 import { useViewAs } from './Access';
@@ -13,11 +15,14 @@ export function UsersPage() {
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<UserListItem[]>('/api/users'), retry: false });
   const viewAs = useViewAs();
+  const confirm = useConfirm();
+  useTitle('People');
   const [link, setLink] = useState<{ name: string; link: CreatedLink } | null>(null);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] });
 
   const resetLink = useMutation({
-    mutationFn: (u: UserListItem) => api.post<CreatedLink>(`/api/users/${u.id}/reset-link`).then((l) => ({ name: u.displayName, link: l })),
+    mutationFn: (u: UserListItem) =>
+      api.post<CreatedLink>(`/api/users/${u.id}/reset-link`).then((l) => ({ name: u.displayName, link: l })),
     onSuccess: setLink,
   });
   const update = useMutation({
@@ -46,7 +51,9 @@ export function UsersPage() {
         <div>
           <h1>People</h1>
           <p className="muted">
-            {me.user.isAdmin ? 'Everyone with an account.' : 'People with access somewhere you manage. You only see their access inside your scope.'}
+            {me.user.isAdmin
+              ? 'Everyone with an account.'
+              : 'People with access somewhere you manage. You only see their access inside your scope.'}
           </p>
         </div>
         <Link className="btn btn-dark" to="/access">
@@ -93,7 +100,11 @@ export function UsersPage() {
                     </span>
                   </div>
                 </td>
-                <td>{[u.hasPassword ? 'Password' : null, u.identities.length ? 'Microsoft' : null].filter(Boolean).join(' + ') || '—'}</td>
+                <td>
+                  {[u.hasPassword ? 'Password' : null, u.identities.length ? 'Microsoft' : null]
+                    .filter(Boolean)
+                    .join(' + ') || '—'}
+                </td>
                 <td>
                   {u.isAdmin ? (
                     'Everywhere'
@@ -124,16 +135,28 @@ export function UsersPage() {
                   )}
                   {isAdmin && u.id !== me.realUser.id && (
                     <>
-                      <button className="btn btn-sm" onClick={() => update.mutate({ id: u.id, body: { isAdmin: !u.isAdmin } })}>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => update.mutate({ id: u.id, body: { isAdmin: !u.isAdmin } })}
+                      >
                         {u.isAdmin ? 'Remove admin' : 'Make admin'}
                       </button>
-                      <button className="btn btn-sm" onClick={() => update.mutate({ id: u.id, body: { disabled: !u.disabled } })}>
+                      <button
+                        className="btn btn-sm"
+                        onClick={() => update.mutate({ id: u.id, body: { disabled: !u.disabled } })}
+                      >
                         {u.disabled ? 'Enable' : 'Disable'}
                       </button>
                       <button
                         className="btn btn-sm btn-danger"
-                        onClick={() => {
-                          if (confirm(`Delete ${u.displayName}? Their access is removed too.`)) remove.mutate(u.id);
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: `Delete ${u.displayName}?`,
+                            message: 'Their account and all their access are removed. This cannot be undone.',
+                            confirmLabel: 'Delete',
+                            danger: true,
+                          });
+                          if (ok) remove.mutate(u.id);
                         }}
                       >
                         Delete

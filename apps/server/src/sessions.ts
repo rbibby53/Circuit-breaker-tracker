@@ -31,9 +31,13 @@ interface SessionRow {
 
 export function createSession(db: DB, config: Config, reply: FastifyReply, userId: number, userAgent?: string): void {
   const { token, hash } = newToken();
-  db.prepare(
-    'INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, ?)',
-  ).run(hash, userId, now(), daysFromNow(config.sessionDays), userAgent?.slice(0, 300) ?? null);
+  db.prepare('INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, ?)').run(
+    hash,
+    userId,
+    now(),
+    daysFromNow(config.sessionDays),
+    userAgent?.slice(0, 300) ?? null,
+  );
   reply.setCookie(SESSION_COOKIE, token, {
     path: '/',
     httpOnly: true,

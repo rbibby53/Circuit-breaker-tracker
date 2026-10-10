@@ -15,9 +15,8 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { ErrorNote, Field } from '../components/ui';
+import { usePanels } from '../queries';
 import type { TreeNode } from '../tree';
-
-export const usePanels = () => useQuery({ queryKey: ['panels'], queryFn: () => api.get<PanelSummary[]>('/api/panels') });
 
 function isInside(byId: Map<number, TreeNode>, locationId: number, ancestorId: number): boolean {
   let n = byId.get(locationId);
@@ -62,7 +61,8 @@ export function PanelsHere({ node, byId }: { node: TreeNode; byId: Map<number, T
             <span className="stack-sm">
               <span className="card-title">{p.name}</span>
               <span className="small">
-                {p.voltage || LAYOUT_LABELS[p.layout]} · {p.mainType === 'lugs' ? 'main lugs' : `${p.mainAmps ?? '?'} A main`}
+                {p.voltage || LAYOUT_LABELS[p.layout]} ·{' '}
+                {p.mainType === 'lugs' ? 'main lugs' : `${p.mainAmps ?? '?'} A main`}
               </span>
               <span className="mono small muted">
                 {p.usedSpaces}/{p.spaces} spaces{p.criticalCount ? ` · ${p.criticalCount} critical` : ''}
@@ -77,11 +77,18 @@ export function PanelsHere({ node, byId }: { node: TreeNode; byId: Map<number, T
   );
 }
 
-export function AddPanelForm({ roomId }: { roomId: number }) {
+export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen: boolean }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(startOpen);
   const [layout, setLayout] = useState<PanelLayout>('residential');
-  const [form, setForm] = useState({ name: '', spaces: 24, mainType: 'breaker' as 'breaker' | 'lugs', mainAmps: 200, voltage: '120/240 V split-phase' });
+  const [form, setForm] = useState({
+    name: '',
+    spaces: 24,
+    mainType: 'breaker' as 'breaker' | 'lugs',
+    mainAmps: 200,
+    voltage: '120/240 V split-phase',
+  });
   const create = useMutation({
     mutationFn: () =>
       api.post<{ id: number }>(`/api/locations/${roomId}/panels`, {
@@ -98,6 +105,15 @@ export function AddPanelForm({ roomId }: { roomId: number }) {
     e.preventDefault();
     create.mutate();
   };
+  if (!open) {
+    return (
+      <div className="add-actions">
+        <button type="button" className="btn" onClick={() => setOpen(true)}>
+          + Add a panel
+        </button>
+      </div>
+    );
+  }
   return (
     <form className="panel stack" onSubmit={submit} aria-label="Add a panel">
       <h2 className="h-caps">Add a panel</h2>
@@ -106,7 +122,14 @@ export function AddPanelForm({ roomId }: { roomId: number }) {
           const available = AVAILABLE_LAYOUTS.includes(l);
           return (
             <label key={l} className={`layout-pick${layout === l ? ' is-on' : ''}${available ? '' : ' is-off'}`}>
-              <input type="radio" name="layout" value={l} checked={layout === l} disabled={!available} onChange={() => setLayout(l)} />
+              <input
+                type="radio"
+                name="layout"
+                value={l}
+                checked={layout === l}
+                disabled={!available}
+                onChange={() => setLayout(l)}
+              />
               <span className="strong">{LAYOUT_LABELS[l]}</span>
               <span className="small muted">
                 {l === 'residential' && 'Two columns, odd left and even right. 1- and 2-pole, tandems.'}
@@ -119,7 +142,12 @@ export function AddPanelForm({ roomId }: { roomId: number }) {
       </div>
       <div className="form-row">
         <Field label="Name">
-          <input required value={form.name} placeholder="e.g. Main panel, Garage sub-panel" onChange={(e) => setForm({ ...form, name: e.target.value })} />
+          <input
+            required
+            value={form.name}
+            placeholder="e.g. Main panel, Garage sub-panel"
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
         </Field>
         <Field label="Spaces">
           <select value={form.spaces} onChange={(e) => setForm({ ...form, spaces: Number(e.target.value) })}>
@@ -131,14 +159,22 @@ export function AddPanelForm({ roomId }: { roomId: number }) {
           </select>
         </Field>
         <Field label="Main">
-          <select value={form.mainType} onChange={(e) => setForm({ ...form, mainType: e.target.value as 'breaker' | 'lugs' })}>
+          <select
+            value={form.mainType}
+            onChange={(e) => setForm({ ...form, mainType: e.target.value as 'breaker' | 'lugs' })}
+          >
             <option value="breaker">Main breaker</option>
             <option value="lugs">Main lugs only</option>
           </select>
         </Field>
         {form.mainType === 'breaker' && (
           <Field label="Main amps">
-            <input type="number" min={1} value={form.mainAmps} onChange={(e) => setForm({ ...form, mainAmps: Number(e.target.value) })} />
+            <input
+              type="number"
+              min={1}
+              value={form.mainAmps}
+              onChange={(e) => setForm({ ...form, mainAmps: Number(e.target.value) })}
+            />
           </Field>
         )}
         <Field label="Voltage">
@@ -181,13 +217,21 @@ export function ServedBy({ node }: { node: TreeNode }) {
                 <td>
                   <span className="strong">{i.label || 'Unlabelled'}</span>{' '}
                   {i.critical && <span className="badge badge-crit">CRIT</span>}
-                  {i.backup !== 'none' && <span className={`badge badge-${i.backup === 'ups' ? 'ups' : 'gen'}`}>{BACKUP_LABELS[i.backup].toUpperCase().slice(0, 3)}</span>}
+                  {i.backup !== 'none' && (
+                    <span className={`badge badge-${i.backup === 'ups' ? 'ups' : 'gen'}`}>
+                      {BACKUP_LABELS[i.backup].toUpperCase().slice(0, 3)}
+                    </span>
+                  )}
                 </td>
                 <td className="mono">{i.amps}A</td>
                 <td>{PROTECTION_LABELS[i.protection]}</td>
                 <td>
                   <div className="cell-stack">
-                    {i.canViewPanel ? <Link to={`/panels/${i.panelId}`}>{i.panelName}</Link> : <span className="strong">{i.panelName}</span>}
+                    {i.canViewPanel ? (
+                      <Link to={`/panels/${i.panelId}`}>{i.panelName}</Link>
+                    ) : (
+                      <span className="strong">{i.panelName}</span>
+                    )}
                     <span className="muted small">{i.panelPath}</span>
                   </div>
                 </td>

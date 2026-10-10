@@ -69,7 +69,13 @@ export async function finishOidc(
   const cfg = await discover(oidc);
   const stateParam = callbackUrl.searchParams.get('state') ?? '';
   const row = db.prepare('SELECT * FROM oidc_states WHERE state = ?').get(stateParam) as
-    | { code_verifier: string; nonce: string; invite_token: string | null; link_user_id: number | null; created_at: string }
+    | {
+        code_verifier: string;
+        nonce: string;
+        invite_token: string | null;
+        link_user_id: number | null;
+        created_at: string;
+      }
     | undefined;
   db.prepare('DELETE FROM oidc_states WHERE state = ?').run(stateParam);
   if (!row || Date.now() - Date.parse(row.created_at) > STATE_TTL_MS) {
