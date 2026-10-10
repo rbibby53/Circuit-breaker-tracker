@@ -1711,8 +1711,12 @@ a:focus-visible {
   .pg-nums {
     flex-basis: 30px;
   }
+  /* The handles are decoration; on a phone the labels need the room more. */
   .pg-handles {
-    flex-basis: 26px;
+    display: none;
+  }
+  .pg-label {
+    font-size: 13px;
   }
   .pg-text {
     padding: 0 6px;
