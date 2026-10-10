@@ -81,6 +81,16 @@ Access is a list of **grants**. Each grant gives one person one role on one loca
   sense. They can't see sibling locations or what's inside them.
 - Every request is checked on the server: breaker → panel → room → … → company.
 
+**Read-only visibility beyond a grant.** Some things outside a person's scope are shown
+read-only, so they can find the right breaker:
+
+- **Feed chain:** anyone who can see a panel can also see everything upstream of it, all the
+  way to the service: each feeding panel's name and location, and the feeder breaker's
+  number, label and amps. They don't see the rest of those upstream panels.
+- **Breakers serving my location:** anyone who can see a room, floor or building can see the
+  breakers that serve it (label, number, panel name and location), even when the panel sits
+  outside their scope.
+
 | Role | Can |
 | --- | --- |
 | **Viewer** | See panels, search, print PDFs |
@@ -107,18 +117,46 @@ How the examples map:
 | Roommates | Editor on **Personal › Apartment** |
 | Parents | Viewer on **Personal › Parents' house** |
 
+### View as user
+
+Admins can **View as** any user, from the Users & access screen or a user's profile:
+
+- The app re-renders with exactly that user's permissions: the same tree, panels, search
+  results and PDFs.
+- A banner names the user and has an **Exit view** button.
+- The view is **read-only**. Edits are disabled in the UI and the server rejects every write
+  while viewing as someone else.
+- The session stores `acting_as_user_id`. Start and stop are written to the audit log.
+- Later: Managers could get the same preview, limited to people and locations inside their
+  own scope.
+
 ### Sign-in
 
 - **First run:** a setup screen creates the first Admin. Alternatively, `ADMIN_USERNAME` and
   `ADMIN_PASSWORD` env vars seed it.
-- **Accounts:** username or email plus password, hashed with argon2id. Login attempts are rate limited.
+- **Two ways to sign in, both on at once:**
+  - **Microsoft Entra ID (OIDC)** for KSU and other work accounts. Set `OIDC_ISSUER`,
+    `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` and an optional button label. The login page
+    shows "Sign in with Microsoft". Uses the authorization-code flow with PKCE, and any
+    standard OIDC provider works the same way.
+  - **Local accounts** for family, roommates and anyone else: username or email plus
+    password, hashed with argon2id. Login attempts are rate limited.
+- **One user, many logins:** a user can have a password, an Entra identity, or both. Entra
+  identities are matched by the token's `oid`/`sub`, never by email alone. An Admin can link
+  or unlink identities.
+- **Access still comes from grants:** signing in with Entra does not give access to
+  anything by itself; the person still needs a grant or an invite. Later, an Entra group
+  could map automatically to a grant.
+- **Password resets:** no email server is needed. An Admin, or a Manager for people inside
+  their scope, creates a one-time reset link.
 - **Sessions:** stored in the database. The cookie is `HttpOnly`, `SameSite=Lax` and `Secure`
   behind HTTPS. Mutating requests also need a custom header, as CSRF protection.
 - **Invites:** a Manager or Admin creates a one-time link for a location, role and invite
-  limit. The link expires after 7 days and needs no email server. Inviting someone who
-  already has an account just adds a grant.
-- **Later:** OIDC single sign-on (Authentik, Authelia, Keycloak, Entra ID, etc.) and an
-  optional trusted-header mode for forward-auth proxies.
+  limit. The link expires after 7 days and needs no email server. The person accepting it
+  either creates a local password or signs in with Microsoft. Inviting someone who already
+  has an account just adds a grant.
+- **Later:** TOTP two-factor for local accounts, and an optional trusted-header mode for
+  forward-auth proxies.
 
 ### Change history
 
@@ -131,8 +169,10 @@ How the examples map:
 ## Data model
 
 ```
-users           id, username, email, display_name, password_hash, is_admin, disabled, created_at, last_seen_at
-sessions        id, user_id, expires_at, created_at, user_agent
+users           id, username, email, display_name, password_hash?, is_admin, disabled, created_at, last_seen_at
+user_identities user_id, provider (e.g. entra), issuer, subject, email, linked_at
+sessions        id, user_id, acting_as_user_id?, expires_at, created_at, user_agent
+reset_tokens    token_hash, user_id, created_by, expires_at, used_at
 locations       id, parent_id?, kind (company | site | building | floor | room), name,
                 sort_order, path (materialised ancestor ids, e.g. "/1/4/9/"), details (JSON:
                 address, notes), is_default_building
@@ -191,6 +231,8 @@ the thumbnails and the PDF all draw from that one layout. The validation rules l
 
 ```
 POST   /api/auth/login | /logout          GET /api/auth/me
+GET    /api/auth/oidc/start | /callback
+POST   /api/admin/view-as/:userId   DELETE /api/admin/view-as
 GET    /api/locations                     (the tree, pruned to what you can see)
 POST   /api/locations   PATCH/DELETE /api/locations/:id
 GET    /api/locations/:id/grants          (direct + inherited, plus grants further inside)
@@ -236,9 +278,11 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
 
 1. **Foundation**
    - pnpm workspace, Docker image and compose file, database and migrations.
-   - Auth: first-run admin, login, sessions.
+   - Auth: first-run admin, local login, sessions, Entra ID / OIDC sign-in, reset links.
    - Location tree (company → room), scoped grants with invite limits, invites.
-   - Permission checks with tests for every scope rule.
+   - Permission checks with tests for every scope rule, including feed-chain and
+     serves visibility.
+   - View as user (read-only).
    - Sites screen and Users & access screen.
    - Audit log plumbing.
 2. **Panel editor (residential)**
@@ -255,6 +299,6 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    - Admin backup and restore.
    - Duplicate a panel.
    - CSV export.
-   - OIDC sign-in.
+   - TOTP two-factor for local accounts.
 
 Later: DIN-rail layout, quad breakers, load calculations, custom tags, photo attachments.
