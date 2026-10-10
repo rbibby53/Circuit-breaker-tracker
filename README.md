@@ -75,6 +75,23 @@ Open the app and create the first admin account on the setup screen. To build th
 yourself, use `docker build -t circuit-breaker-tracker .` or set `build: .` in the compose
 file.
 
+### Unraid
+
+A template is in [`unraid/circuit-breaker-tracker.xml`](unraid/circuit-breaker-tracker.xml). It uses host networking
+on port 2757.
+
+1. In the Unraid terminal, create the data folder and give it to the container's user (uid 1000):
+   ```sh
+   mkdir -p /mnt/user/appdata/circuit-breaker-tracker && chown -R 1000:1000 /mnt/user/appdata/circuit-breaker-tracker
+   ```
+2. Save the template where Unraid looks for your own templates:
+   ```sh
+   curl -fsSL -o /boot/config/plugins/dockerMan/templates-user/my-circuit-breaker-tracker.xml \
+     https://raw.githubusercontent.com/rbibby53/Circuit-breaker-tracker/main/unraid/circuit-breaker-tracker.xml
+   ```
+3. **Docker** tab → **Add Container** → pick **circuit-breaker-tracker** under Template → **Apply**.
+4. Open `http://<server-ip>:2757` and create the first admin.
+
 ### Configuration
 
 | Variable                                              | Default                         | Purpose                                                                                                         |
