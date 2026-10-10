@@ -103,12 +103,24 @@ export class AccessData {
   readonly grantRows: GrantRow[];
   readonly grants: GrantLike[];
 
+  /** Automatic buildings of single-building sites: hidden in the UI and in path labels. */
+  readonly hiddenBuildings: Set<number>;
+
   constructor(db: DB) {
     this.locations = allLocations(db);
     this.byId = new Map(this.locations.map((l) => [l.id, l]));
     this.nodes = new Map(this.locations.map((l) => [l.id, toNode(l)]));
     this.grantRows = allGrants(db);
     this.grants = this.grantRows.map(toGrantLike);
+    const buildingsBySite = new Map<number, LocationRow[]>();
+    for (const l of this.locations) {
+      if (l.kind === 'building' && l.parent_id !== null) {
+        buildingsBySite.set(l.parent_id, [...(buildingsBySite.get(l.parent_id) ?? []), l]);
+      }
+    }
+    this.hiddenBuildings = new Set(
+      [...buildingsBySite.values()].filter((b) => b.length === 1 && b[0]!.is_default_building).map((b) => b[0]!.id),
+    );
   }
 
   node(id: number): LocationNode | undefined {
@@ -120,6 +132,7 @@ export class AccessData {
     const l = this.byId.get(id);
     if (!l) return '';
     return pathIds(l.path)
+      .filter((pid) => pid === id || !this.hiddenBuildings.has(pid))
       .map((pid) => this.byId.get(pid)?.name ?? '?')
       .join(' › ');
   }

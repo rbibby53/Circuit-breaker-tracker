@@ -29,7 +29,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
     throw new Error('PUBLIC_URL must be set when OIDC_ISSUER is set (it builds the redirect URL).');
   }
   return {
-    port: Number(env.PORT ?? 8080),
+    port: Number(env.PORT ?? 2757),
     host: env.HOST ?? '0.0.0.0',
     dataDir: path.resolve(env.DATA_DIR ?? './data'),
     publicUrl,

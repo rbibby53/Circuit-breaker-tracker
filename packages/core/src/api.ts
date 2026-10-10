@@ -1,5 +1,6 @@
 // Response shapes shared by the server and the web app.
 import type { LocationKind } from './locations';
+import type { Backup, MainType, PanelLayout, Protection, Slot } from './panel';
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
 
@@ -97,4 +98,121 @@ export interface ActivityItem {
   entityId: number | null;
   locationPath: string | null;
   summary: string;
+}
+
+// ---- Panels ---------------------------------------------------------------------------
+
+export interface PanelSummary {
+  id: number;
+  locationId: number;
+  name: string;
+  layout: PanelLayout;
+  spaces: number;
+  mainAmps: number | null;
+  mainType: MainType;
+  voltage: string;
+  /** Spaces with something in them. */
+  usedSpaces: number;
+  breakerCount: number;
+  criticalCount: number;
+  fedFrom: string | null;
+  role: EffectiveRole;
+}
+
+export interface ServesDto {
+  locationId: number;
+  note: string;
+  /** null when the viewer cannot see that location. */
+  name: string | null;
+  kind: LocationKind | null;
+  path: string | null;
+}
+
+export interface BreakerDto {
+  id: number;
+  position: number;
+  slot: Slot;
+  poles: number;
+  amps: number;
+  protection: Protection;
+  label: string;
+  notes: string;
+  isSpare: boolean;
+  critical: boolean;
+  backup: Backup;
+  serves: ServesDto[];
+  /** Panels this breaker feeds, when the viewer can see them. */
+  feeds: { panelId: number; panelName: string }[];
+  /** Sub-panels it feeds that the viewer cannot see. */
+  hiddenFeeds: number;
+}
+
+/** One step up the feed chain: the breaker feeding a panel, and the panel it sits in. */
+export interface FeedLink {
+  panelId: number;
+  panelName: string;
+  locationPath: string;
+  breakerId: number;
+  circuit: string;
+  label: string;
+  amps: number;
+  /** Whether the viewer may open that panel. They see this summary either way. */
+  canView: boolean;
+}
+
+export interface PanelDetail extends Omit<PanelSummary, 'usedSpaces' | 'breakerCount' | 'criticalCount' | 'fedFrom'> {
+  locationPath: string;
+  manufacturer: string;
+  model: string;
+  notes: string;
+  version: number;
+  updatedAt: string;
+  canEdit: boolean;
+  breakers: BreakerDto[];
+  /** From the breaker feeding this panel up to the service. Empty when fed by the utility. */
+  feedChain: FeedLink[];
+  fedFromBreakerId: number | null;
+}
+
+export interface SavePanelResponse {
+  panel: PanelDetail;
+  /** New breakers' ids, by the clientKey they were sent with. */
+  idMap: Record<string, number>;
+}
+
+export interface FeedCandidate {
+  breakerId: number;
+  panelId: number;
+  panelName: string;
+  locationPath: string;
+  circuit: string;
+  label: string;
+  amps: number;
+}
+
+export interface ServedByItem {
+  breakerId: number;
+  circuit: string;
+  label: string;
+  amps: number;
+  poles: number;
+  protection: Protection;
+  critical: boolean;
+  backup: Backup;
+  isSpare: boolean;
+  panelId: number;
+  panelName: string;
+  panelPath: string;
+  canViewPanel: boolean;
+  /** What the breaker is tagged with: this location, something inside it, or something above it. */
+  via: string;
+}
+
+export interface PanelHistoryItem {
+  id: number;
+  at: string;
+  user: string;
+  actingAs: string | null;
+  summary: string;
+  details: string[];
 }

@@ -1,4 +1,5 @@
 import { CHILD_KIND, KIND_LABELS, atLeast, type LocationDto, type LocationKind } from '@cbt/core';
+import { AddPanelForm, PanelsHere, ServedBy } from './SitePanels';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
@@ -203,17 +204,11 @@ function LocationView({
       <ErrorNote error={remove.error} />
       {editing && <EditForm node={node} onDone={() => setEditing(false)} />}
 
-      {node.kind === 'room' ? (
-        <div className="empty">
-          <p>
-            <strong>No panels here yet.</strong> The panel editor arrives in the next update; panels will be placed in rooms like this one.
-          </p>
-        </div>
-      ) : (
-        <ChildCards nodes={kids} onSelect={onSelect} />
-      )}
-
+      <PanelsHere node={node} byId={byId} />
+      {node.kind === 'room' && canEdit && <AddPanelForm roomId={node.id} />}
+      {node.kind !== 'room' && <ChildCards nodes={kids} onSelect={onSelect} />}
       {canEdit && addKinds.map((k) => <AddForm key={k} parentId={node.id} kind={k} />)}
+      {(node.kind === 'room' || node.kind === 'floor') && !crumbOnly && <ServedBy node={node} />}
     </div>
   );
 }

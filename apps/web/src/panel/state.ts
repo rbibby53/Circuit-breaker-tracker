@@ -1,0 +1,208 @@
+import {
+  checkChange,
+  freeAt,
+  validateLayout,
+  type Backup,
+  type BreakerInput,
+  type MainType,
+  type PanelDetail,
+  type PanelLayout,
+  type Protection,
+  type Slot,
+} from '@cbt/core';
+
+export interface EditServe {
+  locationId: number;
+  note: string;
+  /** Tags on locations this person cannot see. Kept by the server; never sent. */
+  hidden: boolean;
+}
+
+export interface EditBreaker {
+  key: string;
+  id?: number;
+  position: number;
+  slot: Slot;
+  poles: number;
+  amps: number;
+  protection: Protection;
+  label: string;
+  notes: string;
+  isSpare: boolean;
+  critical: boolean;
+  backup: Backup;
+  serves: EditServe[];
+}
+
+export interface EditPanel {
+  name: string;
+  layout: PanelLayout;
+  spaces: number;
+  mainAmps: number | null;
+  mainType: MainType;
+  voltage: string;
+  manufacturer: string;
+  model: string;
+  notes: string;
+  fedFromBreakerId: number | null;
+  breakers: EditBreaker[];
+}
+
+let counter = 0;
+export const newKey = () => `new-${Date.now().toString(36)}-${(counter++).toString(36)}`;
+
+export function fromDetail(p: PanelDetail): EditPanel {
+  return {
+    name: p.name,
+    layout: p.layout,
+    spaces: p.spaces,
+    mainAmps: p.mainAmps,
+    mainType: p.mainType,
+    voltage: p.voltage,
+    manufacturer: p.manufacturer,
+    model: p.model,
+    notes: p.notes,
+    fedFromBreakerId: p.fedFromBreakerId,
+    breakers: p.breakers.map((b) => ({
+      key: `id-${b.id}`,
+      id: b.id,
+      position: b.position,
+      slot: b.slot,
+      poles: b.poles,
+      amps: b.amps,
+      protection: b.protection,
+      label: b.label,
+      notes: b.notes,
+      isSpare: b.isSpare,
+      critical: b.critical,
+      backup: b.backup,
+      serves: b.serves.map((s) => ({ locationId: s.locationId, note: s.note, hidden: s.name === null })),
+    })),
+  };
+}
+
+/**
+ * The save request body. `fedFromBreakerId` is only sent when it changed. Ids the server no
+ * longer has (a breaker brought back by undo after being deleted) are sent as new breakers.
+ */
+export function toRequest(doc: EditPanel, version: number, baselineFedFrom: number | null, knownIds: Set<number>) {
+  const breakers: BreakerInput[] = doc.breakers.map((b) => ({
+    id: b.id !== undefined && knownIds.has(b.id) ? b.id : undefined,
+    clientKey: b.key,
+    position: b.position,
+    slot: b.slot,
+    poles: b.poles,
+    amps: b.amps,
+    protection: b.protection,
+    label: b.label,
+    notes: b.notes,
+    isSpare: b.isSpare,
+    critical: b.critical,
+    backup: b.backup,
+    serves: b.serves.filter((s) => !s.hidden).map((s) => ({ locationId: s.locationId, note: s.note })),
+  }));
+  return {
+    name: doc.name,
+    layout: doc.layout,
+    spaces: doc.spaces,
+    mainAmps: doc.mainType === 'lugs' ? null : doc.mainAmps,
+    mainType: doc.mainType,
+    voltage: doc.voltage,
+    manufacturer: doc.manufacturer,
+    model: doc.model,
+    notes: doc.notes,
+    version,
+    breakers,
+    ...(doc.fedFromBreakerId !== baselineFedFrom ? { fedFromBreakerId: doc.fedFromBreakerId } : {}),
+  };
+}
+
+/** Give newly saved breakers their server ids (by the key they were sent with). */
+export function applyIds(doc: EditPanel, idMap: Record<string, number>): EditPanel {
+  if (!doc.breakers.some((b) => idMap[b.key] !== undefined && b.id !== idMap[b.key])) return doc;
+  return { ...doc, breakers: doc.breakers.map((b) => (idMap[b.key] !== undefined ? { ...b, id: idMap[b.key] } : b)) };
+}
+
+export type Result = { ok: true; doc: EditPanel } | { ok: false; error: string };
+
+const shape = (b: EditBreaker) => ({ key: b.key, position: b.position, slot: b.slot, poles: b.poles, label: b.label });
+
+function replace(doc: EditPanel, next: EditBreaker): Result {
+  const error = checkChange(doc, doc.breakers.map(shape), shape(next));
+  if (error) return { ok: false, error };
+  const exists = doc.breakers.some((b) => b.key === next.key);
+  return {
+    ok: true,
+    doc: { ...doc, breakers: exists ? doc.breakers.map((b) => (b.key === next.key ? next : b)) : [...doc.breakers, next] },
+  };
+}
+
+export function addBreaker(doc: EditPanel, position: number, slot: Slot = 'full'): Result & { key?: string } {
+  const key = newKey();
+  const r = replace(doc, {
+    key,
+    position,
+    slot,
+    poles: 1,
+    amps: 20,
+    protection: 'standard',
+    label: '',
+    notes: '',
+    isSpare: false,
+    critical: false,
+    backup: 'none',
+    serves: [],
+  });
+  return r.ok ? { ...r, key } : r;
+}
+
+export function updateBreaker(doc: EditPanel, key: string, patch: Partial<EditBreaker>): Result {
+  const b = doc.breakers.find((x) => x.key === key);
+  if (!b) return { ok: false, error: 'That breaker is gone.' };
+  return replace(doc, { ...b, ...patch });
+}
+
+export type Size = '1' | '2' | '3' | 'tandem';
+
+export function sizeOf(b: EditBreaker): Size {
+  return b.slot !== 'full' ? 'tandem' : (String(b.poles) as Size);
+}
+
+export function setSize(doc: EditPanel, key: string, size: Size): Result {
+  const b = doc.breakers.find((x) => x.key === key);
+  if (!b) return { ok: false, error: 'That breaker is gone.' };
+  if (size === 'tandem') {
+    const free = freeAt(doc, doc.breakers.map(shape), b.position, key);
+    const slot: Slot = free.A ? 'A' : free.B ? 'B' : 'A';
+    return updateBreaker(doc, key, { poles: 1, slot });
+  }
+  return updateBreaker(doc, key, { poles: Number(size), slot: 'full' });
+}
+
+/** Move a breaker to start at `position`, keeping it a tandem half when it is one. */
+export function moveBreaker(doc: EditPanel, key: string, position: number, slot?: Slot): Result {
+  const b = doc.breakers.find((x) => x.key === key);
+  if (!b) return { ok: false, error: 'That breaker is gone.' };
+  if (b.slot === 'full') return updateBreaker(doc, key, { position, slot: 'full' });
+  const free = freeAt(doc, doc.breakers.map(shape), position, key);
+  const target: Slot = slot ?? (free[b.slot] ? b.slot : free.A ? 'A' : 'B');
+  return updateBreaker(doc, key, { position, slot: target });
+}
+
+export function removeBreaker(doc: EditPanel, key: string): EditPanel {
+  return { ...doc, breakers: doc.breakers.filter((b) => b.key !== key) };
+}
+
+/** Change panel-level fields; checks that the breakers still fit. */
+export function updatePanel(doc: EditPanel, patch: Partial<Omit<EditPanel, 'breakers'>>): Result {
+  const next = { ...doc, ...patch };
+  const issue = validateLayout(next, next.breakers.map(shape))[0];
+  return issue ? { ok: false, error: issue.message } : { ok: true, doc: next };
+}
+
+/** Spaces a breaker could start at (for the "starts at" picker). */
+export function validStarts(doc: EditPanel, key: string): number[] {
+  const out: number[] = [];
+  for (let p = 1; p <= doc.spaces; p++) if (moveBreaker(doc, key, p).ok) out.push(p);
+  return out;
+}

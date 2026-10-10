@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { LOCATION_KINDS } from './locations';
+import { BACKUPS, MAIN_TYPES, MAX_SPACES, MIN_SPACES, PANEL_LAYOUTS, PROTECTIONS, SLOTS } from './panel';
 import { ROLES } from './roles';
 
 export const usernameSchema = z
@@ -78,3 +79,54 @@ export const updateUserSchema = z.object({
   isAdmin: z.boolean().optional(),
   disabled: z.boolean().optional(),
 });
+
+// ---- Panels ---------------------------------------------------------------------------
+
+const amps = z.number().int().min(1).max(4000);
+const optionalText = (max: number) => z.string().trim().max(max).default('');
+
+export const createPanelSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  layout: z.enum(PANEL_LAYOUTS).default('residential'),
+  spaces: z.number().int().min(MIN_SPACES).max(MAX_SPACES),
+  mainAmps: amps.nullable().default(null),
+  mainType: z.enum(MAIN_TYPES).default('breaker'),
+  voltage: optionalText(40),
+  manufacturer: optionalText(80),
+  model: optionalText(80),
+  notes: optionalText(2000),
+});
+
+export const servesInputSchema = z.object({
+  locationId: z.number().int().positive(),
+  note: optionalText(80),
+});
+
+export const breakerInputSchema = z.object({
+  id: z.number().int().positive().optional(),
+  /** Client-side key, echoed back so new breakers can be matched to their new ids. */
+  clientKey: z.string().min(1).max(64),
+  position: z.number().int().min(1).max(MAX_SPACES),
+  slot: z.enum(SLOTS).default('full'),
+  poles: z.number().int().min(1).max(3),
+  amps,
+  protection: z.enum(PROTECTIONS).default('standard'),
+  label: optionalText(80),
+  notes: optionalText(1000),
+  isSpare: z.boolean().default(false),
+  critical: z.boolean().default(false),
+  backup: z.enum(BACKUPS).default('none'),
+  serves: z.array(servesInputSchema).max(50).default([]),
+});
+
+export const savePanelSchema = createPanelSchema.extend({
+  /** The version the client last loaded. A mismatch means someone else saved first. */
+  version: z.number().int().min(1),
+  /** Omit to leave unchanged; null to clear. */
+  fedFromBreakerId: z.number().int().positive().nullable().optional(),
+  breakers: z.array(breakerInputSchema).max(MAX_SPACES * 2),
+});
+
+export type CreatePanelInput = z.infer<typeof createPanelSchema>;
+export type BreakerInput = z.infer<typeof breakerInputSchema>;
+export type SavePanelInput = z.infer<typeof savePanelSchema>;

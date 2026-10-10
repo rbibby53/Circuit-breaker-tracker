@@ -13,6 +13,7 @@ import { AccountPage } from './pages/Account';
 import { ActivityPage } from './pages/Activity';
 import { InvitePage } from './pages/Invite';
 import { LoginPage } from './pages/Login';
+import { PanelEditorPage } from './pages/PanelEditor';
 import { ResetPage } from './pages/Reset';
 import { SetupPage } from './pages/Setup';
 import { SitesPage } from './pages/Sites';
@@ -39,6 +40,7 @@ createRoot(document.getElementById('root')!).render(
             }
           >
             <Route path="/" element={<SitesPage />} />
+            <Route path="/panels/:id" element={<PanelEditorPage />} />
             <Route path="/access" element={<AccessPage />} />
             <Route path="/users" element={<UsersPage />} />
             <Route path="/activity" element={<ActivityPage />} />

@@ -1,0 +1,337 @@
+import {
+  KIND_LABELS,
+  canView,
+  circuitLabel,
+  effectiveRole,
+  pathIds,
+  positionsOf,
+  visibleLocations,
+  type Actor,
+  type Backup,
+  type BreakerDto,
+  type FeedLink,
+  type MainType,
+  type PanelDetail,
+  type PanelLayout,
+  type PanelSummary,
+  type Protection,
+  type Slot,
+} from '@cbt/core';
+import type { DB } from './db';
+import type { AccessData } from './repo';
+
+export interface PanelRow {
+  id: number;
+  location_id: number;
+  name: string;
+  layout: PanelLayout;
+  spaces: number;
+  main_amps: number | null;
+  main_type: MainType;
+  voltage: string;
+  manufacturer: string;
+  model: string;
+  notes: string;
+  fed_from_breaker_id: number | null;
+  version: number;
+  created_at: string;
+  updated_at: string;
+}
+
+export interface BreakerRow {
+  id: number;
+  panel_id: number;
+  position: number;
+  slot: Slot;
+  poles: number;
+  amps: number;
+  protection: Protection;
+  label: string;
+  notes: string;
+  is_spare: number;
+  critical: number;
+  backup: Backup;
+}
+
+export interface ServesRow {
+  breaker_id: number;
+  location_id: number;
+  note: string;
+}
+
+export const getPanel = (db: DB, id: number) =>
+  db.prepare('SELECT * FROM panels WHERE id = ?').get(id) as PanelRow | undefined;
+
+export const getBreaker = (db: DB, id: number) =>
+  db.prepare('SELECT * FROM breakers WHERE id = ?').get(id) as BreakerRow | undefined;
+
+export const breakersOf = (db: DB, panelId: number) =>
+  db.prepare('SELECT * FROM breakers WHERE panel_id = ? ORDER BY position, slot').all(panelId) as BreakerRow[];
+
+export function servesOf(db: DB, breakerIds: number[]): ServesRow[] {
+  if (breakerIds.length === 0) return [];
+  return db
+    .prepare(`SELECT * FROM breaker_serves WHERE breaker_id IN (${breakerIds.map(() => '?').join(',')})`)
+    .all(...breakerIds) as ServesRow[];
+}
+
+export const allPanels = (db: DB) => db.prepare('SELECT * FROM panels ORDER BY name COLLATE NOCASE').all() as PanelRow[];
+
+export function canViewPanel(actor: Actor, access: AccessData, panel: PanelRow): boolean {
+  const node = access.node(panel.location_id);
+  return !!node && canView(actor, node, access.grants);
+}
+
+/** The site a location belongs to (the location itself when it is a site). */
+export function siteOf(access: AccessData, locationId: number): number | null {
+  const l = access.byId.get(locationId);
+  if (!l) return null;
+  for (const id of pathIds(l.path)) if (access.byId.get(id)?.kind === 'site') return id;
+  return null;
+}
+
+const MAX_CHAIN = 50;
+
+/**
+ * The chain of feeders above a panel, nearest first. Everyone who can see the panel sees
+ * this summary, even for upstream panels they cannot open.
+ */
+export function feedChain(db: DB, actor: Actor, access: AccessData, panel: PanelRow): FeedLink[] {
+  const out: FeedLink[] = [];
+  const seen = new Set<number>([panel.id]);
+  let feederId = panel.fed_from_breaker_id;
+  while (feederId && out.length < MAX_CHAIN) {
+    const breaker = getBreaker(db, feederId);
+    const up = breaker ? getPanel(db, breaker.panel_id) : undefined;
+    if (!breaker || !up || seen.has(up.id)) break;
+    seen.add(up.id);
+    out.push({
+      panelId: up.id,
+      panelName: up.name,
+      locationPath: access.pathLabel(up.location_id),
+      breakerId: breaker.id,
+      circuit: circuitLabel(up, breaker),
+      label: breaker.label,
+      amps: breaker.amps,
+      canView: canViewPanel(actor, access, up),
+    });
+    feederId = up.fed_from_breaker_id;
+  }
+  return out;
+}
+
+/** True when `candidatePanelId` is `panelId` itself or anywhere downstream of it. */
+export function isDownstream(db: DB, panelId: number, candidatePanelId: number): boolean {
+  let current = getPanel(db, candidatePanelId);
+  const seen = new Set<number>();
+  while (current && !seen.has(current.id)) {
+    if (current.id === panelId) return true;
+    seen.add(current.id);
+    const feeder = current.fed_from_breaker_id ? getBreaker(db, current.fed_from_breaker_id) : undefined;
+    current = feeder ? getPanel(db, feeder.panel_id) : undefined;
+  }
+  return false;
+}
+
+export function panelSummary(db: DB, actor: Actor, access: AccessData, panel: PanelRow): PanelSummary {
+  const breakers = breakersOf(db, panel.id);
+  const used = new Set<number>();
+  for (const b of breakers) for (const p of positionsOf(panel, b)) used.add(p);
+  const feeder = panel.fed_from_breaker_id ? getBreaker(db, panel.fed_from_breaker_id) : undefined;
+  const feederPanel = feeder ? getPanel(db, feeder.panel_id) : undefined;
+  return {
+    id: panel.id,
+    locationId: panel.location_id,
+    name: panel.name,
+    layout: panel.layout,
+    spaces: panel.spaces,
+    mainAmps: panel.main_amps,
+    mainType: panel.main_type,
+    voltage: panel.voltage,
+    usedSpaces: used.size,
+    breakerCount: breakers.length,
+    criticalCount: breakers.filter((b) => b.critical).length,
+    fedFrom: feeder && feederPanel ? `${feederPanel.name} · ${circuitLabel(feederPanel, feeder)}` : null,
+    role: effectiveRole(actor, access.node(panel.location_id)!, access.grants)!,
+  };
+}
+
+export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: PanelRow): PanelDetail {
+  const breakers = breakersOf(db, panel.id);
+  const serves = servesOf(
+    db,
+    breakers.map((b) => b.id),
+  );
+  const visible = visibleLocations(actor, [...access.nodes.values()], access.grants);
+  const fedPanels = db
+    .prepare(
+      `SELECT p.* FROM panels p JOIN breakers b ON b.id = p.fed_from_breaker_id WHERE b.panel_id = ?`,
+    )
+    .all(panel.id) as PanelRow[];
+  const role = effectiveRole(actor, access.node(panel.location_id)!, access.grants)!;
+
+  const dto = (b: BreakerRow): BreakerDto => {
+    const feeds = fedPanels.filter((p) => p.fed_from_breaker_id === b.id);
+    const shown = feeds.filter((p) => canViewPanel(actor, access, p));
+    return {
+      id: b.id,
+      position: b.position,
+      slot: b.slot,
+      poles: b.poles,
+      amps: b.amps,
+      protection: b.protection,
+      label: b.label,
+      notes: b.notes,
+      isSpare: !!b.is_spare,
+      critical: !!b.critical,
+      backup: b.backup,
+      serves: serves
+        .filter((s) => s.breaker_id === b.id)
+        .map((s) => {
+          const l = access.byId.get(s.location_id);
+          const seen = l && visible.has(l.id);
+          return {
+            locationId: s.location_id,
+            note: seen ? s.note : '',
+            name: seen ? l!.name : null,
+            kind: seen ? l!.kind : null,
+            path: seen ? access.pathLabel(l!.id) : null,
+          };
+        }),
+      feeds: shown.map((p) => ({ panelId: p.id, panelName: p.name })),
+      hiddenFeeds: feeds.length - shown.length,
+    };
+  };
+
+  return {
+    id: panel.id,
+    locationId: panel.location_id,
+    locationPath: access.pathLabel(panel.location_id),
+    name: panel.name,
+    layout: panel.layout,
+    spaces: panel.spaces,
+    mainAmps: panel.main_amps,
+    mainType: panel.main_type,
+    voltage: panel.voltage,
+    manufacturer: panel.manufacturer,
+    model: panel.model,
+    notes: panel.notes,
+    version: panel.version,
+    updatedAt: panel.updated_at,
+    role,
+    canEdit: role === 'admin' || role === 'editor' || role === 'manager',
+    breakers: breakers.map(dto),
+    feedChain: feedChain(db, actor, access, panel),
+    fedFromBreakerId: panel.fed_from_breaker_id,
+  };
+}
+
+/** A plain snapshot used for change detection and history. */
+export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: ServesRow[]) {
+  return {
+    name: panel.name,
+    spaces: panel.spaces,
+    mainAmps: panel.main_amps,
+    mainType: panel.main_type,
+    voltage: panel.voltage,
+    manufacturer: panel.manufacturer,
+    model: panel.model,
+    notes: panel.notes,
+    fedFromBreakerId: panel.fed_from_breaker_id,
+    breakers: breakers
+      .map((b) => ({
+        id: b.id,
+        position: b.position,
+        slot: b.slot,
+        poles: b.poles,
+        amps: b.amps,
+        protection: b.protection,
+        label: b.label,
+        notes: b.notes,
+        isSpare: !!b.is_spare,
+        critical: !!b.critical,
+        backup: b.backup,
+        serves: serves
+          .filter((s) => s.breaker_id === b.id)
+          .map((s) => `${s.location_id}:${s.note}`)
+          .sort(),
+      }))
+      .sort((a, b) => a.id - b.id),
+  };
+}
+
+export type Snapshot = ReturnType<typeof snapshot>;
+
+const PANEL_FIELDS: [keyof Snapshot, string][] = [
+  ['name', 'name'],
+  ['spaces', 'spaces'],
+  ['mainAmps', 'main breaker'],
+  ['mainType', 'main type'],
+  ['voltage', 'voltage'],
+  ['manufacturer', 'manufacturer'],
+  ['model', 'model'],
+  ['notes', 'notes'],
+  ['fedFromBreakerId', 'fed from'],
+];
+
+const BREAKER_FIELDS = [
+  ['position', 'moved'],
+  ['slot', 'slot'],
+  ['poles', 'poles'],
+  ['amps', 'amps'],
+  ['protection', 'protection'],
+  ['label', 'label'],
+  ['notes', 'notes'],
+  ['isSpare', 'spare'],
+  ['critical', 'critical'],
+  ['backup', 'backup power'],
+  ['serves', 'serves'],
+] as const;
+
+/** Human-readable lines describing what changed between two snapshots. */
+export function describeChanges(
+  layout: { layout: PanelLayout; spaces: number },
+  before: Snapshot,
+  after: Snapshot,
+  locationName: (id: number) => string,
+): string[] {
+  const lines: string[] = [];
+  for (const [k, label] of PANEL_FIELDS) {
+    if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) {
+      lines.push(
+        k === 'notes' || k === 'fedFromBreakerId'
+          ? `Panel ${label} changed`
+          : `Panel ${label}: ${before[k] ?? 'none'} → ${after[k] ?? 'none'}`,
+      );
+    }
+  }
+  const name = (b: Snapshot['breakers'][number]) =>
+    `${circuitLabel(layout, b)} ${b.label || 'unlabelled'}`.trim();
+  const beforeById = new Map(before.breakers.map((b) => [b.id, b]));
+  const afterById = new Map(after.breakers.map((b) => [b.id, b]));
+  for (const b of after.breakers) {
+    const old = beforeById.get(b.id);
+    if (!old) {
+      lines.push(`Added ${name(b)} (${b.amps}A)`);
+      continue;
+    }
+    const changes: string[] = [];
+    for (const [k, label] of BREAKER_FIELDS) {
+      if (JSON.stringify(old[k]) === JSON.stringify(b[k])) continue;
+      if (k === 'position') changes.push(`moved from ${circuitLabel(layout, old)}`);
+      else if (k === 'serves') {
+        const names = (list: string[]) => list.map((s) => locationName(Number(s.split(':')[0])));
+        changes.push(`serves ${names(old.serves).join(', ') || 'nothing'} → ${names(b.serves).join(', ') || 'nothing'}`);
+      } else if (k === 'notes') changes.push('notes changed');
+      else changes.push(`${label} ${String(old[k])} → ${String(b[k])}`);
+    }
+    if (changes.length) lines.push(`${name(b)}: ${changes.join('; ')}`);
+  }
+  for (const b of before.breakers) if (!afterById.has(b.id)) lines.push(`Removed ${name(b)}`);
+  return lines;
+}
+
+export function locationName(access: AccessData, id: number): string {
+  const l = access.byId.get(id);
+  return l ? `${l.name}${l.kind === 'room' ? '' : ` (${KIND_LABELS[l.kind].toLowerCase()})`}` : 'a deleted location';
+}
