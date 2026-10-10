@@ -11,8 +11,8 @@ UI mockups: https://claude.ai/artifact/2uQ3SfWmCnL1UuWPbkVchY
 - Recreate a breaker panel digitally: 1-, 2- and 3-pole breakers, tandems, spares and empty spaces.
 - Label what every breaker does and which rooms it serves, including rooms on different floors.
 - Flag circuits as **critical** and mark **backup power** (UPS or generator).
-- Organise everything as **Site → Floor → Room → Panel**.
-- Multiple users with **per-site roles**, running behind a reverse proxy.
+- Organise everything as **Company → Site → Building → Floor → Room**, with panels placed in rooms.
+- Multiple users with **roles scoped to any level** of that tree, running behind a reverse proxy.
 - Export print-ready PDFs (Letter by default, A4 optional).
 - US panels first (residential load centers and commercial 3-phase panelboards). The data model leaves room for DIN-rail layouts later.
 
@@ -44,24 +44,68 @@ Dockerfile
 docker-compose.yml
 ```
 
-## Users, sites and roles
+## Users, locations and scoped roles
 
-Every request is checked on the server against the site the data belongs to
-(breaker → panel → site). People only see sites they are members of.
+### The location tree
 
-| Role | Scope | Can |
-| --- | --- | --- |
-| **Viewer** | One site | See panels, search, print PDFs |
-| **Editor** | One site | Viewer + edit breakers, labels and flags; add or remove floors, rooms and panels |
-| **Manager** | One site | Editor + invite people, change roles, rename or delete the site |
-| **Admin** | Whole install | Everything on every site, manage all users, backups and restore |
+Everything lives in one tree of locations:
+
+```
+Company → Site → Building → Floor → Room
+```
+
+Panels are placed in a room. Examples:
+
+```
+Personal (company)
+  Home (site)               ← single-building sites hide the Building level in the UI
+  Apartment (site)
+  Parents' house (site)
+KSU (company)
+  [Campus] (site)
+    [Building A] (building)
+      Basement → Electrical room
+      Floor 1, Floor 2
+    [Building B] (building)
+```
+
+### Grants
+
+Access is a list of **grants**. Each grant gives one person one role on one location.
+
+- A grant covers that location **and everything inside it**, and nothing outside it.
+- A person can hold several grants. At any location, the strongest role from that location
+  or any location above it wins.
+- Grants only ever add access. There are no "deny" rules, so who sees what stays easy to reason about.
+- Everyone can see the names of the locations above their grant, so the breadcrumb makes
+  sense. They can't see sibling locations or what's inside them.
+- Every request is checked on the server: breaker → panel → room → … → company.
+
+| Role | Can |
+| --- | --- |
+| **Viewer** | See panels, search, print PDFs |
+| **Editor** | Viewer + edit breakers, labels and flags; add, rename or remove locations and panels inside their scope |
+| **Manager** | Editor + invite people and manage grants, **only inside their own scope** and **only up to their invite limit** |
+| **Admin** | A user-level flag, not a grant. Everything, everywhere: all companies, all users, backups and restore |
+
+**Invite limit.** Every Manager grant carries a limit: *Viewers only*, *Viewers and editors*,
+or *Up to managers*. A Manager can only:
+
+- grant access at locations inside their own Manager scope;
+- hand out roles up to their invite limit;
+- give new Manager grants an invite limit no higher than their own;
+- see and edit grants, people and activity inside their scope, but not their own grant.
 
 How the examples map:
 
-- **KSU building:** you are Admin; your supervisor is Manager (or Editor); coworkers are Viewers.
-- **Apartment:** you and your roommates are Editors.
-- **Parents' house:** your parents are Viewers on that site only. They never see other sites.
-- **You:** Admin on everything.
+| Who | Grant |
+| --- | --- |
+| You | Admin |
+| KSU supervisor | Manager on **KSU** (company), invite limit *Viewers and editors*. They can add coworkers anywhere in KSU and never see Personal. |
+| Coworkers | Viewer or Editor on the KSU campus, one building, or one floor |
+| A contractor | Viewer on a single room, e.g. one electrical room |
+| Roommates | Editor on **Personal › Apartment** |
+| Parents | Viewer on **Personal › Parents' house** |
 
 ### Sign-in
 
@@ -70,15 +114,17 @@ How the examples map:
 - **Accounts:** username or email plus password, hashed with argon2id. Login attempts are rate limited.
 - **Sessions:** stored in the database. The cookie is `HttpOnly`, `SameSite=Lax` and `Secure`
   behind HTTPS. Mutating requests also need a custom header, as CSRF protection.
-- **Invites:** a Manager or Admin creates a one-time link for a site and role. The link
-  expires after 7 days and needs no email server.
+- **Invites:** a Manager or Admin creates a one-time link for a location, role and invite
+  limit. The link expires after 7 days and needs no email server. Inviting someone who
+  already has an account just adds a grant.
 - **Later:** OIDC single sign-on (Authentik, Authelia, Keycloak, Entra ID, etc.) and an
   optional trusted-header mode for forward-auth proxies.
 
 ### Change history
 
 - Every change is written to an audit log: who, when, and the record before and after.
-- Each panel has a **History** view. Admins get a site-wide **Activity log**.
+- Each panel has a **History** view. Managers and Admins get an **Activity log** filtered to
+  their scope.
 - Panels carry a `version`. If two people edit the same panel at once, the second save gets
   a conflict prompt instead of silently overwriting.
 
@@ -87,30 +133,38 @@ How the examples map:
 ```
 users           id, username, email, display_name, password_hash, is_admin, disabled, created_at, last_seen_at
 sessions        id, user_id, expires_at, created_at, user_agent
-invites         token_hash, site_id, role, created_by, expires_at, used_by, used_at
-sites           id, name, address, notes
-site_members    site_id, user_id, role (viewer | editor | manager)
-floors          id, site_id, name, sort_order          -- "Exterior" is just a floor
-rooms           id, floor_id, name, sort_order
-panels          id, site_id, room_id?, name, layout, spaces, voltage_system, phases,
+locations       id, parent_id?, kind (company | site | building | floor | room), name,
+                sort_order, path (materialised ancestor ids, e.g. "/1/4/9/"), details (JSON:
+                address, notes), is_default_building
+grants          id, user_id, location_id, role (viewer | editor | manager),
+                invite_limit (viewer | editor | manager, managers only), created_by, created_at
+                -- unique (user_id, location_id)
+invites         token_hash, location_id, role, invite_limit, created_by, expires_at, used_by, used_at
+panels          id, location_id (a room), name, layout, spaces, voltage_system, phases,
                 main_amps, main_type (main breaker | main lugs), manufacturer, model,
                 fed_from_breaker_id?, numbering, notes, version, created_at, updated_at
 breakers        id, panel_id, position, slot (full | A | B), poles (1-3), amps,
                 protection (standard | gfci | afci | dual), label, notes,
                 is_spare, critical, backup (none | ups | generator)
-breaker_serves  breaker_id, target_type (room | floor | site), target_id, note
-audit_log       id, user_id, site_id, entity, entity_id, action, before, after, at
+breaker_serves  breaker_id, location_id (room | floor | building | site), note
+audit_log       id, user_id, location_id, entity, entity_id, action, before, after, at
 ```
 
 Notes:
 
-- **Serving several rooms:** `breaker_serves` is many-to-many. A breaker can serve rooms on
-  any floor of its site, a whole floor, or the whole site (for example, smoke alarms). Each
-  link can carry a short note such as "lights" or "bath fan".
+- **One locations table.** Using one table instead of five keeps grants, invites, the "serves"
+  links and the audit log pointing at a single `location_id`. The parent → child kinds are
+  enforced (company → site → building → floor → room). The materialised `path` makes
+  "everything inside X" and "everything above X" one indexed query each.
+- **Hidden building level.** A home site gets one default building, created automatically
+  and hidden in the UI until a second building is added.
+- **Serving several locations:** `breaker_serves` is many-to-many. A breaker can serve rooms
+  on any floor or building of its site, a whole floor, a whole building or the whole site
+  (for example, smoke alarms). Each link can carry a short note such as "lights" or "bath fan".
 - **Tandem breakers:** one space holds two circuits, numbered `21A` and `21B`
   (`slot` = A or B). Quad breakers come later.
-- **Sub-panels:** `fed_from_breaker_id` links a sub-panel to the breaker that feeds it, so
-  "what does this sub-panel hang off?" can be answered.
+- **Sub-panels:** `fed_from_breaker_id` links a sub-panel to the breaker that feeds it. That
+  works across buildings, e.g. a campus feeder.
 - **Space vs spare:** an empty position has no row. A spare is a breaker row with
   `is_spare = true`.
 
@@ -137,17 +191,19 @@ the thumbnails and the PDF all draw from that one layout. The validation rules l
 
 ```
 POST   /api/auth/login | /logout          GET /api/auth/me
-GET    /api/sites                         (only sites you belong to)
-POST   /api/sites   PATCH/DELETE /api/sites/:id
-GET    /api/sites/:id/tree                (floors, rooms, panels for the sidebar)
-CRUD   /api/sites/:id/floors, /api/floors/:id/rooms
-CRUD   /api/sites/:id/members, POST /api/sites/:id/invites, POST /api/invites/:token/accept
+GET    /api/locations                     (the tree, pruned to what you can see)
+POST   /api/locations   PATCH/DELETE /api/locations/:id
+GET    /api/locations/:id/grants          (direct + inherited, plus grants further inside)
+POST   /api/locations/:id/grants   PATCH/DELETE /api/grants/:id
+POST   /api/locations/:id/invites  POST /api/invites/:token/accept
+GET    /api/users                         (Admin: everyone; Manager: people in their scope)
 GET    /api/panels/:id                    (panel + breakers + serves)
 PUT    /api/panels/:id                    (whole-panel save, If-Match: version)
 GET    /api/panels/:id/history
 GET    /api/panels/:id/pdf?paper=letter|a4&style=sheet|door
-GET    /api/sites/:id/pdf                 (every panel in the site, one PDF)
-GET    /api/search?q=                     (breakers, rooms, panels across your sites)
+GET    /api/locations/:id/pdf             (every panel under a site, building or floor)
+GET    /api/search?q=                     (breakers, locations, panels you can see)
+GET    /api/activity?location=        (audit log within your scope)
 GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
 ```
 
@@ -159,7 +215,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    and a QR code to the panel page. The QR code needs `PUBLIC_URL`.
 2. **Door card:** a narrow strip that fits inside the panel door.
 3. **Room index:** rooms grouped by floor, with the breakers that feed each one.
-4. **Site book:** every panel in a site in one PDF.
+4. **Book:** every panel under a site, building or floor in one PDF.
 
 ## Docker
 
@@ -181,8 +237,9 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
 1. **Foundation**
    - pnpm workspace, Docker image and compose file, database and migrations.
    - Auth: first-run admin, login, sessions.
-   - Roles and site membership, invites.
-   - Site, floor and room management. Sites screen and Users & access screen.
+   - Location tree (company → room), scoped grants with invite limits, invites.
+   - Permission checks with tests for every scope rule.
+   - Sites screen and Users & access screen.
    - Audit log plumbing.
 2. **Panel editor (residential)**
    - Layout engine.
