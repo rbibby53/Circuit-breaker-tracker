@@ -4,6 +4,8 @@ import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
 import { useCurrentUser } from '../auth';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useTitle } from '../lib/useTitle';
 import { initials } from '../components/Layout';
 import { ErrorNote, LinkBox, relativeTime } from '../components/ui';
 import { useViewAs } from './Access';
@@ -13,6 +15,8 @@ export function UsersPage() {
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<UserListItem[]>('/api/users'), retry: false });
   const viewAs = useViewAs();
+  const confirm = useConfirm();
+  useTitle('People');
   const [link, setLink] = useState<{ name: string; link: CreatedLink } | null>(null);
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] });
 
@@ -145,8 +149,14 @@ export function UsersPage() {
                       </button>
                       <button
                         className="btn btn-sm btn-danger"
-                        onClick={() => {
-                          if (confirm(`Delete ${u.displayName}? Their access is removed too.`)) remove.mutate(u.id);
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: `Delete ${u.displayName}?`,
+                            message: 'Their account and all their access are removed. This cannot be undone.',
+                            confirmLabel: 'Delete',
+                            danger: true,
+                          });
+                          if (ok) remove.mutate(u.id);
                         }}
                       >
                         Delete

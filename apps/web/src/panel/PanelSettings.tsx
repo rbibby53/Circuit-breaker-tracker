@@ -1,6 +1,7 @@
 import { MAX_SPACES, MIN_SPACES, type FeedCandidate, type PanelDetail } from '@cbt/core';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
+import { useConfirm } from '../components/ConfirmDialog';
 import type { EditPanel } from './state';
 
 export function PanelSettings({
@@ -14,6 +15,7 @@ export function PanelSettings({
   onChange: (patch: Partial<Omit<EditPanel, 'breakers'>>, coalesce?: string) => void;
   onDelete: () => void;
 }) {
+  const confirm = useConfirm();
   const candidates = useQuery({
     queryKey: ['feed-candidates', server.id],
     queryFn: () => api.get<FeedCandidate[]>(`/api/panels/${server.id}/feed-candidates`),
@@ -114,8 +116,14 @@ export function PanelSettings({
         <button
           type="button"
           className="btn btn-danger"
-          onClick={() => {
-            if (confirm(`Delete ${server.name} and all its breakers? This cannot be undone.`)) onDelete();
+          onClick={async () => {
+            const ok = await confirm({
+              title: `Delete ${server.name}?`,
+              message: 'All its breakers and their labels go too. This cannot be undone.',
+              confirmLabel: 'Delete panel',
+              danger: true,
+            });
+            if (ok) onDelete();
           }}
         >
           Delete panel

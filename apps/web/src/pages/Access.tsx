@@ -13,15 +13,17 @@ import {
   type UserListItem,
 } from '@cbt/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useCurrentUser } from '../auth';
+import { useConfirm } from '../components/ConfirmDialog';
+import { useTitle } from '../lib/useTitle';
 import { initials } from '../components/Layout';
 import { LocationTree } from '../components/LocationTree';
 import { ErrorNote, Field, LinkBox, formatDate } from '../components/ui';
-import { buildTree } from '../tree';
-import { useLocations } from './Sites';
+import { buildTree, flatten } from '../tree';
+import { useLocations } from '../queries';
 
 const rolesUpTo = (ceiling: EffectiveRole | null): Role[] => ROLES.filter((r) => roleRank(r) <= roleRank(ceiling));
 
@@ -48,6 +50,13 @@ export function AccessPage() {
   const { roots, byId } = buildTree(locations.data ?? []);
   const selected = selectedId ? byId.get(selectedId) : undefined;
   const canManageAnything = me.user.isAdmin || (locations.data ?? []).some((l) => l.role === 'manager');
+  useTitle(selected ? `Access · ${selected.name}` : 'Access');
+
+  // Open on the first place this person manages, rather than an empty page.
+  const firstManaged = flatten(roots).find((n) => n.role === 'manager' || n.role === 'admin')?.id;
+  useEffect(() => {
+    if (!selectedId && firstManaged) setParams({ loc: String(firstManaged) }, { replace: true });
+  }, [selectedId, firstManaged, setParams]);
 
   return (
     <div className="with-sidebar">
@@ -102,6 +111,7 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
   });
   const invalidate = () => qc.invalidateQueries({ queryKey: ['access', locationId] });
   const viewAs = useViewAs();
+  const confirm = useConfirm();
 
   const update = useMutation({
     mutationFn: (v: { id: number; role: Role; inviteLimit: Role | null }) =>
@@ -223,8 +233,14 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                     !readOnly && (
                       <button
                         className="btn btn-sm"
-                        onClick={() => {
-                          if (confirm(`Remove ${g.user.displayName}'s access here?`)) remove.mutate(g.id);
+                        onClick={async () => {
+                          const ok = await confirm({
+                            title: `Remove ${g.user.displayName}'s access?`,
+                            message: `They will no longer see ${g.locationName} or anything inside it, unless another grant covers it.`,
+                            confirmLabel: 'Remove access',
+                            danger: true,
+                          });
+                          if (ok) remove.mutate(g.id);
                         }}
                       >
                         Remove

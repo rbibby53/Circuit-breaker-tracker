@@ -8,10 +8,11 @@ import {
 } from '@cbt/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { Link, useNavigate, useParams } from 'react-router-dom';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, ApiError, errorMessage } from '../api';
 import { useCurrentUser } from '../auth';
 import { ErrorNote, formatDate } from '../components/ui';
+import { useTitle } from '../lib/useTitle';
 import { Inspector } from '../panel/Inspector';
 import { PanelGrid } from '../panel/PanelGrid';
 import { PanelSettings } from '../panel/PanelSettings';
@@ -31,10 +32,12 @@ import {
   type Size,
 } from '../panel/state';
 import { ancestry, buildTree } from '../tree';
-import { useLocations } from './Sites';
+import { useLocations } from '../queries';
 
 export function PanelEditorPage() {
   const { id = '' } = useParams();
+  const [params] = useSearchParams();
+  const breakerParam = params.get('breaker');
   const panelId = Number(id);
   const [reloads, setReloads] = useState(0);
   const detail = useQuery({
@@ -55,7 +58,14 @@ export function PanelEditorPage() {
       </main>
     );
   }
-  return <Editor key={`${panelId}:${reloads}`} initial={detail.data} onReload={() => setReloads((n) => n + 1)} />;
+  return (
+    <Editor
+      key={`${panelId}:${reloads}`}
+      initial={detail.data}
+      initialSelected={breakerParam ? `id-${breakerParam}` : null}
+      onReload={() => setReloads((n) => n + 1)}
+    />
+  );
 }
 
 type SaveState = 'saved' | 'pending' | 'saving' | 'error' | 'conflict';
@@ -63,7 +73,15 @@ const SAVE_DELAY_MS = 700;
 const COALESCE_MS = 1500;
 const MAX_UNDO = 100;
 
-function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => void }) {
+function Editor({
+  initial,
+  initialSelected,
+  onReload,
+}: {
+  initial: PanelDetail;
+  initialSelected: string | null;
+  onReload: () => void;
+}) {
   const me = useCurrentUser();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -74,7 +92,7 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
   const [server, setServer] = useState(initial);
   // Undo/redo stacks live in a ref: they change together with `doc`, which drives re-renders.
   const stacks = useRef<{ past: EditPanel[]; future: EditPanel[] }>({ past: [], future: [] });
-  const [selected, setSelected] = useState<string | null>(null);
+  const [selected, setSelected] = useState<string | null>(initialSelected);
   const [message, setMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -189,11 +207,14 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
   }, [saveState]);
 
   useEffect(() => {
-    if (readOnly) return;
     const onKey = (e: KeyboardEvent) => {
       const el = e.target as HTMLElement;
-      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName)) return;
-      if (!(e.ctrlKey || e.metaKey)) return;
+      if (['INPUT', 'TEXTAREA', 'SELECT'].includes(el.tagName) || el.closest('dialog')) return;
+      if (e.key === 'Escape') {
+        setSelected(null);
+        return;
+      }
+      if (readOnly || !(e.ctrlKey || e.metaKey)) return;
       const k = e.key.toLowerCase();
       if (k === 'z' && !e.shiftKey) {
         e.preventDefault();
@@ -206,6 +227,16 @@ function Editor({ initial, onReload }: { initial: PanelDetail; onReload: () => v
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
   }, [readOnly, undo, redo]);
+
+  // On narrow screens the details sit below the panel: bring them into view on selection.
+  useEffect(() => {
+    if (!selected || !window.matchMedia('(max-width: 960px)').matches) return;
+    requestAnimationFrame(() =>
+      document.querySelector('.inspector')?.scrollIntoView({ behavior: 'smooth', block: 'start' }),
+    );
+  }, [selected]);
+
+  useTitle(doc.name);
 
   // ---- Derived -----------------------------------------------------------------------
 

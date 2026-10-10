@@ -1,8 +1,10 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from '../api';
-import { useCurrentUser } from '../auth';
+import { useAuthConfig, useCurrentUser } from '../auth';
+import { useLocations } from '../queries';
 import { Logo } from './Logo';
+import { Search } from './Search';
 
 export function Layout() {
   const me = useCurrentUser();
@@ -24,34 +26,46 @@ export function Layout() {
     },
   });
 
-  // The Access, People and Activity screens are for admins and managers; the server decides
-  // per request, so showing the links to everyone only costs a polite "no access" page.
+  // Access, People and Activity are for admins and managers only; hide them from everyone else.
+  const locations = useLocations();
+  const config = useAuthConfig();
+  const manages = me.user.isAdmin || (locations.data ?? []).some((l) => l.role === 'manager');
+
   return (
     <div className="app">
+      <a className="skip-link" href="#main">
+        Skip to content
+      </a>
       <header className="topbar">
         <NavLink to="/" className="brand" aria-label="Circuit Breaker Tracker home">
           <Logo />
-          <span>Circuit Breaker Tracker</span>
+          <span className="brand-text">Circuit Breaker Tracker</span>
         </NavLink>
         <nav className="topnav" aria-label="Main">
           <NavLink to="/" end>
             Sites
           </NavLink>
-          <NavLink to="/access">Access</NavLink>
-          <NavLink to="/users">People</NavLink>
-          <NavLink to="/activity">Activity</NavLink>
+          {manages && (
+            <>
+              <NavLink to="/access">Access</NavLink>
+              <NavLink to="/users">People</NavLink>
+              <NavLink to="/activity">Activity</NavLink>
+            </>
+          )}
         </nav>
-        <div className="spacer" />
-        <NavLink to="/account" className="userchip">
-          <span className="avatar" aria-hidden="true">
-            {initials(me.realUser.displayName)}
-          </span>
-          <span>{me.realUser.displayName}</span>
-          {me.realUser.isAdmin && <span className="chip chip-dark">Admin</span>}
-        </NavLink>
-        <button className="btn btn-ghost-dark" onClick={() => logout.mutate()}>
-          Sign out
-        </button>
+        <Search />
+        <div className="topbar-user">
+          <NavLink to="/account" className="userchip" aria-label={`Your account: ${me.realUser.displayName}`}>
+            <span className="avatar" aria-hidden="true">
+              {initials(me.realUser.displayName)}
+            </span>
+            <span className="userchip-name">{me.realUser.displayName}</span>
+            {me.realUser.isAdmin && <span className="chip chip-dark">Admin</span>}
+          </NavLink>
+          <button className="btn btn-ghost-dark" onClick={() => logout.mutate()}>
+            Sign out
+          </button>
+        </div>
       </header>
       {me.viewingAs && (
         <div className="viewas" role="status">
@@ -67,12 +81,20 @@ export function Layout() {
           <strong>Viewing as {me.user.displayName}</strong>
           <span>Read-only. You see exactly what they see.</span>
           <div className="spacer" />
-          <button className="btn btn-dark" onClick={() => exitViewAs.mutate()} disabled={exitViewAs.isPending}>
+          <button className="btn btn-on-accent" onClick={() => exitViewAs.mutate()} disabled={exitViewAs.isPending}>
             Exit view
           </button>
         </div>
       )}
-      <Outlet />
+      <div className="app-body" id="main" tabIndex={-1}>
+        <Outlet />
+      </div>
+      <footer className="app-footer">
+        <span>Circuit Breaker Tracker {config.data?.version ? `v${config.data.version}` : ''}</span>
+        <a href="https://github.com/rbibby53/Circuit-breaker-tracker" target="_blank" rel="noreferrer">
+          Source on GitHub
+        </a>
+      </footer>
     </div>
   );
 }

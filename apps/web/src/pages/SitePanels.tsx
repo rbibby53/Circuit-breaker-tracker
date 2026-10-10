@@ -15,10 +15,8 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
 import { ErrorNote, Field } from '../components/ui';
+import { usePanels } from '../queries';
 import type { TreeNode } from '../tree';
-
-export const usePanels = () =>
-  useQuery({ queryKey: ['panels'], queryFn: () => api.get<PanelSummary[]>('/api/panels') });
 
 function isInside(byId: Map<number, TreeNode>, locationId: number, ancestorId: number): boolean {
   let n = byId.get(locationId);
@@ -79,9 +77,10 @@ export function PanelsHere({ node, byId }: { node: TreeNode; byId: Map<number, T
   );
 }
 
-export function AddPanelForm({ roomId }: { roomId: number }) {
+export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen: boolean }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
+  const [open, setOpen] = useState(startOpen);
   const [layout, setLayout] = useState<PanelLayout>('residential');
   const [form, setForm] = useState({
     name: '',
@@ -106,6 +105,15 @@ export function AddPanelForm({ roomId }: { roomId: number }) {
     e.preventDefault();
     create.mutate();
   };
+  if (!open) {
+    return (
+      <div className="add-actions">
+        <button type="button" className="btn" onClick={() => setOpen(true)}>
+          + Add a panel
+        </button>
+      </div>
+    );
+  }
   return (
     <form className="panel stack" onSubmit={submit} aria-label="Add a panel">
       <h2 className="h-caps">Add a panel</h2>

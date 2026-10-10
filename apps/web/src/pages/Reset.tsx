@@ -1,11 +1,13 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTitle } from '../lib/useTitle';
 import { api } from '../api';
 import { AuthShell } from '../components/AuthShell';
 import { ErrorNote, Field } from '../components/ui';
 
 export function ResetPage() {
+  useTitle('Reset password');
   const { token = '' } = useParams();
   const qc = useQueryClient();
   const navigate = useNavigate();

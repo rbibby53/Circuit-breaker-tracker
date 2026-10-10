@@ -2,6 +2,7 @@ import { INVITE_LIMIT_LABELS, KIND_LABELS, ROLE_LABELS, type InviteInfo } from '
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useNavigate, useParams } from 'react-router-dom';
+import { useTitle } from '../lib/useTitle';
 import { api, ApiError } from '../api';
 import { useAuthConfig, useMe } from '../auth';
 import { AuthShell } from '../components/AuthShell';
@@ -15,6 +16,7 @@ const ROLE_BLURB = {
 } as const;
 
 export function InvitePage() {
+  useTitle('Invite');
   const { token = '' } = useParams();
   const qc = useQueryClient();
   const navigate = useNavigate();

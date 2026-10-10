@@ -1,12 +1,15 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
+import { getTheme, setTheme, type Theme } from '../lib/theme';
+import { useTitle } from '../lib/useTitle';
 import { api } from '../api';
 import { useAuthConfig, useCurrentUser } from '../auth';
 import { ErrorNote, Field } from '../components/ui';
 import { MicrosoftIcon } from './Login';
 
 export function AccountPage() {
+  useTitle('Account');
   const me = useCurrentUser();
   const config = useAuthConfig();
   const qc = useQueryClient();
@@ -14,6 +17,7 @@ export function AccountPage() {
   const [name, setName] = useState(me.realUser.displayName);
   const [pw, setPw] = useState({ currentPassword: '', newPassword: '' });
   const [saved, setSaved] = useState<string | null>(null);
+  const [theme, setThemeState] = useState<Theme>(getTheme);
 
   const rename = useMutation({
     mutationFn: () => api.patch('/api/me', { displayName: name }),
@@ -66,6 +70,26 @@ export function AccountPage() {
           {saved ?? 'Microsoft account linked.'}
         </p>
       )}
+
+      <section className="panel stack" aria-label="Appearance">
+        <h2 className="h-caps">Appearance</h2>
+        <div className="segmented three" role="group" aria-label="Theme">
+          {(['system', 'light', 'dark'] as const).map((t) => (
+            <button
+              key={t}
+              type="button"
+              aria-pressed={theme === t}
+              onClick={() => {
+                setTheme(t);
+                setThemeState(t);
+              }}
+            >
+              {t === 'system' ? 'Match device' : t === 'light' ? 'Light' : 'Dark'}
+            </button>
+          ))}
+        </div>
+        <p className="muted small">Saved in this browser only.</p>
+      </section>
 
       <form className="panel stack" onSubmit={submitName}>
         <h2 className="h-caps">Name</h2>

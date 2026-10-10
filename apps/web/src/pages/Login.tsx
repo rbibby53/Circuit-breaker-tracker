@@ -1,6 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { useTitle } from '../lib/useTitle';
 import { api } from '../api';
 import { useAuthConfig } from '../auth';
 import { AuthShell } from '../components/AuthShell';
@@ -23,6 +24,7 @@ export function safeNext(next: string | null): string {
 }
 
 export function LoginPage() {
+  useTitle('Sign in');
   const config = useAuthConfig();
   const qc = useQueryClient();
   const navigate = useNavigate();

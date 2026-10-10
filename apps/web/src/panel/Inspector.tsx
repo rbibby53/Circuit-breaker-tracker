@@ -11,6 +11,7 @@ import {
 } from '@cbt/core';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
+import { useConfirm } from '../components/ConfirmDialog';
 import type { TreeNode } from '../tree';
 import { servesByFloor } from './serves';
 import { ServesPicker } from './ServesPicker';
@@ -31,6 +32,7 @@ interface Props {
 
 export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPatch, onSize, onMove, onRemove }: Props) {
   const [picking, setPicking] = useState(false);
+  const confirm = useConfirm();
   const size = sizeOf(b);
   const groups = servesByFloor(byId, b.serves);
   const hidden = b.serves.filter((s) => s.hidden || !byId.has(s.locationId)).length;
@@ -238,11 +240,16 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
       <button
         type="button"
         className="btn btn-danger"
-        onClick={() => {
-          const warn = feeds.length
-            ? ` It feeds ${feeds.map((f) => f.panelName).join(', ')}, which will be unlinked.`
-            : '';
-          if (confirm(`Remove ${b.label || 'this breaker'}?${warn}`)) onRemove();
+        onClick={async () => {
+          const ok = await confirm({
+            title: `Remove ${b.label || 'this breaker'}?`,
+            message: feeds.length
+              ? `It feeds ${feeds.map((f) => f.panelName).join(', ')}, which will be unlinked. You can undo this.`
+              : 'You can undo this.',
+            confirmLabel: 'Remove',
+            danger: true,
+          });
+          if (ok) onRemove();
         }}
       >
         Remove breaker

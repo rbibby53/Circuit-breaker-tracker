@@ -1,16 +1,16 @@
-import { CHILD_KIND, KIND_LABELS, atLeast, type LocationDto, type LocationKind } from '@cbt/core';
-import { AddPanelForm, PanelsHere, ServedBy } from './SitePanels';
-import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { CHILD_KIND, KIND_LABELS, atLeast, type LocationKind } from '@cbt/core';
+import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
 import { useCurrentUser } from '../auth';
+import { useConfirm } from '../components/ConfirmDialog';
 import { LocationTree } from '../components/LocationTree';
 import { ErrorNote, Field } from '../components/ui';
+import { useTitle } from '../lib/useTitle';
+import { useLocations, usePanels } from '../queries';
 import { ancestry, buildTree, hiddenBuilding, shownChildren, type TreeNode } from '../tree';
-
-export const useLocations = () =>
-  useQuery({ queryKey: ['locations'], queryFn: () => api.get<LocationDto[]>('/api/locations') });
+import { AddPanelForm, PanelsHere, ServedBy } from './SitePanels';
 
 const plural = (kind: LocationKind, n: number) => `${n} ${KIND_LABELS[kind].toLowerCase()}${n === 1 ? '' : 's'}`;
 
@@ -21,9 +21,10 @@ export function SitesPage() {
   const selectedId = params.get('loc') ? Number(params.get('loc')) : null;
   const select = (id: number | null) => setParams(id ? { loc: String(id) } : {});
 
-  if (locations.isLoading) return <div className="page-loading">Loading…</div>;
   const { roots, byId } = buildTree(locations.data ?? []);
   const selected = selectedId ? (byId.get(selectedId) ?? null) : null;
+  useTitle(selected?.name ?? 'Sites');
+  if (locations.isLoading) return <div className="page-loading">Loading…</div>;
 
   return (
     <div className="with-sidebar">
@@ -66,17 +67,32 @@ function Overview({
           <p className="muted">Everything you have access to, by company.</p>
         </div>
       </div>
-      {roots.length === 0 && (
-        <div className="empty">
-          {isAdmin ? (
-            <p>
-              Start by adding a company. Use one for your own places (for example "Personal") and one per organisation.
-            </p>
-          ) : (
+      {roots.length === 0 &&
+        (isAdmin ? (
+          <section className="panel stack" aria-label="Getting started">
+            <h2>Getting started</h2>
+            <ol className="steps">
+              <li>
+                <strong>Add a company.</strong> Use one for your own places (for example “Personal”) and one per
+                organisation, such as your employer.
+              </li>
+              <li>
+                <strong>Add a site inside it,</strong> then its floors and rooms. For a house, add floors straight to
+                the site.
+              </li>
+              <li>
+                <strong>Put a panel in a room</strong> and click its empty spaces to add breakers.
+              </li>
+              <li>
+                <strong>Invite people</strong> from Access, scoped to just the places they need.
+              </li>
+            </ol>
+          </section>
+        ) : (
+          <div className="empty">
             <p>You don't have access to anything yet. Ask whoever invited you to share a location.</p>
-          )}
-        </div>
-      )}
+          </div>
+        ))}
       {roots.map((company) => (
         <section key={company.id} className="stack">
           <div className="section-head">
@@ -90,7 +106,11 @@ function Overview({
           <ChildCards nodes={shownChildren(company)} onSelect={onSelect} />
         </section>
       ))}
-      {isAdmin && !readOnly && <AddForm parentId={null} kind="company" />}
+      {isAdmin && !readOnly && (
+        <div className="add-actions">
+          <AddForm parentId={null} kind="company" startOpen={roots.length === 0} />
+        </div>
+      )}
     </div>
   );
 }
@@ -133,6 +153,8 @@ function LocationView({
   readOnly: boolean;
 }) {
   const qc = useQueryClient();
+  const confirm = useConfirm();
+  const panels = usePanels();
   const [editing, setEditing] = useState(false);
   const chain = ancestry(byId, node.id);
   const parent = node.parentId ? byId.get(node.parentId) : undefined;
@@ -203,8 +225,14 @@ function LocationView({
             <button
               className="btn btn-danger"
               disabled={remove.isPending}
-              onClick={() => {
-                if (confirm(`Delete ${node.name}? This cannot be undone.`)) remove.mutate();
+              onClick={async () => {
+                const ok = await confirm({
+                  title: `Delete ${node.name}?`,
+                  message: 'This cannot be undone.',
+                  confirmLabel: 'Delete',
+                  danger: true,
+                });
+                if (ok) remove.mutate();
               }}
             >
               Delete
@@ -216,9 +244,26 @@ function LocationView({
       {editing && <EditForm node={node} onDone={() => setEditing(false)} />}
 
       <PanelsHere node={node} byId={byId} />
-      {node.kind === 'room' && canEdit && <AddPanelForm roomId={node.id} />}
+      {node.kind === 'room' && canEdit && (
+        <AddPanelForm
+          key={node.id}
+          roomId={node.id}
+          startOpen={!(panels.data ?? []).some((p) => p.locationId === node.id)}
+        />
+      )}
       {node.kind !== 'room' && <ChildCards nodes={kids} onSelect={onSelect} />}
-      {canEdit && addKinds.map((k) => <AddForm key={k} parentId={node.id} kind={k} />)}
+      {canEdit && addKinds.length > 0 && (
+        <div className="add-actions">
+          {addKinds.map((k) => (
+            <AddForm
+              key={`${node.id}-${k}`}
+              parentId={node.id}
+              kind={k}
+              startOpen={kids.length === 0 && k !== 'building'}
+            />
+          ))}
+        </div>
+      )}
       {(node.kind === 'room' || node.kind === 'floor') && !crumbOnly && <ServedBy node={node} />}
     </div>
   );
@@ -268,8 +313,17 @@ const PLACEHOLDERS: Record<LocationKind, string> = {
   room: 'e.g. Utility room, Electrical room 2B',
 };
 
-function AddForm({ parentId, kind }: { parentId: number | null; kind: LocationKind }) {
+function AddForm({
+  parentId,
+  kind,
+  startOpen = false,
+}: {
+  parentId: number | null;
+  kind: LocationKind;
+  startOpen?: boolean;
+}) {
   const qc = useQueryClient();
+  const [open, setOpen] = useState(startOpen);
   const [name, setName] = useState('');
   const add = useMutation({
     mutationFn: () => api.post<{ id: number }>('/api/locations', { parentId, kind, name }),
@@ -282,15 +336,33 @@ function AddForm({ parentId, kind }: { parentId: number | null; kind: LocationKi
     e.preventDefault();
     add.mutate();
   };
-  const label = KIND_LABELS[kind];
+  const label = KIND_LABELS[kind].toLowerCase();
+  if (!open) {
+    return (
+      <button type="button" className="btn" onClick={() => setOpen(true)}>
+        + Add {label}
+      </button>
+    );
+  }
   return (
     <form className="add-row" onSubmit={submit}>
-      <Field label={`Add a ${label.toLowerCase()}`}>
-        <input required value={name} placeholder={PLACEHOLDERS[kind]} onChange={(e) => setName(e.target.value)} />
+      <Field label={`Add a ${label}`}>
+        <input
+          required
+          autoFocus={!startOpen}
+          value={name}
+          placeholder={PLACEHOLDERS[kind]}
+          onChange={(e) => setName(e.target.value)}
+        />
       </Field>
       <button className="btn btn-dark" disabled={add.isPending}>
-        Add {label.toLowerCase()}
+        Add {label}
       </button>
+      {!startOpen && (
+        <button type="button" className="btn" onClick={() => setOpen(false)}>
+          Done
+        </button>
+      )}
       <ErrorNote error={add.error} />
     </form>
   );
