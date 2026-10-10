@@ -25,7 +25,7 @@ both the browser and the server.
 | --- | --- | --- |
 | Frontend | React + Vite, TanStack Router and Query, dnd-kit | Mature, fast, good drag-and-drop for moving breakers |
 | Backend | Fastify on Node 22 | Small, fast, schema-validated routes |
-| Database | SQLite (better-sqlite3) with Drizzle ORM and migrations | One file on a volume, easy backups; Drizzle can move to Postgres later if needed |
+| Database | SQLite (better-sqlite3) with plain SQL migrations | One file on a volume, easy backups; the tree queries are hand-written SQL anyway |
 | Validation | Zod schemas shared by client and server | One definition of what a valid panel is |
 | PDF | PDFKit driven by the shared layout engine | Vector output that matches the screen, no headless Chrome (image stays ~150 MB) |
 | Auth | Local accounts (argon2id), DB-backed sessions; OIDC later | Works out of the box; SSO can be added without a rewrite |
@@ -196,8 +196,9 @@ Notes:
   links and the audit log pointing at a single `location_id`. The parent → child kinds are
   enforced (company → site → building → floor → room). The materialised `path` makes
   "everything inside X" and "everything above X" one indexed query each.
-- **Hidden building level.** A home site gets one default building, created automatically
-  and hidden in the UI until a second building is added.
+- **Hidden building level.** Adding a floor straight to a site (as you would for a home)
+  creates one default building behind the scenes. The UI hides it until a second building
+  is added. Sites built from buildings (a campus) never get a stray default building.
 - **Serving several locations:** `breaker_serves` is many-to-many. A breaker can serve rooms
   on any floor or building of its site, a whole floor, a whole building or the whole site
   (for example, smoke alarms). Each link can carry a short note such as "lights" or "bath fan".
@@ -280,8 +281,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    - pnpm workspace, Docker image and compose file, database and migrations.
    - Auth: first-run admin, local login, sessions, Entra ID / OIDC sign-in, reset links.
    - Location tree (company → room), scoped grants with invite limits, invites.
-   - Permission checks with tests for every scope rule, including feed-chain and
-     serves visibility.
+   - Permission checks with tests for every scope rule.
    - View as user (read-only).
    - Sites screen and Users & access screen.
    - Audit log plumbing.
@@ -290,6 +290,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    - Add, edit, move and resize breakers: 1- and 2-pole, tandem, spare.
    - Flags. A "serves" picker that spans floors.
    - Validation, autosave and undo, conflict detection, panel history.
+   - Read-only feed-chain and "serves my location" visibility, with tests.
 3. **Commercial 3-phase**
    - Phase labels, 3-pole breakers, 277/480 V, 42/84 circuits.
    - Sub-panel feed links.

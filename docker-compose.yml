@@ -1,0 +1,26 @@
+services:
+  breakers:
+    image: ghcr.io/rbibby53/circuit-breaker-tracker:latest
+    # Or build it yourself from this repository:
+    # build: .
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+    environment:
+      # The address people use to reach the app. Needed for invite links, QR codes and SSO.
+      PUBLIC_URL: "https://breakers.example.com"
+      # Set when running behind a reverse proxy (Caddy, Nginx, Traefik…).
+      TRUST_PROXY: "true"
+      # Optional: create the first admin automatically instead of using the setup screen.
+      # ADMIN_USERNAME: "admin"
+      # ADMIN_PASSWORD: "change-me-to-something-long"
+      # Optional: Microsoft Entra ID single sign-on. See README.
+      # OIDC_ISSUER: "https://login.microsoftonline.com/<tenant-id>/v2.0"
+      # OIDC_CLIENT_ID: "<application-client-id>"
+      # OIDC_CLIENT_SECRET: "<client-secret>"
+      # OIDC_LABEL: "Sign in with Microsoft"
+    volumes:
+      - breakers-data:/data
+
+volumes:
+  breakers-data:
