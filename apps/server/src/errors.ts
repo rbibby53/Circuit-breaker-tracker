@@ -1,4 +1,4 @@
-import type { ZodType, ZodTypeDef } from 'zod';
+import type { ZodType, z } from 'zod';
 
 export class HttpError extends Error {
   constructor(
@@ -18,7 +18,7 @@ export const conflict = (msg: string) => new HttpError(409, msg, 'conflict');
 export const gone = (msg: string) => new HttpError(410, msg, 'gone');
 
 /** Validate a request body or query with a zod schema, throwing a 400 on failure. */
-export function parse<T>(schema: ZodType<T, ZodTypeDef, unknown>, input: unknown): T {
+export function parse<S extends ZodType>(schema: S, input: unknown): z.output<S> {
   const r = schema.safeParse(input ?? {});
   if (!r.success) {
     const first = r.error.issues[0];

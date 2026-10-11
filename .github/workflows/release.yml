@@ -1,37 +1,106 @@
 name: Release
 
-# Push a tag like v1.0.0 to create a GitHub release. Its notes are that version's section of
-# CHANGELOG.md, followed by GitHub's list of merged pull requests. The Publish image workflow
-# builds and pushes the matching Docker image from the same tag.
+# Releases happen on their own: when a merge to main carries a version that has no release yet
+# (see "Releasing" in CONTRIBUTING.md), this tags the merge commit v<version>, creates the
+# GitHub release with that version's CHANGELOG.md section as its notes, and publishes the
+# Docker image. Run it by hand from the Actions tab to retry a release that failed part way.
 on:
   push:
-    tags: ['v*']
+    branches: [main]
+  workflow_dispatch:
+
+# One release at a time; a second merge waits rather than racing the first.
+concurrency:
+  group: release
+  cancel-in-progress: false
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
-  release:
+  check:
     runs-on: ubuntu-latest
+    if: github.ref == 'refs/heads/main'
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      release: ${{ steps.version.outputs.release }}
+      image: ${{ steps.version.outputs.image }}
+      prerelease: ${{ steps.version.outputs.prerelease }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: version
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          version="$(node -p "require('./package.json').version")"
+          # Every package carries the same version; a half-done bump is a mistake to catch here.
+          for f in apps/*/package.json packages/*/package.json; do
+            v="$(node -p "require('./$f').version")"
+            if [ "$v" != "$version" ]; then
+              echo "::error file=$f::version $v does not match package.json ($version)"
+              exit 1
+            fi
+          done
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+          if [[ "$version" == *-* ]]; then echo "prerelease=true" >> "$GITHUB_OUTPUT"; else echo "prerelease=false" >> "$GITHUB_OUTPUT"; fi
+
+          # Release when there is no release yet. Publish the image too, except on a retry of a
+          # release whose image already went out (an automatic run after an unrelated merge).
+          if gh release view "v$version" > /dev/null 2>&1; then
+            echo "release=false" >> "$GITHUB_OUTPUT"
+            echo "v$version is already released."
+            echo "image=${{ github.event_name == 'workflow_dispatch' }}" >> "$GITHUB_OUTPUT"
+          else
+            echo "release=true" >> "$GITHUB_OUTPUT"
+            echo "image=true" >> "$GITHUB_OUTPUT"
+            echo "Releasing v$version."
+          fi
+
+  release:
+    needs: check
+    if: needs.check.outputs.release == 'true'
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
     steps:
       - uses: actions/checkout@v7
       - name: Take the notes from CHANGELOG.md
+        env:
+          VERSION: ${{ needs.check.outputs.version }}
         run: |
-          version="${GITHUB_REF_NAME#v}"
-          # Everything under "## <version>" up to the next "## " heading.
-          awk -v v="$version" '
-            /^## / { if (found) exit; if (index($0, "## " v) == 1) { found = 1; next } }
+          # Everything under "## <version>" (or "## <version> — <date>") up to the next "## ".
+          awk -v v="$VERSION" '
+            /^## / { if (found) exit; if ($0 == "## " v || index($0, "## " v " ") == 1) { found = 1; next } }
             found { print }
           ' CHANGELOG.md > notes.md
-          if [ ! -s notes.md ]; then
-            echo "CHANGELOG.md has no section for $version" >&2
+          if ! grep -q '[^[:space:]]' notes.md; then
+            echo "::error file=CHANGELOG.md::CHANGELOG.md has no notes under a \"## $VERSION\" heading"
             exit 1
           fi
           {
             echo
-            echo "**Docker:** \`ghcr.io/${{ github.repository_owner }}/circuit-breaker-tracker:$version\` (also \`latest\`)"
+            echo "**Docker:** \`ghcr.io/${{ github.repository_owner }}/circuit-breaker-tracker:$VERSION\`"
           } >> notes.md
-      - name: Create the release
+      - name: Tag and create the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --generate-notes --verify-tag
+          VERSION: ${{ needs.check.outputs.version }}
+          PRERELEASE: ${{ needs.check.outputs.prerelease }}
+        run: |
+          flags=()
+          if [ "$PRERELEASE" = true ]; then flags+=(--prerelease); fi
+          # A tag pushed by hand is used as it is; otherwise the release tags this commit.
+          gh release create "v$VERSION" --target "$GITHUB_SHA" --title "v$VERSION" \
+            --notes-file notes.md --generate-notes "${flags[@]}"
+
+  # Tags made with the workflow's own token do not start other workflows, so the image is
+  # published from here rather than by a tag push.
+  image:
+    needs: [check, release]
+    if: ${{ !cancelled() && needs.check.outputs.image == 'true' && needs.release.result != 'failure' }}
+    permissions:
+      contents: read
+      packages: write
+    uses: ./.github/workflows/publish.yml
+    with:
+      version: ${{ needs.check.outputs.version }}
