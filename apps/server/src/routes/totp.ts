@@ -89,6 +89,7 @@ export function totpRoutes(app: FastifyInstance, db: DB, config: Config): void {
     }
     const kind = checkCode(db, user, body.code);
     if (!kind) {
+      req.failure = `Wrong two-step code for ${user.username} (attempt ${challenge.attempts + 1} of ${MAX_ATTEMPTS})`;
       if (challenge.attempts + 1 >= MAX_ATTEMPTS) {
         db.prepare('DELETE FROM login_challenges WHERE id = ?').run(challenge.id);
         throw forbidden('Too many wrong codes. Enter your password again.');
@@ -97,7 +98,14 @@ export function totpRoutes(app: FastifyInstance, db: DB, config: Config): void {
       throw forbidden('That code did not work. Check the time on your phone and try the newest code.');
     }
     db.prepare('DELETE FROM login_challenges WHERE id = ?').run(challenge.id);
-    createSession(db, config, reply, user.id, req.headers['user-agent']);
+    createSession(
+      db,
+      config,
+      reply,
+      user.id,
+      req.headers['user-agent'],
+      kind === 'recovery' ? 'password and a recovery code' : 'password and two-step code',
+    );
     if (kind === 'recovery') {
       audit(
         db,

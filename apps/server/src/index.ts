@@ -9,6 +9,7 @@ import { createUser } from './users';
 const config = loadConfig();
 const db = openDatabase(path.join(config.dataDir, 'breakers.db'));
 
+let bootstrapped: string | null = null;
 if (config.bootstrapAdmin && countUsers(db) === 0) {
   await createUser(db, {
     username: config.bootstrapAdmin.username,
@@ -16,24 +17,54 @@ if (config.bootstrapAdmin && countUsers(db) === 0) {
     password: config.bootstrapAdmin.password,
     isAdmin: true,
   });
-  console.log(`Created admin user "${config.bootstrapAdmin.username}" from ADMIN_USERNAME.`);
+  bootstrapped = config.bootstrapAdmin.username;
 }
 
-const app = await buildApp(config, db);
+const app = await buildApp(config, db, { startupReport: true });
+if (bootstrapped) app.log.info(`Created the admin account "${bootstrapped}" from ADMIN_USERNAME`);
+
+const LABELS = {
+  sessions: ['expired session', 'expired sessions'],
+  states: ['abandoned Microsoft sign-in', 'abandoned Microsoft sign-ins'],
+  challenges: ['unfinished two-step sign-in', 'unfinished two-step sign-ins'],
+  invites: ['old invite link', 'old invite links'],
+  resets: ['old reset link', 'old reset links'],
+} as const;
 
 const purge = () => {
-  const removed = purgeExpired(db);
-  if (Object.values(removed).some((n) => n > 0)) app.log.info({ removed }, 'Removed expired records');
+  try {
+    const removed = purgeExpired(db);
+    const parts = (Object.keys(LABELS) as (keyof typeof LABELS)[])
+      .filter((k) => removed[k] > 0)
+      .map((k) => `${removed[k]} ${LABELS[k][removed[k] === 1 ? 0 : 1]}`);
+    if (parts.length) app.log.info(`Cleaned up ${parts.join(', ')}`);
+  } catch (err) {
+    app.log.error({ err }, 'Cleaning up expired records failed');
+  }
 };
 purge();
 setInterval(purge, 60 * 60_000).unref();
 
-const shutdown = async () => {
+const shutdown = async (signal: string) => {
+  app.log.info(`Stopping (${signal})`);
   await app.close();
   db.close();
   process.exit(0);
 };
-process.on('SIGTERM', shutdown);
-process.on('SIGINT', shutdown);
+process.on('SIGTERM', () => void shutdown('SIGTERM'));
+process.on('SIGINT', () => void shutdown('SIGINT'));
+// Anything that escapes a request still ends up in the log, with its stack, before the
+// container restarts.
+process.on('uncaughtException', (err) => {
+  app.log.fatal({ err }, 'Crashed on an unexpected error');
+  process.exit(1);
+});
+process.on('unhandledRejection', (err) => {
+  app.log.error({ err }, 'Unhandled promise rejection');
+});
 
-await app.listen({ port: config.port, host: config.host });
+await app.listen({
+  port: config.port,
+  host: config.host,
+  listenTextResolver: (address) => `Web UI listening at ${address}`,
+});

@@ -6,6 +6,20 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Readable container logs.** One line per event in the container's time zone instead of
+  JSON, so the Unraid log viewer is useful:
+  - a start-up summary: version, database size and counts, public address, sign-in methods, settings locked by environment variables, and warnings such as half-configured Microsoft sign-in;
+  - sign-ins and sign-outs, with how and from where;
+  - refused sign-ins and wrong two-step codes, with the reason;
+  - every change, as on the Activity page;
+  - refused changes, with the message the person saw;
+  - errors with their stack.
+
+  The health check is no longer logged every 30 seconds, and per-request lines are now at
+  Debug. Link tokens and query strings are never logged. A new **Log format** setting
+  (`LOG_FORMAT=json`) keeps JSON for log collectors. A warning appears when requests come
+  through a reverse proxy but "Behind a reverse proxy" is off.
+
 - **Set someone's name and email from People.** People → **Manage** now has a Profile section
   with their picture, display name and email (used for their Gravatar). Admins can edit anyone;
   managers can edit the people they could send a reset link to.

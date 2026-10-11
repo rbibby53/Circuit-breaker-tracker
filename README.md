@@ -179,7 +179,31 @@ and shows there as locked. This suits infrastructure-as-code setups:
 | Gravatar profile pictures  | `GRAVATAR`                                                               |
 | Behind a reverse proxy     | `TRUST_PROXY`                                                            |
 | HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                              |
-| Log level                  | `LOG_LEVEL`                                                              |
+| Log level                  | `LOG_LEVEL` (`error`, `warn`, `info`, `debug`)                           |
+| Log format                 | `LOG_FORMAT` (`text`, `json`)                                            |
+
+### Logs
+
+The container log (Unraid's log viewer, `docker logs`) has one readable line per event, in the
+container's time zone (`TZ`):
+
+```
+2026-10-11 14:05:09 INFO  Circuit Breaker Tracker 1.4.0 starting · Node v24.11.0 · times in this log are America/Chicago
+2026-10-11 14:05:09 INFO  Database /data/breakers.db (1.2 MB, schema 6): 4 people, 31 locations, 6 panels, 212 breakers
+2026-10-11 14:05:09 INFO  Sign-in: passwords, Microsoft / OIDC via login.microsoftonline.com · sessions last 30 days
+2026-10-11 14:06:41 INFO  Signed in: ryan (password and two-step code) from 192.168.1.20
+2026-10-11 14:07:02 INFO  ryan: Edited panel Main panel: Changed 14 label · Personal › Home › Basement › Utility room
+2026-10-11 14:09:15 WARN  POST /api/auth/login → 403 in 98 ms · 192.168.1.31 · Sign-in refused for "sam": wrong password
+```
+
+- **Info** (the default) shows the start-up summary, sign-ins and sign-outs, every change (the
+  same entries as the Activity page), clean-ups, and any problems with the reason.
+- **Debug** adds a line for every request, with who made it. Health checks and static files
+  are never logged.
+- Link tokens and query strings are never written to the log.
+- Set **Log format** to JSON for a log collector such as Loki or Graylog.
+
+Both are under Settings → Logging and take effect without a restart.
 
 ### Behind a reverse proxy
 

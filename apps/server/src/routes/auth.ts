@@ -61,7 +61,7 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
       entityId: admin.id,
       summary: `Created first admin ${admin.username}`,
     });
-    createSession(db, config, reply, admin.id, req.headers['user-agent']);
+    createSession(db, config, reply, admin.id, req.headers['user-agent'], 'first-run setup');
     return { ok: true };
   });
 
@@ -69,20 +69,36 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     const { username, password } = parse(loginSchema, req.body);
     const user = findUserByLogin(db, username);
     const ok = await verifyPassword(user?.password_hash, password);
-    if (!user || !ok) throw forbidden('Wrong username or password.');
-    if (user.disabled) throw forbidden('This account is disabled.');
+    // The reason goes on the request's log line; the person only sees the generic message.
+    const refuse = (why: string, message: string) => {
+      req.failure = `Sign-in refused for ${JSON.stringify(username)}: ${why}`;
+      return forbidden(message);
+    };
+    if (!user) throw refuse('no such account', 'Wrong username or password.');
+    if (!ok)
+      throw refuse(user.password_hash ? 'wrong password' : 'account has no password', 'Wrong username or password.');
+    if (user.disabled) throw refuse('account is disabled', 'This account is disabled.');
     // Admins can always use their password, so turning this off can never lock everyone out.
     if (!config.settings.get('allowLocalLogin') && !user.is_admin) {
-      throw forbidden('Password sign-in is turned off here. Use the single sign-on button.');
+      throw refuse(
+        'password sign-in is turned off',
+        'Password sign-in is turned off here. Use the single sign-on button.',
+      );
     }
     // With two-step sign-in on, the session only starts once a code is checked.
-    if (user.totp_enabled_at) return { totpRequired: true, challenge: startTotpChallenge(db, user.id) };
-    createSession(db, config, reply, user.id, req.headers['user-agent']);
+    if (user.totp_enabled_at) {
+      req.log.debug(`Password accepted for ${user.username}; waiting for their two-step code`);
+      return { totpRequired: true, challenge: startTotpChallenge(db, user.id) };
+    }
+    createSession(db, config, reply, user.id, req.headers['user-agent'], 'password');
     return { ok: true };
   });
 
   app.post('/api/auth/logout', async (req, reply) => {
-    if (req.auth) destroySession(db, req.auth.sessionId);
+    if (req.auth) {
+      destroySession(db, req.auth.sessionId);
+      req.log.info(`Signed out: ${req.auth.realUser.username}`);
+    }
     clearSessionCookie(config, reply);
     return { ok: true };
   });
@@ -150,7 +166,7 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
       entityId: user.id,
       summary: `${user.username} joined by invite`,
     });
-    createSession(db, config, reply, user.id, req.headers['user-agent']);
+    createSession(db, config, reply, user.id, req.headers['user-agent'], 'new account from an invite');
     return { ok: true };
   });
 
@@ -186,7 +202,7 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     });
     // A reset link does not get around two-step sign-in: they sign in with the new password and a code.
     if (user.totp_enabled_at) return { ok: true, signIn: true };
-    createSession(db, config, reply, user.id, req.headers['user-agent']);
+    createSession(db, config, reply, user.id, req.headers['user-agent'], 'password reset link');
     return { ok: true };
   });
 
@@ -211,10 +227,17 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     try {
       const { claims, state } = await finishOidc(db, config, callbackUrl);
       const result = await completeOidcLogin(db, claims, state);
-      createSession(db, config, reply, result.userId, req.headers['user-agent']);
+      createSession(
+        db,
+        config,
+        reply,
+        result.userId,
+        req.headers['user-agent'],
+        state.linkUserId ? 'Microsoft, linking it to their account' : 'Microsoft',
+      );
       return reply.redirect(result.redirect);
     } catch (err) {
-      req.log.warn({ err }, 'OIDC sign-in failed');
+      req.log.warn(`Microsoft sign-in failed from ${req.ip}: ${err instanceof Error ? err.message : String(err)}`);
       const message = err instanceof Error ? err.message : 'Sign-in failed.';
       return reply.redirect(`/login?error=${encodeURIComponent(message)}`);
     }
