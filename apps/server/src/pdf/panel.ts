@@ -4,6 +4,7 @@ import {
   breakerTags,
   circuitLabel,
   panelDirectory,
+  phaseOf,
   type BreakerDto,
   type DirectoryEntry,
   type DirectoryTag,
@@ -84,8 +85,10 @@ interface ScheduleStyle {
 
 interface ScheduleInfo {
   used: Set<DirectoryTag>;
-  multiPole: boolean;
+  /** Most poles on any one breaker. */
+  maxPoles: number;
   tandem: boolean;
+  phased: boolean;
   compact: boolean;
 }
 
@@ -104,10 +107,14 @@ function drawSchedule(
   const breakers: Breaker[] = panel.breakers.map((b) => ({ ...b, key: String(b.id) }));
   const dir = panelDirectory(panel, breakers);
   const used = new Set<DirectoryTag>();
-  let multiPole = false;
+  let maxPoles = 1;
   let tandem = false;
   const cols = dir.columns.length;
-  const colW = width / cols;
+  // Three-phase panelboards get a phase column between the two halves, like a bus bar.
+  const phased = cols === 2 && panel.layout === 'commercial';
+  const phaseW = phased ? (style.compact ? 11 : 15) : 0;
+  const colW = (width - phaseW) / cols;
+  const colX = (c: number) => x + c * (colW + phaseW);
   const height = dir.rows * rowH;
 
   const numSize = clamp(rowH * 0.45, 5.5, style.compact ? 8 : 9);
@@ -118,7 +125,7 @@ function drawSchedule(
   const pad = clamp(rowH * 0.2, 2.5, 5);
 
   dir.columns.forEach((entries, c) => {
-    const g = geometry(x + c * colW, colW, cols === 2 && c === 0, style.numW, style.ampsW);
+    const g = geometry(colX(c), colW, cols === 2 && c === 0, style.numW, style.ampsW);
     pdf.doc.save().rect(g.num.x, y, g.num.w, height).fill(FILL).restore();
     pdf.vline(g.amps.x, y, y + height);
     pdf.vline(g.amps.x + g.amps.w, y, y + height);
@@ -126,7 +133,7 @@ function drawSchedule(
     for (const e of entries) {
       const top = y + (e.row - 1) * rowH;
       const h = e.span * rowH;
-      if (e.row > 1) pdf.hline(x + c * colW, x + (c + 1) * colW, top, RULE, 0.6);
+      if (e.row > 1) pdf.hline(colX(c), colX(c) + colW, top, RULE, 0.6);
       drawEntry(e, top, h);
     }
 
@@ -186,7 +193,7 @@ function drawSchedule(
         return;
       }
       if (e.type === 'breaker') {
-        if (e.numbers.length > 1) multiPole = true;
+        maxPoles = Math.max(maxPoles, e.numbers.length);
         e.numbers.forEach((n, i) => numberAt(String(n), top + i * rowH, rowH));
         if (e.numbers.length > 1) {
           // A tie bar beside the numbers, like the handle tie on a multi-pole breaker.
@@ -223,9 +230,26 @@ function drawSchedule(
     }
   });
 
+  if (phased) {
+    const px = x + colW;
+    pdf.doc.save().rect(px, y, phaseW, height).fill('#d6d6d6').restore();
+    const size = clamp(rowH * 0.42, 5, style.compact ? 7 : 8.5);
+    const lh = pdf.lineHeight({ font: 'bold', size });
+    for (let r = 1; r <= dir.rows; r++) {
+      const top = y + (r - 1) * rowH;
+      if (r > 1) pdf.hline(px, px + phaseW, top, '#bdbdbd', 0.4);
+      pdf.line(phaseOf(panel, (r - 1) * 2 + 1) ?? '', px, top + (rowH - lh) / 2, {
+        font: 'bold',
+        size,
+        width: phaseW,
+        align: 'center',
+      });
+    }
+    pdf.vline(px + phaseW, y, y + height, INK, 1);
+  }
   pdf.doc.save().lineWidth(1).rect(x, y, width, height).stroke(INK).restore();
   if (cols === 2) pdf.vline(x + colW, y, y + height, INK, 1);
-  return { used, multiPole, tandem, compact: style.compact };
+  return { used, maxPoles, tandem, phased, compact: style.compact };
 }
 
 /** The key under a schedule: only the markers this panel uses. Returns the y below it. */
@@ -234,11 +258,13 @@ function drawKey(pdf: Pdf, x: number, y: number, width: number, info: ScheduleIn
     tag: t.tag,
     text: t.meaning,
   }));
-  if (info.multiPole) {
+  if (info.phased) items.push({ text: 'A / B / C (middle column) = the phase each row is on' });
+  if (info.maxPoles > 1) {
+    const kinds = info.maxPoles > 2 ? 'two- or three-pole breaker' : 'two-pole breaker';
     items.push({
       text: info.compact
-        ? 'A bar ties the spaces of a two-pole breaker'
-        : '2P = two-pole breaker, its spaces tied by a bar',
+        ? `A bar ties the spaces of a ${kinds}`
+        : `${info.maxPoles > 2 ? '2P / 3P' : '2P'} = ${kinds}, its spaces tied by a bar`,
     });
   }
   if (info.tandem) items.push({ text: 'A / B = the two halves of a tandem breaker' });

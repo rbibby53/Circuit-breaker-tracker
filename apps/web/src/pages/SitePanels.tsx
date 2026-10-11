@@ -1,11 +1,12 @@
 import {
   AVAILABLE_LAYOUTS,
   BACKUP_LABELS,
+  LAYOUT_DEFAULTS,
   LAYOUT_LABELS,
-  MAX_SPACES,
-  MIN_SPACES,
   PANEL_LAYOUTS,
   PROTECTION_LABELS,
+  VOLTAGE_PRESETS,
+  spaceChoices,
   type PanelLayout,
   type PanelSummary,
   type ServedByItem,
@@ -91,6 +92,12 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
     mainAmps: defaults?.mainAmps ?? 200,
     voltage: defaults?.voltage ?? '120/240 V split-phase',
   });
+  // Admins set the defaults for homes in Settings; other layouts start from their own.
+  const pickLayout = (l: PanelLayout) => {
+    const d = l === 'residential' && defaults ? defaults : LAYOUT_DEFAULTS[l];
+    setLayout(l);
+    setForm((f) => ({ ...f, spaces: d.spaces, mainAmps: d.mainAmps, voltage: d.voltage }));
+  };
   const create = useMutation({
     mutationFn: () =>
       api.post<{ id: number }>(`/api/locations/${roomId}/panels`, {
@@ -130,12 +137,12 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
                 value={l}
                 checked={layout === l}
                 disabled={!available}
-                onChange={() => setLayout(l)}
+                onChange={() => pickLayout(l)}
               />
               <span className="strong">{LAYOUT_LABELS[l]}</span>
               <span className="small muted">
                 {l === 'residential' && 'Two columns, odd left and even right. 1- and 2-pole, tandems.'}
-                {l === 'commercial' && 'Three-phase, 1-, 2- and 3-pole. Coming in the next update.'}
+                {l === 'commercial' && 'Three-phase, rows on phases A, B and C. 1-, 2- and 3-pole, no tandems.'}
                 {l === 'single' && 'One column for small sub-panels. Coming later.'}
               </span>
             </label>
@@ -153,7 +160,7 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
         </Field>
         <Field label="Spaces">
           <select value={form.spaces} onChange={(e) => setForm({ ...form, spaces: Number(e.target.value) })}>
-            {Array.from({ length: (MAX_SPACES - MIN_SPACES) / 2 + 1 }, (_, i) => MIN_SPACES + i * 2).map((n) => (
+            {spaceChoices(layout).map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
@@ -180,8 +187,17 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
           </Field>
         )}
         <Field label="Voltage">
-          <input value={form.voltage} onChange={(e) => setForm({ ...form, voltage: e.target.value })} />
+          <input
+            value={form.voltage}
+            list="new-panel-voltages"
+            onChange={(e) => setForm({ ...form, voltage: e.target.value })}
+          />
         </Field>
+        <datalist id="new-panel-voltages">
+          {VOLTAGE_PRESETS[layout].map((v) => (
+            <option key={v} value={v} />
+          ))}
+        </datalist>
         <button className="btn btn-dark" disabled={create.isPending}>
           Create panel
         </button>

@@ -1,4 +1,14 @@
-import { cellOf, circuitLabel, columnsFor, freeAt, positionsOf, rowsFor, type Slot } from '@cbt/core';
+import {
+  cellOf,
+  circuitLabel,
+  columnsFor,
+  freeAt,
+  phaseOf,
+  phasesOf,
+  positionsOf,
+  rowsFor,
+  type Slot,
+} from '@cbt/core';
 import type { DragEvent, ReactElement } from 'react';
 import type { TreeNode } from '../tree';
 import { servesSummary } from './serves';
@@ -115,10 +125,17 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
           )}
         </div>
         <div
-          className={`pg-grid${cols === 1 ? ' is-single' : ''}`}
+          className={`pg-grid${cols === 1 ? ' is-single' : ''}${doc.layout === 'commercial' && cols === 2 ? ' is-phased' : ''}`}
           style={{ gridTemplateRows: `repeat(${rows}, 46px)` }}
         >
           {cols === 2 && <div className="pg-bus" style={{ gridRow: `1 / span ${rows}` }} aria-hidden="true" />}
+          {cols === 2 &&
+            doc.layout === 'commercial' &&
+            Array.from({ length: rows }, (_, i) => (
+              <span key={`phase-${i}`} className="pg-phase" style={{ gridRow: i + 1 }} aria-hidden="true">
+                {phaseOf(doc, i * 2 + 1)}
+              </span>
+            ))}
           {empties}
           {doc.breakers.map((b) => {
             const { column, row } = cellOf(doc, b.position);
@@ -127,6 +144,7 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
             const circuits = positionsOf(doc, b).map((p) => `${p}${tandem ? b.slot : ''}`);
             const test = TEST_COLOR[b.protection];
             const selected = b.key === selectedKey;
+            const phases = phasesOf(doc, b);
             return (
               <button
                 key={b.key}
@@ -137,7 +155,7 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
                   gridRow: `${row} / span ${b.poles}`,
                   alignSelf: tandem ? (b.slot === 'A' ? 'start' : 'end') : 'stretch',
                 }}
-                aria-label={`Circuit ${circuitLabel(doc, b)}, ${b.label || 'unlabelled'}, ${b.amps} amps${b.critical ? ', critical' : ''}${b.backup !== 'none' ? `, on ${b.backup}` : ''}`}
+                aria-label={`Circuit ${circuitLabel(doc, b)}${phases.length ? `, phase ${phases.join(' ')}` : ''}, ${b.label || 'unlabelled'}, ${b.amps} amps${b.critical ? ', critical' : ''}${b.backup !== 'none' ? `, on ${b.backup}` : ''}`}
                 aria-pressed={selected}
                 draggable={!readOnly}
                 onDragStart={(e) => {

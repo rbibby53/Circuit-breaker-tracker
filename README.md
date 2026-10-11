@@ -8,9 +8,9 @@ A self-hosted web app for recreating your electrical panels, labelling what ever
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
 
-> **Status:** milestones 1, 2 and 4 of 5 are done: accounts, single sign-on, scoped access, the
-> panel editor for residential load centers, and printing. Commercial 3-phase panels are on
-> hold. See [docs/PLAN.md](docs/PLAN.md) for the whole plan.
+> **Status:** milestones 1 to 4 of 5 are done: accounts, single sign-on, scoped access, the
+> panel editor for residential load centers and commercial 3-phase panelboards, and printing.
+> See [docs/PLAN.md](docs/PLAN.md) for the whole plan.
 
 ![The panel editor with a tandem breaker selected](docs/screenshots/editor.png)
 
@@ -28,9 +28,13 @@ as a single Docker container with its data in one SQLite file.
   is needed.
 - **View as user:** admins can see the app exactly as someone else sees it, read-only.
 - **Activity log:** every change is recorded. Managers see the changes inside their scope.
-- **Panel editor** for residential load centers (120/240 V split-phase):
+- **Panel editor** for residential load centers and commercial panelboards:
   - Odd spaces on the left, even on the right. Click an empty space to add a breaker, drag
     to move it, and pick 1-pole, 2-pole or tandem (21A / 21B).
+  - **Three-phase panelboards** (120/208 V, 277/480 V): rows are labelled with phases A, B
+    and C, and breakers can be 1-, 2- or 3-pole. Each breaker shows the phases it is on and
+    its voltage (120 V, 208 V…). No tandems, and space counts come in multiples of 6 (30, 42,
+    84…), as on real panelboards.
   - Set amps, protection (standard, GFCI, AFCI, dual function), a **critical** flag,
     **backup power** (UPS or generator) and spare.
   - Tag what each breaker **serves**: rooms on any floor, a whole floor or building, or
@@ -65,12 +69,14 @@ as a single Docker container with its data in one SQLite file.
 
 <p align="center"><img src="docs/screenshots/phone-editor.png" alt="The panel editor on a phone" width="300"></p>
 
-|                                                                          |                                                            |
-| ------------------------------------------------------------------------ | ---------------------------------------------------------- |
-| ![A printed panel sheet](docs/screenshots/pdf-sheet.png)                 | ![A printed door card](docs/screenshots/pdf-door-card.png) |
-| The panel sheet: what every breaker serves, with markers, key and notes. | The door card, sized to slip inside the panel door.        |
-| ![The print dialog](docs/screenshots/print-dialog.png)                   |                                                            |
-| Print a whole site as a book, or just its room index, on Letter or A4.   |                                                            |
+|                                                                            |                                                                 |
+| -------------------------------------------------------------------------- | --------------------------------------------------------------- |
+| ![A printed panel sheet](docs/screenshots/pdf-sheet.png)                   | ![A printed door card](docs/screenshots/pdf-door-card.png)      |
+| The panel sheet: what every breaker serves, with markers, key and notes.   | The door card, sized to slip inside the panel door.             |
+| ![The print dialog](docs/screenshots/print-dialog.png)                     |                                                                 |
+| Print a whole site as a book, or just its room index, on Letter or A4.     |                                                                 |
+| ![A three-phase panelboard](docs/screenshots/editor-3phase.png)            | ![A printed three-phase sheet](docs/screenshots/pdf-3phase.png) |
+| A 120/208 V panelboard: phases A, B, C on the bus, 2- and 3-pole breakers. | Its printed sheet, with a phase column down the middle.         |
 
 ## Run it
 

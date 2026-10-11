@@ -239,3 +239,58 @@ describe('feed chain and served-by', () => {
     expect((await s.admin.get(`/api/panels/${s.subId}`)).body.feedChain).toEqual([]);
   });
 });
+
+describe('three-phase panelboards', () => {
+  it('creates a commercial panel and takes 3-pole breakers on phases A, B and C', async () => {
+    const h = await home();
+    const r = await h.admin.post(`/api/locations/${h.utility}/panels`, {
+      name: 'LP-1',
+      layout: 'commercial',
+      spaces: 42,
+      mainAmps: 225,
+      voltage: '120/208 V 3-phase',
+    });
+    expect(r.status).toBe(200);
+    const saved = await save(h.admin, r.body.id, [
+      breaker('RTU-1', 1, { poles: 3, amps: 60 }),
+      breaker('Lights', 2),
+      breaker('Pump', 4, { poles: 2, amps: 30 }),
+    ]);
+    expect(saved.status).toBe(200);
+    const rtu = saved.body.panel.breakers.find((b: { label: string }) => b.label === 'RTU-1');
+    expect(rtu).toMatchObject({ position: 1, poles: 3 });
+    const history = await h.admin.get(`/api/panels/${r.body.id}/history`);
+    expect(history.body[0].details).toContain('Added 1 + 3 + 5 RTU-1 (60A)');
+  });
+
+  it('refuses tandems and space counts that leave the phases uneven', async () => {
+    const h = await home();
+    const bad = await h.admin.post(`/api/locations/${h.utility}/panels`, {
+      name: 'LP-2',
+      layout: 'commercial',
+      spaces: 40,
+    });
+    expect(bad.status).toBe(400);
+    expect(bad.body.message).toMatch(/multiple of 6/);
+    const ok = await h.admin.post(`/api/locations/${h.utility}/panels`, {
+      name: 'LP-2',
+      layout: 'commercial',
+      spaces: 30,
+    });
+    const r = await save(h.admin, ok.body.id, [breaker('Half', 3, { slot: 'A' })]);
+    expect(r.status).toBe(400);
+    expect(r.body.message).toMatch(/no tandems/);
+  });
+
+  it('switches a panel between layouts only when its breakers still fit', async () => {
+    const h = await home();
+    await save(h.admin, h.main, [breaker('Hall', 21, { slot: 'A' })]);
+    const blocked = await save(h.admin, h.main, [breaker('Hall', 21, { slot: 'A' })], { layout: 'commercial' });
+    expect(blocked.status).toBe(400);
+    const moved = await save(h.admin, h.main, [breaker('Hall', 21)], { layout: 'commercial' });
+    expect(moved.status).toBe(200);
+    expect(moved.body.panel.layout).toBe('commercial');
+    const pdf = await h.admin.raw(`/api/panels/${h.main}/pdf`);
+    expect(pdf.status).toBe(200);
+  });
+});
