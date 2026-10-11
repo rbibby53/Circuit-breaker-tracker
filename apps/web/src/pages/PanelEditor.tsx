@@ -15,6 +15,7 @@ import { PANEL_PRINT_STYLES, PrintButton } from '../components/PrintDialog';
 import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { Inspector } from '../panel/Inspector';
+import { LoadSummary } from '../panel/LoadSummary';
 import { PanelGrid } from '../panel/PanelGrid';
 import { PanelSettings } from '../panel/PanelSettings';
 import { siteOf } from '../panel/serves';
@@ -403,6 +404,7 @@ function Editor({
       <div className="editor-body">
         <section className="editor-center" aria-label="Panel">
           <Legend />
+          <LoadSummary panel={doc} breakers={doc.breakers} mainAmps={doc.mainType === 'lugs' ? null : doc.mainAmps} />
           <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
           <PanelGrid
             doc={doc}

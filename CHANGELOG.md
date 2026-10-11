@@ -6,6 +6,9 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Panel summary** under each panel: circuits, spares and free spaces. **Show leg balance**
+  (or phase balance on 3-phase panels) adds up breaker ratings on each leg or phase, with a
+  note when one carries much more than another. These are ratings, not measured current.
 - **Automatic daily backups** to `/data/backups`, at a set hour (03:00 by default) and keeping
   the newest 14. Both are settings (`BACKUP_HOUR`, `BACKUP_KEEP`), and `0` turns them off. A
   backup missed while the server was off runs when it is back. Settings lists the saved
