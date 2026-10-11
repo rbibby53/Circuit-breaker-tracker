@@ -21,6 +21,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { useTitle } from '../lib/useTitle';
 import { Avatar } from '../components/Avatar';
 import { LocationTree } from '../components/LocationTree';
+import { Sidebar } from '../components/Sidebar';
 import { ErrorNote, Field, LinkBox, formatDate } from '../components/ui';
 import { buildTree, flatten } from '../tree';
 import { useLocations } from '../queries';
@@ -61,17 +62,19 @@ export function AccessPage() {
 
   return (
     <div className="with-sidebar">
-      <aside className="sidebar" aria-label="Location tree">
-        <div className="sidebar-head">
-          <span className="eyebrow">Pick a location</span>
-        </div>
+      <Sidebar
+        label="Location"
+        current={selectedId ? (byId.get(selectedId)?.name ?? null) : null}
+        selectedId={selectedId}
+        head={<span className="eyebrow">Pick a location</span>}
+      >
         <LocationTree
           roots={roots}
           selectedId={selectedId}
           onSelect={select}
           badge={(n) => (n.role === 'manager' && !me.user.isAdmin ? 'Manager' : null)}
         />
-      </aside>
+      </Sidebar>
       <main className="content">
         <div className="page-head">
           <div>

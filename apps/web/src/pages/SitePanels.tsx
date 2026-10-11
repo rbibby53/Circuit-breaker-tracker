@@ -4,7 +4,6 @@ import {
   DEVICE_LABELS,
   LAYOUT_DEFAULTS,
   LAYOUT_LABELS,
-  PANEL_LAYOUTS,
   PROTECTION_LABELS,
   VOLTAGE_PRESETS,
   spaceChoices,
@@ -129,23 +128,14 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
     <form className="panel stack" onSubmit={submit} aria-label="Add a panel">
       <h2 className="h-caps">Add a panel</h2>
       <div className="layout-picks" role="radiogroup" aria-label="Layout">
-        {PANEL_LAYOUTS.map((l) => {
-          const available = AVAILABLE_LAYOUTS.includes(l);
+        {AVAILABLE_LAYOUTS.map((l) => {
           return (
-            <label key={l} className={`layout-pick${layout === l ? ' is-on' : ''}${available ? '' : ' is-off'}`}>
-              <input
-                type="radio"
-                name="layout"
-                value={l}
-                checked={layout === l}
-                disabled={!available}
-                onChange={() => pickLayout(l)}
-              />
+            <label key={l} className={`layout-pick${layout === l ? ' is-on' : ''}`}>
+              <input type="radio" name="layout" value={l} checked={layout === l} onChange={() => pickLayout(l)} />
               <span className="strong">{LAYOUT_LABELS[l]}</span>
               <span className="small muted">
                 {l === 'residential' && 'Two columns, odd left and even right. 1- and 2-pole, tandems.'}
                 {l === 'commercial' && 'Three-phase, rows on phases A, B and C. 1-, 2- and 3-pole, no tandems.'}
-                {l === 'single' && 'One column for small sub-panels. Coming later.'}
               </span>
             </label>
           );

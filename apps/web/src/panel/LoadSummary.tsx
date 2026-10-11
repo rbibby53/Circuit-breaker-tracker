@@ -14,6 +14,8 @@ export function LoadSummary({
 }) {
   const [open, setOpen] = useState(false);
   const load = panelLoad(panel, breakers);
+  const critical = breakers.filter((b) => b.critical).length;
+  const onBackup = breakers.filter((b) => b.backup !== 'none').length;
   const max = Math.max(1, ...load.legs.map((l) => l.amps));
   const phase = panel.layout === 'commercial';
   return (
@@ -30,6 +32,16 @@ export function LoadSummary({
         <span>
           <strong>{load.freeSpaces}</strong> free {load.freeSpaces === 1 ? 'space' : 'spaces'}
         </span>
+        {critical > 0 && (
+          <span>
+            <strong>{critical}</strong> critical
+          </span>
+        )}
+        {onBackup > 0 && (
+          <span>
+            <strong>{onBackup}</strong> on backup power
+          </span>
+        )}
         {load.surge.length > 0 && (
           <span className="load-surge">
             <span className="badge badge-spd">SPD</span> Surge protector{load.surge.length > 1 ? 's' : ''} at{' '}

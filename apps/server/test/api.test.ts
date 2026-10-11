@@ -221,6 +221,20 @@ describe('view as user', () => {
 });
 
 describe('activity log', () => {
+  it('pages through older entries and links to places that still exist', async () => {
+    const s = await scenario();
+    const all = (await s.admin.get('/api/activity?limit=500')).body as any[];
+    const page1 = (await s.admin.get('/api/activity?limit=3')).body as any[];
+    const page2 = (await s.admin.get(`/api/activity?limit=3&before=${page1.at(-1).id}`)).body as any[];
+    expect([...page1, ...page2].map((a) => a.id)).toEqual(all.slice(0, 6).map((a) => a.id));
+    const floor = all.find((a) => a.summary.includes('Floor 2'));
+    expect(floor.locationId).toBe(s.floor2);
+    // A deleted place is no longer linked.
+    await s.admin.del(`/api/locations/${s.floor2}`);
+    const after = ((await s.admin.get('/api/activity?limit=500')).body as any[]).find((a) => a.id === floor.id);
+    expect(after.locationId).toBeNull();
+  });
+
   it('managers only see activity inside their scope', async () => {
     const s = await scenario();
     await createLocation(s.roommate, s.apartment, 'floor', 'Upstairs');

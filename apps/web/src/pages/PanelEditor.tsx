@@ -1,11 +1,4 @@
-import {
-  LAYOUT_LABELS,
-  positionsOf,
-  type PanelDetail,
-  type PanelHistoryItem,
-  type SavePanelResponse,
-  type Slot,
-} from '@cbt/core';
+import { LAYOUT_LABELS, type PanelDetail, type PanelHistoryItem, type SavePanelResponse, type Slot } from '@cbt/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -264,10 +257,6 @@ function Editor({
   const serverBreaker = selectedBreaker?.id ? server.breakers.find((b) => b.id === selectedBreaker.id) : undefined;
   const site = siteOf(byId, initial.locationId);
   const chain = ancestry(byId, initial.locationId);
-  const used = new Set(doc.breakers.flatMap((b) => positionsOf(doc, b)));
-  const critical = doc.breakers.filter((b) => b.critical).length;
-  const surgeCount = doc.breakers.filter((b) => b.device === 'surge').length;
-  const onBackup = doc.breakers.filter((b) => b.backup !== 'none').length;
 
   // Save pending edits first so the PDF matches what is on screen.
   const printFlush = async () => {
@@ -431,11 +420,6 @@ function Editor({
               )
             }
           />
-          <p className="panel-stats">
-            {used.size} of {doc.spaces} spaces filled · {doc.breakers.length - surgeCount} breakers
-            {surgeCount > 0 && ` · ${surgeCount} surge protector${surgeCount === 1 ? '' : 's'}`} · {critical} critical ·{' '}
-            {onBackup} on backup power
-          </p>
         </section>
         {selectedBreaker ? (
           <Inspector
