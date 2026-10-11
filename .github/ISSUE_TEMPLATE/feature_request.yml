@@ -1,0 +1,20 @@
+name: Feature request
+description: An idea to make the tracker more useful.
+labels: [enhancement]
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What are you trying to do?
+      description: Describe the job, not the solution. For example "find which breaker feeds the lab fridge from my phone".
+    validations:
+      required: true
+  - type: textarea
+    id: idea
+    attributes:
+      label: What would help?
+  - type: textarea
+    id: context
+    attributes:
+      label: Anything else?
+      description: Panel types, number of sites or people, screenshots of how you do it today.

@@ -1,5 +1,9 @@
 # Circuit Breaker Tracker
 
+[![CI](https://github.com/rbibby53/Circuit-breaker-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/rbibby53/Circuit-breaker-tracker/actions/workflows/ci.yml)
+[![Image](https://img.shields.io/badge/image-ghcr.io-2496ED?logo=docker&logoColor=white)](https://github.com/rbibby53/Circuit-breaker-tracker/pkgs/container/circuit-breaker-tracker)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+
 A self-hosted web app for recreating your electrical panels, labelling what every breaker
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
@@ -7,6 +11,8 @@ as a single Docker container with its data in one SQLite file.
 > **Status:** milestones 1 and 2 of 5 are done: accounts, single sign-on, scoped access and the
 > panel editor for residential load centers. Commercial 3-phase panels and PDF export come
 > next. See [docs/PLAN.md](docs/PLAN.md) for the whole plan.
+
+![The panel editor with a tandem breaker selected](docs/screenshots/editor.png)
 
 ## What works today
 
@@ -37,6 +43,17 @@ as a single Docker container with its data in one SQLite file.
   their access.
 - **Breakers serving a room:** each room and floor page lists every breaker that serves it,
   from any panel, including whole-floor and whole-site tags.
+
+## Screenshots
+
+|                                                                        |                                                          |
+| ---------------------------------------------------------------------- | -------------------------------------------------------- |
+| ![Dark mode](docs/screenshots/dark-editor.png)                         | ![Search from the header](docs/screenshots/search.png)   |
+| Dark mode follows your system, or pick one under Account.              | Press <kbd>/</kbd> to search rooms, panels and breakers. |
+| ![Users and access](docs/screenshots/access.png)                       | ![Settings](docs/screenshots/settings.png)               |
+| Grant access on any location; managers only invite within their scope. | Admins configure the app in Settings instead of Docker.  |
+
+<p align="center"><img src="docs/screenshots/phone-editor.png" alt="The panel editor on a phone" width="300"></p>
 
 ## Run it
 
@@ -195,6 +212,11 @@ docs/PLAN.md    The plan and milestones
 
 The access rules live in `packages/core/src/access.ts` and are covered by
 `access.test.ts`. The server re-checks every request against them.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately as described in
+[SECURITY.md](SECURITY.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 
