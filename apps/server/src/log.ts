@@ -45,26 +45,48 @@ export function formatLine(record: Record<string, unknown>): string {
   return line;
 }
 
+/** A line kept for the log viewer in Settings. */
+export interface RecentLine {
+  time: number;
+  level: number;
+  text: string;
+}
+
+/** How many lines the log viewer can show. Kept in memory only, so a restart clears them. */
+export const RECENT_LINES = 500;
+
 /** Where pino writes. The format can change at runtime from Settings. */
 export class LogStream {
+  private recentLines: RecentLine[] = [];
+
   constructor(
     public format: LogFormat,
     private out: (s: string) => void = (s) => process.stdout.write(s),
   ) {}
 
   write(chunk: string): void {
-    if (this.format === 'json') {
-      this.out(chunk);
-      return;
-    }
     for (const raw of chunk.split('\n')) {
       if (!raw) continue;
+      let record: Record<string, unknown> | null = null;
       try {
-        this.out(`${formatLine(JSON.parse(raw) as Record<string, unknown>)}\n`);
+        record = JSON.parse(raw) as Record<string, unknown>;
       } catch {
-        this.out(`${raw}\n`);
+        record = null;
       }
+      const text = record ? formatLine(record) : raw;
+      this.out(`${this.format === 'json' ? raw : text}\n`);
+      this.recentLines.push({
+        time: typeof record?.time === 'number' ? record.time : Date.now(),
+        level: Number(record?.level ?? 30),
+        text,
+      });
+      if (this.recentLines.length > RECENT_LINES) this.recentLines.splice(0, this.recentLines.length - RECENT_LINES);
     }
+  }
+
+  /** Oldest first, at or above a pino level number (30 info, 40 warn, 50 error). */
+  recent(minLevel = 0): RecentLine[] {
+    return this.recentLines.filter((l) => l.level >= minLevel);
   }
 }
 

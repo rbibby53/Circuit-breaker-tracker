@@ -4,6 +4,7 @@ import { z } from 'zod';
 import type { Config } from '../config';
 import { actorOf, requireAuth } from '../context';
 import type { DB } from '../db';
+import type { AuthState } from '../sessions';
 import { idParam, notFound, parse } from '../errors';
 import { disposition } from '../download';
 import { canViewPanel, getPanel, panelDetail } from '../panels';
@@ -22,7 +23,7 @@ const panelQuery = z.object({ ...common, style: z.enum(['sheet', 'door']).defaul
 const locationQuery = z.object({ ...common, style: z.enum(['book', 'index']).default('book') });
 
 export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
-  const context = (tz: string | undefined): PrintContext => {
+  const context = (tz: string | undefined, auth: AuthState): PrintContext => {
     const wantQr = config.settings.get('printQr');
     const base = config.publicUrl;
     return {
@@ -36,6 +37,8 @@ export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
           : null,
       timeZone: safeTimeZone(tz),
       now: new Date(),
+      // The person at the keyboard, also while viewing as someone else.
+      printedBy: auth.realUser.display_name,
     };
   };
 
@@ -54,7 +57,7 @@ export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
     if (!panel || !canViewPanel(actor, access, panel)) throw notFound('Panel not found.');
     const detail = panelDetail(db, actor, access, panel);
 
-    const ctx = context(q.tz);
+    const ctx = context(q.tz, auth);
     const pdf = new Pdf(q.paper ?? config.settings.get('paperSize'), detail.name, ctx);
     if (q.style === 'door') drawDoorCard(pdf, detail);
     else drawPanelSheet(pdf, detail);
@@ -71,7 +74,7 @@ export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
     const root = access.byId.get(id);
     if (!root || !canView(actor, access.node(id)!, access.grants)) throw notFound();
 
-    const ctx = context(q.tz);
+    const ctx = context(q.tz, auth);
     const index = roomIndex(db, actor, access, id);
     const kindLabel = KIND_LABELS[root.kind];
     const pdf = new Pdf(q.paper ?? config.settings.get('paperSize'), `${root.name} panel directory`, ctx);

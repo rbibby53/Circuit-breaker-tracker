@@ -6,6 +6,7 @@ import { useTitle } from '../lib/useTitle';
 import { api } from '../api';
 import { useAuthConfig, useCurrentUser } from '../auth';
 import { Avatar } from '../components/Avatar';
+import { SessionsSection } from '../components/Sessions';
 import { TwoStepSettings } from '../components/TwoStep';
 import { ErrorNote, Field } from '../components/ui';
 import { MicrosoftIcon } from './Login';
@@ -150,6 +151,8 @@ export function AccountPage() {
       </form>
 
       <TwoStepSettings me={me} />
+
+      <SessionsSection />
 
       {config.data?.oidc.enabled && (
         <section className="panel stack">

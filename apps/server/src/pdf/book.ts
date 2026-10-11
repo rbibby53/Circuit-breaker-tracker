@@ -1,6 +1,6 @@
 import type { PanelDetail } from '@cbt/core';
 import type { IndexBreaker, RoomIndex } from '../roomIndex';
-import { FAINT, INK, MUTED, Pdf, RULE, formatDate, type Font } from './document';
+import { FAINT, INK, MUTED, Pdf, RULE, printedLine, type Font } from './document';
 import { drawPanelSheet } from './panel';
 
 const ROW = 14;
@@ -139,10 +139,7 @@ export function drawBook(
     pdf.line(root.path, pdf.left, y, { font: 'body', size: 10, color: MUTED, width: pdf.contentWidth });
     y += 16;
   }
-  const summary = [
-    `${panels.length} panel${panels.length === 1 ? '' : 's'}`,
-    `printed ${formatDate(pdf.ctx.now, pdf.ctx)}`,
-  ].join(', ');
+  const summary = [`${panels.length} panel${panels.length === 1 ? '' : 's'}`, printedLine(pdf.ctx, false)].join(', ');
   pdf.line(summary[0]!.toUpperCase() + summary.slice(1), pdf.left, y, { font: 'body', size: 10, color: MUTED });
   y += 44;
 

@@ -204,4 +204,10 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX breaker_tags_tag ON breaker_tags (tag);
   `,
+  `
+  -- For "Where you're signed in": when each session was last used, from where, and how it began.
+  ALTER TABLE sessions ADD COLUMN last_seen_at TEXT;
+  ALTER TABLE sessions ADD COLUMN ip TEXT;
+  ALTER TABLE sessions ADD COLUMN method TEXT;
+  `,
 ];

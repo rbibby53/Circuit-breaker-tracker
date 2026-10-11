@@ -133,6 +133,37 @@ function ProfileForm({ user }: { user: UserListItem }) {
   );
 }
 
+/** End all of someone's sign-ins, e.g. after a lost phone or when they leave. */
+function SignOutEverywhere({ user }: { user: UserListItem }) {
+  const confirm = useConfirm();
+  const go = useMutation({ mutationFn: () => api.post<{ signedOut: number }>(`/api/users/${user.id}/sign-out`) });
+  return (
+    <div className="row-between">
+      <span className="small muted">
+        {go.data
+          ? `Signed out of ${go.data.signedOut} ${go.data.signedOut === 1 ? 'browser' : 'browsers'}.`
+          : 'Lost phone or shared computer? End every sign-in they have.'}
+      </span>
+      <button
+        type="button"
+        className="btn btn-sm"
+        disabled={go.isPending}
+        onClick={async () => {
+          const ok = await confirm({
+            title: `Sign ${user.displayName} out everywhere?`,
+            message: 'They stay in the app with the same access, and just sign in again.',
+            confirmLabel: 'Sign out everywhere',
+          });
+          if (ok) go.mutate();
+        }}
+      >
+        Sign out everywhere
+      </button>
+      <ErrorNote error={go.error} />
+    </div>
+  );
+}
+
 /** Everything about one person on one screen: their profile, and access to change, remove or add. */
 export function ManageAccess({
   user,
@@ -182,6 +213,7 @@ export function ManageAccess({
   return (
     <Modal open={open} onClose={onClose} title={user.displayName}>
       {canEditProfile && <ProfileForm key={user.id} user={user} />}
+      {canEditProfile && <SignOutEverywhere user={user} />}
       <h3>Access</h3>
       {user.isAdmin ? (
         <p>{user.displayName} is an admin and can see and change everything.</p>

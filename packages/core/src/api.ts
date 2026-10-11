@@ -364,3 +364,46 @@ export interface RestoreUpload {
   id: string;
   summary: BackupSummary;
 }
+
+/** A database copy in the backups folder, made on schedule or by "Back up now". */
+export interface BackupFile {
+  name: string;
+  bytes: number;
+  createdAt: string;
+}
+
+export interface BackupList {
+  /** Where the copies are kept, as the server sees it (inside the container). */
+  dir: string;
+  keep: number;
+  hour: number;
+  /** When the next automatic backup is due, if they are on. */
+  nextAt: string | null;
+  files: BackupFile[];
+  /** The last automatic backup failed with this message. */
+  lastError: string | null;
+}
+
+/** One place someone is signed in, for "Where you're signed in". */
+export interface SessionInfo {
+  id: number;
+  /** The browser this list is being looked at in. */
+  current: boolean;
+  /** "Chrome on Windows", from the browser's user agent. */
+  device: string;
+  /** How the sign-in happened: "password", "Microsoft"… (unknown for older sessions). */
+  method: string | null;
+  ip: string | null;
+  createdAt: string;
+  lastSeenAt: string | null;
+  expiresAt: string;
+}
+
+/** The log viewer under Settings → Logging. */
+export interface LogLines {
+  /** The level the server logs at; lower levels are not kept either. */
+  level: string;
+  /** How many lines are kept in memory, at most. */
+  capacity: number;
+  lines: { time: string; level: 'debug' | 'info' | 'warn' | 'error'; text: string }[];
+}
