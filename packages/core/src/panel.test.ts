@@ -3,9 +3,13 @@ import {
   cellOf,
   checkChange,
   circuitLabel,
+  circuitVolts,
   freeAt,
+  phaseOf,
+  phasesOf,
   positionsOf,
   rowsFor,
+  spaceChoices,
   validateLayout,
   type BreakerShape,
   type PanelShape,
@@ -99,5 +103,41 @@ describe('editing helpers', () => {
   it('checks a move without counting the breaker against itself', () => {
     expect(checkChange(res, breakers, b('dryer', 4, 2))).toBeNull();
     expect(checkChange(res, breakers, b('dryer', 19, 2))).toMatch(/21/);
+  });
+});
+
+describe('three-phase panelboards', () => {
+  const com: PanelShape = { layout: 'commercial', spaces: 42 };
+
+  it('labels rows A, B, C down both columns', () => {
+    expect([1, 2, 3, 4, 5, 6, 7, 8].map((p) => phaseOf(com, p))).toEqual(['A', 'A', 'B', 'B', 'C', 'C', 'A', 'A']);
+    expect(phaseOf(res, 1)).toBeNull();
+  });
+
+  it('puts a 3-pole breaker on all three phases wherever it starts', () => {
+    expect(phasesOf(com, { position: 1, poles: 3 })).toEqual(['A', 'B', 'C']);
+    expect(phasesOf(com, { position: 4, poles: 3 })).toEqual(['B', 'C', 'A']);
+    expect(phasesOf(com, { position: 12, poles: 2 })).toEqual(['C', 'A']);
+    expect(circuitLabel(com, { position: 1, poles: 3, slot: 'full' })).toBe('1 + 3 + 5');
+    expect(validateLayout(com, [b('Chiller', 1, 3), b('Pump', 2, 3), b('Lights', 7)])).toEqual([]);
+  });
+
+  it('takes no tandems', () => {
+    expect(validateLayout(com, [b('Half', 7, 1, 'A')])[0]?.message).toMatch(/no tandems/);
+  });
+
+  it('needs a multiple of 6 spaces so the phases balance', () => {
+    expect(validateLayout({ layout: 'commercial', spaces: 40 }, [])[0]?.message).toMatch(/multiple of 6/);
+    expect(validateLayout({ layout: 'commercial', spaces: 6 }, [])[0]?.message).toMatch(/at least 12/);
+    expect(spaceChoices('commercial')).toEqual([12, 18, 24, 30, 36, 42, 48, 54, 60, 66, 72, 78, 84]);
+    expect(spaceChoices('residential')).toHaveLength(42);
+  });
+
+  it('works out circuit voltage from the panel voltage and poles', () => {
+    expect(circuitVolts('120/208 V 3-phase', 1)).toBe(120);
+    expect(circuitVolts('120/208 V 3-phase', 3)).toBe(208);
+    expect(circuitVolts('277/480 V 3-phase', 2)).toBe(480);
+    expect(circuitVolts('120/240 V split-phase', 2)).toBe(240);
+    expect(circuitVolts('480 V delta', 3)).toBeNull();
   });
 });

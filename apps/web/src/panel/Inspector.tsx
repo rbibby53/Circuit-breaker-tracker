@@ -4,8 +4,11 @@ import {
   COMMON_AMPS,
   PROTECTIONS,
   PROTECTION_LABELS,
+  allowsTandem,
   circuitLabel,
+  circuitVolts,
   maxPoles,
+  phasesOf,
   type BreakerDto,
   type Slot,
 } from '@cbt/core';
@@ -45,13 +48,26 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
       label: '3-pole',
       disabled: maxPoles(doc) < 3 ? 'Split-phase panels have no 3-pole breakers' : undefined,
     },
-    { value: 'tandem', label: 'Tandem' },
+    {
+      value: 'tandem',
+      label: 'Tandem',
+      disabled: allowsTandem(doc) ? undefined : 'Three-phase panelboards take no tandems',
+    },
   ];
+  const phases = phasesOf(doc, b);
+  const volts = circuitVolts(doc.voltage, b.poles);
+  const where = [
+    `Circuit ${circuitLabel(doc, b)}`,
+    phases.length ? `Phase ${phases.join(' ')}` : null,
+    volts ? `${volts} V` : null,
+  ]
+    .filter(Boolean)
+    .join(' · ');
 
   if (readOnly) {
     return (
       <aside className="inspector" aria-label="Breaker details">
-        <span className="eyebrow">Circuit {circuitLabel(doc, b)}</span>
+        <span className="eyebrow">{where}</span>
         <h2>{b.label || 'Unlabelled'}</h2>
         <dl className="facts">
           <dt>Size</dt>
@@ -82,7 +98,7 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
   return (
     <aside className="inspector" aria-label="Breaker details">
       <div className="stack-sm">
-        <span className="eyebrow">Circuit {circuitLabel(doc, b)}</span>
+        <span className="eyebrow">{where}</span>
         <h2>{b.label || 'New breaker'}</h2>
       </div>
 

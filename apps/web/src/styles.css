@@ -1315,6 +1315,9 @@ a:focus-visible {
   grid-template-columns: minmax(0, 1fr) 14px minmax(0, 1fr);
   row-gap: 4px;
 }
+.pg-grid.is-phased {
+  grid-template-columns: minmax(0, 1fr) 18px minmax(0, 1fr);
+}
 .pg-grid.is-single {
   grid-template-columns: minmax(0, 1fr);
   max-width: 360px;
@@ -1325,6 +1328,21 @@ a:focus-visible {
   grid-column: 2;
   background: repeating-linear-gradient(180deg, #b07c3a 0 23px, #8c6230 23px 50px);
   border-radius: 2px;
+}
+.pg-phase {
+  grid-column: 2;
+  align-self: center;
+  justify-self: center;
+  z-index: 1;
+  width: 15px;
+  border-radius: 2px;
+  background: rgb(0 0 0 / 0.5);
+  color: #fff;
+  font-family: var(--mono);
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
 }
 .pg-space,
 .pg-breaker {

@@ -1,11 +1,11 @@
 // Panel layout engine: where breakers sit, what they occupy, and whether a layout is valid.
-// The editor, thumbnails and (later) the PDF all draw from these functions.
+// The editor, thumbnails and the PDF all draw from these functions.
 
 export const PANEL_LAYOUTS = ['residential', 'commercial', 'single'] as const;
 export type PanelLayout = (typeof PANEL_LAYOUTS)[number];
 
-/** Layouts that can be created today. Commercial 3-phase and single column come later. */
-export const AVAILABLE_LAYOUTS: readonly PanelLayout[] = ['residential'];
+/** Layouts that can be created today. Single column comes later. */
+export const AVAILABLE_LAYOUTS: readonly PanelLayout[] = ['residential', 'commercial'];
 
 export const LAYOUT_LABELS: Record<PanelLayout, string> = {
   residential: 'Residential load center',
@@ -32,6 +32,20 @@ export type Slot = (typeof SLOTS)[number];
 
 export const MAIN_TYPES = ['breaker', 'lugs'] as const;
 export type MainType = (typeof MAIN_TYPES)[number];
+
+/** Common service voltages offered as suggestions; any text is still accepted. */
+export const VOLTAGE_PRESETS: Record<PanelLayout, string[]> = {
+  residential: ['120/240 V split-phase', '120/208 V single-phase'],
+  commercial: ['120/208 V 3-phase', '277/480 V 3-phase', '120/240 V 3-phase high-leg'],
+  single: ['120/240 V split-phase', '120/208 V 3-phase', '277/480 V 3-phase'],
+};
+
+/** What a new panel of each layout starts with. */
+export const LAYOUT_DEFAULTS: Record<PanelLayout, { spaces: number; mainAmps: number; voltage: string }> = {
+  residential: { spaces: 24, mainAmps: 200, voltage: '120/240 V split-phase' },
+  commercial: { spaces: 42, mainAmps: 225, voltage: '120/208 V 3-phase' },
+  single: { spaces: 12, mainAmps: 100, voltage: '120/240 V split-phase' },
+};
 
 export const COMMON_AMPS = [10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200];
 
@@ -64,6 +78,44 @@ export function rowsFor(panel: PanelShape): number {
 /** Most poles a single breaker may have on this panel. Split-phase panels have no 3-pole breakers. */
 export function maxPoles(panel: PanelShape): number {
   return panel.layout === 'commercial' ? 3 : 2;
+}
+
+/** Three-phase panelboards take no tandem breakers. */
+export function allowsTandem(panel: PanelShape): boolean {
+  return panel.layout === 'residential';
+}
+
+export const PHASES = ['A', 'B', 'C'] as const;
+export type Phase = (typeof PHASES)[number];
+
+/** The phase a space sits on in a 3-phase panelboard: rows run A, B, C, A, B, C… Null otherwise. */
+export function phaseOf(panel: PanelShape, position: number): Phase | null {
+  if (panel.layout !== 'commercial') return null;
+  return PHASES[(cellOf(panel, position).row - 1) % 3]!;
+}
+
+/** Phases a breaker is connected to, top to bottom. Empty when the panel has no phase labels. */
+export function phasesOf(panel: PanelShape, b: Pick<BreakerShape, 'position' | 'poles'>): Phase[] {
+  return positionsOf(panel, b).flatMap((p) => phaseOf(panel, p) ?? []);
+}
+
+/** Space counts a panel of this layout can have. */
+export function spaceChoices(layout: PanelLayout): number[] {
+  const out: number[] = [];
+  for (let n = MIN_SPACES; n <= MAX_SPACES; n++) {
+    if (validatePanelShape({ layout, spaces: n }).length === 0) out.push(n);
+  }
+  return out;
+}
+
+/**
+ * Circuit voltage from the panel's voltage text and the breaker's poles: on "120/208 V" a
+ * 1-pole breaker is 120 V and a 2- or 3-pole one 208 V. Null when the text has no "low/high" pair.
+ */
+export function circuitVolts(voltage: string, poles: number): number | null {
+  const m = /(\d{2,3})\s*\/\s*(\d{3})/.exec(voltage);
+  if (!m) return null;
+  return poles > 1 ? Number(m[2]) : Number(m[1]);
 }
 
 /** Spaces between one pole and the next pole of the same breaker (straight down its column). */
@@ -103,6 +155,12 @@ export function validatePanelShape(panel: PanelShape): LayoutIssue[] {
   const issues: LayoutIssue[] = [];
   if (!Number.isInteger(panel.spaces) || panel.spaces < MIN_SPACES || panel.spaces > MAX_SPACES) {
     issues.push({ key: null, message: `A panel needs between ${MIN_SPACES} and ${MAX_SPACES} spaces.` });
+  } else if (panel.layout === 'commercial' && (panel.spaces % 6 !== 0 || panel.spaces < 12)) {
+    issues.push({
+      key: null,
+      message:
+        'A three-phase panelboard needs a multiple of 6 spaces, at least 12 (for example 30, 42 or 84), so each phase gets the same number of rows.',
+    });
   } else if (columnsFor(panel) === 2 && panel.spaces % 2 !== 0) {
     issues.push({ key: null, message: 'A two-column panel needs an even number of spaces.' });
   }
@@ -129,6 +187,10 @@ export function validateLayout(panel: PanelShape, breakers: readonly BreakerShap
             ? `${name(b)} is 3-pole, but this split-phase panel only takes 1- and 2-pole breakers.`
             : `${name(b)} must have between 1 and ${maxPoles(panel)} poles.`,
       });
+      continue;
+    }
+    if (b.slot !== 'full' && !allowsTandem(panel)) {
+      issues.push({ key: b.key, message: `${name(b)} is a tandem, but three-phase panelboards take no tandems.` });
       continue;
     }
     if (b.slot !== 'full' && b.poles !== 1) {

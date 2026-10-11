@@ -6,6 +6,15 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Commercial 3-phase panelboards.** Pick _Commercial panelboard_ when adding a panel, or switch
+  an existing one under Panel settings.
+  - Rows are labelled A, B, C on the bus.
+  - Breakers can be 1-, 2- or 3-pole. The breaker details show which phases a breaker is on
+    and its voltage, e.g. "Phase B C A · 208 V".
+  - Spaces come in multiples of 6 so the phases balance, and tandems are refused.
+  - New panels start at 42 spaces and 120/208 V. Common voltages are suggested as you type.
+  - Printed sheets and door cards get a phase column.
+
 - **Print to PDF.** A Print button on every panel and location offers:
   - a **panel sheet** laid out like the panel;
   - a **door card** to cut out and keep inside the panel door;

@@ -291,7 +291,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    - Flags. A "serves" picker that spans floors.
    - Validation, autosave and undo, conflict detection, panel history.
    - Read-only feed-chain and "serves my location" visibility, with tests.
-3. **Commercial 3-phase**
+3. **Commercial 3-phase (done)**
    - Phase labels, 3-pole breakers, 277/480 V, 42/84 circuits.
    - Sub-panel feed links.
 4. **PDF export (done):** panel sheet, door card, room index, site book, QR code.

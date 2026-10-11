@@ -1,4 +1,13 @@
-import { MAX_SPACES, MIN_SPACES, type FeedCandidate, type PanelDetail } from '@cbt/core';
+import {
+  AVAILABLE_LAYOUTS,
+  LAYOUT_DEFAULTS,
+  LAYOUT_LABELS,
+  VOLTAGE_PRESETS,
+  spaceChoices,
+  type FeedCandidate,
+  type PanelDetail,
+  type PanelLayout,
+} from '@cbt/core';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -21,6 +30,20 @@ export function PanelSettings({
     queryFn: () => api.get<FeedCandidate[]>(`/api/panels/${server.id}/feed-candidates`),
   });
   const known = new Set((candidates.data ?? []).map((c) => c.breakerId));
+  const spaces = spaceChoices(doc.layout);
+  if (!spaces.includes(doc.spaces)) spaces.push(doc.spaces);
+
+  // Switching layout keeps what still fits: the nearest valid space count, and the voltage
+  // unless it was the old layout's stock value.
+  const changeLayout = (layout: PanelLayout) => {
+    const choices = spaceChoices(layout);
+    const nextSpaces = choices.includes(doc.spaces)
+      ? doc.spaces
+      : (choices.find((n) => n >= doc.spaces) ?? choices[choices.length - 1]!);
+    const stock = VOLTAGE_PRESETS[doc.layout].includes(doc.voltage) || !doc.voltage;
+    onChange({ layout, spaces: nextSpaces, ...(stock ? { voltage: LAYOUT_DEFAULTS[layout].voltage } : {}) });
+  };
+
   const byPanel = new Map<number, FeedCandidate[]>();
   for (const c of candidates.data ?? []) byPanel.set(c.panelId, [...(byPanel.get(c.panelId) ?? []), c]);
 
@@ -33,9 +56,19 @@ export function PanelSettings({
           <input value={doc.name} onChange={(e) => onChange({ name: e.target.value }, 'name')} />
         </label>
         <label className="field">
+          <span className="field-label">Layout</span>
+          <select value={doc.layout} onChange={(e) => changeLayout(e.target.value as PanelLayout)}>
+            {AVAILABLE_LAYOUTS.map((l) => (
+              <option key={l} value={l}>
+                {LAYOUT_LABELS[l]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
           <span className="field-label">Spaces</span>
           <select value={doc.spaces} onChange={(e) => onChange({ spaces: Number(e.target.value) })}>
-            {Array.from({ length: (MAX_SPACES - MIN_SPACES) / 2 + 1 }, (_, i) => MIN_SPACES + i * 2).map((n) => (
+            {spaces.map((n) => (
               <option key={n} value={n}>
                 {n}
               </option>
@@ -67,9 +100,15 @@ export function PanelSettings({
           <span className="field-label">Voltage</span>
           <input
             value={doc.voltage}
-            placeholder="120/240 V split-phase"
+            list="panel-voltages"
+            placeholder={LAYOUT_DEFAULTS[doc.layout].voltage}
             onChange={(e) => onChange({ voltage: e.target.value }, 'voltage')}
           />
+          <datalist id="panel-voltages">
+            {VOLTAGE_PRESETS[doc.layout].map((v) => (
+              <option key={v} value={v} />
+            ))}
+          </datalist>
         </label>
         <label className="field">
           <span className="field-label">Manufacturer</span>
