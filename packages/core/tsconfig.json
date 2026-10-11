@@ -1,4 +1,8 @@
 {
   "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    // Shared by the browser and Node; DOM supplies types for globals both have, such as URL.
+    "lib": ["ES2023", "DOM"]
+  },
   "include": ["src"]
 }

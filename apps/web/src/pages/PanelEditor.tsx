@@ -91,13 +91,21 @@ function Editor({
 
   const [doc, setDoc] = useState<EditPanel>(() => fromDetail(initial));
   const [server, setServer] = useState(initial);
-  // Undo/redo stacks live in a ref: they change together with `doc`, which drives re-renders.
+  // Undo/redo stacks live in a ref so handlers always see the latest; their sizes are state so
+  // the Undo and Redo buttons re-render when they change.
   const stacks = useRef<{ past: EditPanel[]; future: EditPanel[] }>({ past: [], future: [] });
+  const [history, setHistory] = useState({ undo: 0, redo: 0 });
+  const setStacks = useCallback((next: { past: EditPanel[]; future: EditPanel[] }) => {
+    stacks.current = next;
+    setHistory({ undo: next.past.length, redo: next.future.length });
+  }, []);
   const [selected, setSelected] = useState<string | null>(initialSelected);
   // A search result can point at another breaker while this panel is already open.
-  useEffect(() => {
+  const [lastInitial, setLastInitial] = useState(initialSelected);
+  if (initialSelected !== lastInitial) {
+    setLastInitial(initialSelected);
     if (initialSelected) setSelected(initialSelected);
-  }, [initialSelected]);
+  }
   const [message, setMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [saveError, setSaveError] = useState<string | null>(null);
@@ -121,17 +129,20 @@ function Editor({
     setSaveState('pending');
   };
 
-  const commit = useCallback((next: EditPanel, coalesce?: string) => {
-    const t = Date.now();
-    const last = lastCoalesce.current;
-    const merge = coalesce && last && last.key === coalesce && t - last.at < COALESCE_MS;
-    if (!merge) {
-      stacks.current = { past: [...stacks.current.past, docRef.current].slice(-MAX_UNDO), future: [] };
-    }
-    lastCoalesce.current = coalesce ? { key: coalesce, at: t } : null;
-    setMessage(null);
-    setDocNow(next);
-  }, []);
+  const commit = useCallback(
+    (next: EditPanel, coalesce?: string) => {
+      const t = Date.now();
+      const last = lastCoalesce.current;
+      const merge = coalesce && last && last.key === coalesce && t - last.at < COALESCE_MS;
+      if (!merge) {
+        setStacks({ past: [...stacks.current.past, docRef.current].slice(-MAX_UNDO), future: [] });
+      }
+      lastCoalesce.current = coalesce ? { key: coalesce, at: t } : null;
+      setMessage(null);
+      setDocNow(next);
+    },
+    [setStacks],
+  );
 
   const apply = (r: Result, coalesce?: string) => {
     if (r.ok) commit(r.doc, coalesce);
@@ -143,21 +154,21 @@ function Editor({
     const s = stacks.current;
     const prev = s.past[s.past.length - 1];
     if (!prev) return;
-    stacks.current = { past: s.past.slice(0, -1), future: [docRef.current, ...s.future] };
+    setStacks({ past: s.past.slice(0, -1), future: [docRef.current, ...s.future] });
     lastCoalesce.current = null;
     setMessage(null);
     setDocNow(prev);
-  }, []);
+  }, [setStacks]);
 
   const redo = useCallback(() => {
     const s = stacks.current;
     const next = s.future[0];
     if (!next) return;
-    stacks.current = { past: [...s.past, docRef.current], future: s.future.slice(1) };
+    setStacks({ past: [...s.past, docRef.current], future: s.future.slice(1) });
     lastCoalesce.current = null;
     setMessage(null);
     setDocNow(next);
-  }, []);
+  }, [setStacks]);
 
   // ---- Autosave ----------------------------------------------------------------------
 
@@ -299,7 +310,7 @@ function Editor({
                   type="button"
                   className="btn"
                   onClick={undo}
-                  disabled={stacks.current.past.length === 0}
+                  disabled={history.undo === 0}
                   aria-label="Undo"
                   title="Undo (Ctrl+Z)"
                 >
@@ -309,7 +320,7 @@ function Editor({
                   type="button"
                   className="btn"
                   onClick={redo}
-                  disabled={stacks.current.future.length === 0}
+                  disabled={history.redo === 0}
                   aria-label="Redo"
                   title="Redo (Ctrl+Shift+Z)"
                 >

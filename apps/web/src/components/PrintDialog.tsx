@@ -61,13 +61,9 @@ export function PrintButton({
   const [open, setOpen] = useState(false);
   const [busy, setBusy] = useState(false);
   const [style, setStyle] = useState(styles[0]!.value);
-  const [paper, setPaper] = useState<PaperSize>(() => rememberedPaper() ?? 'letter');
-  const [paperTouched, setPaperTouched] = useState(() => rememberedPaper() !== null);
-
   // Until someone picks a size, follow the admin's default.
-  useEffect(() => {
-    if (!paperTouched && config.data?.paperSize) setPaper(config.data.paperSize);
-  }, [config.data?.paperSize, paperTouched]);
+  const [chosenPaper, setChosenPaper] = useState<PaperSize | null>(rememberedPaper);
+  const paper = chosenPaper ?? config.data?.paperSize ?? 'letter';
 
   useEffect(() => {
     const d = dialog.current;
@@ -138,8 +134,7 @@ export function PrintButton({
                     type="button"
                     aria-pressed={paper === p}
                     onClick={() => {
-                      setPaper(p);
-                      setPaperTouched(true);
+                      setChosenPaper(p);
                       rememberPaper(p);
                     }}
                   >
