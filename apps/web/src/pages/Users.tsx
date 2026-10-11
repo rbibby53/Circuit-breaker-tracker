@@ -92,7 +92,14 @@ export function UsersPage() {
         value={query}
         onChange={(e) => setQuery(e.target.value)}
       />
-      {managed && <ManageAccess user={managed} open onClose={() => setManaging(null)} />}
+      {managed && (
+        <ManageAccess
+          user={managed}
+          open
+          onClose={() => setManaging(null)}
+          canEditProfile={(isAdmin || managed.canReset) && managed.id !== me.realUser.id}
+        />
+      )}
       <InviteDialog open={inviting} onClose={() => setInviting(false)} />
       <div className="table-wrap">
         <table className="table">
@@ -151,9 +158,14 @@ export function UsersPage() {
                 </td>
                 <td>{relativeTime(u.lastSeenAt)}</td>
                 <td className="actions">
-                  {!u.isAdmin && !me.viewingAs && (
+                  {u.id === me.realUser.id && !me.viewingAs && (
+                    <Link className="btn btn-sm btn-dark" to="/account">
+                      Your profile
+                    </Link>
+                  )}
+                  {u.id !== me.realUser.id && !me.viewingAs && (
                     <button className="btn btn-sm btn-dark" onClick={() => setManaging(u.id)}>
-                      Manage access
+                      Manage
                     </button>
                   )}
                   {canViewAs && u.id !== me.realUser.id && (

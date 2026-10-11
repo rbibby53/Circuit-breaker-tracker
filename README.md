@@ -31,9 +31,10 @@ as a single Docker container with its data in one SQLite file.
   is needed.
 - **People page:** find anyone by name, email or location, and open **Manage access** to see
   everywhere they have access, change a role, remove access or grant a new location in one
-  place. You can also invite someone from there.
-- **Profile pictures from [Gravatar](https://gravatar.com)** for people who add an email to
-  their profile, with initials for everyone else. Browsers fetch the pictures straight from
+  place, and set their name and email. You can also invite someone from there.
+- **Profile pictures from [Gravatar](https://gravatar.com)** for people with an email: added
+  under Your account, by an admin or manager under People, or from their Microsoft sign-in.
+  Everyone else gets initials. Browsers fetch the pictures straight from
   gravatar.com using a hash of the email; admins can turn this off in Settings.
 - **View as user:** admins can see the app exactly as someone else sees it, read-only.
 - **Activity log:** every change is recorded. Managers see the changes inside their scope.

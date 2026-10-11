@@ -13,6 +13,8 @@ import { api } from '../api';
 import { InviteForm, RoleFields, rolesUpTo } from '../pages/Access';
 import { useLocations } from '../queries';
 import { ancestry, buildTree } from '../tree';
+import { useAuthConfig } from '../auth';
+import { Avatar } from './Avatar';
 import { useConfirm } from './ConfirmDialog';
 import { ErrorNote, Field } from './ui';
 
@@ -85,8 +87,64 @@ function useCeiling(locationId: number | '') {
   return { choices: rolesUpTo(access.data?.ceiling ?? null), name: access.data?.location.name ?? '' };
 }
 
-/** Everything about one person's access, on one screen: change, remove, or add somewhere new. */
-export function ManageAccess({ user, open, onClose }: { user: UserListItem; open: boolean; onClose: () => void }) {
+/** A person's name and email, as set by an admin or a manager who looks after them. */
+function ProfileForm({ user }: { user: UserListItem }) {
+  const qc = useQueryClient();
+  const config = useAuthConfig();
+  const [name, setName] = useState(user.displayName);
+  const [email, setEmail] = useState(user.email ?? '');
+  const save = useMutation({
+    mutationFn: () => api.patch(`/api/users/${user.id}`, { displayName: name.trim(), email: email.trim() }),
+    onSuccess: () => qc.invalidateQueries({ queryKey: ['users'] }),
+  });
+  const submit = (e: FormEvent) => {
+    e.preventDefault();
+    save.mutate();
+  };
+  return (
+    <form className="form-band" onSubmit={submit}>
+      <h3>Profile</h3>
+      <div className="profile-row">
+        <Avatar name={user.displayName} url={user.avatarUrl} light />
+        <p className="muted small">
+          {config.data?.gravatar
+            ? 'Their picture comes from gravatar.com for this email. Without one, their initials are shown.'
+            : 'Profile pictures are turned off in Settings.'}
+        </p>
+      </div>
+      <div className="form-row">
+        <Field label="Display name">
+          <input required maxLength={80} value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="Email (optional)">
+          <input type="email" maxLength={200} value={email} onChange={(e) => setEmail(e.target.value)} />
+        </Field>
+        <button className="btn btn-dark" disabled={save.isPending}>
+          Save profile
+        </button>
+      </div>
+      {save.isSuccess && !save.isPending && (
+        <p className="ok" role="status">
+          Profile saved.
+        </p>
+      )}
+      <ErrorNote error={save.error} />
+    </form>
+  );
+}
+
+/** Everything about one person on one screen: their profile, and access to change, remove or add. */
+export function ManageAccess({
+  user,
+  open,
+  onClose,
+  canEditProfile,
+}: {
+  user: UserListItem;
+  open: boolean;
+  onClose: () => void;
+  canEditProfile: boolean;
+}) {
   const qc = useQueryClient();
   const confirm = useConfirm();
   const places = useGrantableLocations();
@@ -122,7 +180,9 @@ export function ManageAccess({ user, open, onClose }: { user: UserListItem; open
   };
 
   return (
-    <Modal open={open} onClose={onClose} title={`Access for ${user.displayName}`}>
+    <Modal open={open} onClose={onClose} title={user.displayName}>
+      {canEditProfile && <ProfileForm key={user.id} user={user} />}
+      <h3>Access</h3>
       {user.isAdmin ? (
         <p>{user.displayName} is an admin and can see and change everything.</p>
       ) : user.grants.length === 0 ? (

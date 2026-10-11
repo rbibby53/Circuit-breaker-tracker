@@ -67,6 +67,40 @@ describe('profile and pictures', () => {
     ).toEqual(['Home:viewer', 'Shop:editor']);
   });
 
+  it('lets admins and the managers who look after someone set their email', async () => {
+    ({ app } = await testApp());
+    const admin = await setupAdmin(app);
+    const co = await createLocation(admin, null, 'company', 'Acme');
+    const home = await createLocation(admin, co, 'site', 'Home');
+    const shop = await createLocation(admin, co, 'site', 'Shop');
+    const boss = await invite(app, admin, home, 'manager', 'boss', 'editor');
+    const sam = await invite(app, boss, home, 'viewer', 'sam');
+    const pat = await invite(app, admin, shop, 'viewer', 'pat');
+    const idOf = async (c: typeof sam) => (await c.get('/api/auth/me')).body.user.id as number;
+    const [samId, patId, adminId] = [await idOf(sam), await idOf(pat), await idOf(admin)];
+
+    const r = await boss.patch(`/api/users/${samId}`, { displayName: 'Sam P', email: ' Sam@Example.com ' });
+    expect(r.status).toBe(200);
+    const me = (await sam.get('/api/auth/me')).body.user;
+    expect(me).toMatchObject({
+      displayName: 'Sam P',
+      email: 'sam@example.com',
+      avatarUrl: gravatarUrl('sam@example.com'),
+    });
+
+    // Not someone outside their scope, not an admin, and never admin rights.
+    expect((await boss.patch(`/api/users/${patId}`, { email: 'pat@example.com' })).status).toBe(404);
+    expect((await boss.patch(`/api/users/${adminId}`, { email: 'boss@example.com' })).status).toBe(404);
+    expect((await boss.patch(`/api/users/${samId}`, { disabled: true })).status).toBe(403);
+    expect((await sam.patch(`/api/users/${patId}`, { email: 'x@example.com' })).status).toBe(404);
+
+    // Admins can set anyone's, an empty email clears it, and addresses stay unique.
+    expect((await admin.patch(`/api/users/${patId}`, { email: 'PAT@example.com' })).status).toBe(200);
+    expect((await admin.patch(`/api/users/${samId}`, { email: 'pat@example.com' })).status).toBe(409);
+    expect((await admin.patch(`/api/users/${samId}`, { email: '' })).status).toBe(200);
+    expect((await sam.get('/api/auth/me')).body.user.avatarUrl).toBeNull();
+  });
+
   it('reports the Gravatar setting to the browser', async () => {
     ({ app } = await testApp({ GRAVATAR: 'false' }));
     await setupAdmin(app);
