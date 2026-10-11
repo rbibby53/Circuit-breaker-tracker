@@ -1,12 +1,17 @@
 name: Publish image
 
 # Pushes ghcr.io/<owner>/circuit-breaker-tracker:
-#   v1.2.3 tag -> 1.2.3, 1.2, 1 and latest (the newest release)
-#   main       -> edge (the development build between releases)
+#   every merge to main -> edge (the development build between releases)
+#   a release           -> 1.2.3, 1.2, 1 and latest (called by the Release workflow)
 on:
   push:
     branches: [main]
-    tags: ['v*']
+  workflow_call:
+    inputs:
+      version:
+        description: The release version, e.g. 1.2.3. Built from its v1.2.3 tag.
+        type: string
+        required: true
 
 permissions:
   contents: read
@@ -17,6 +22,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.version && format('v{0}', inputs.version) || '' }}
       - uses: docker/setup-qemu-action@v4
       - uses: docker/setup-buildx-action@v4
       - uses: docker/login-action@v4
@@ -24,11 +31,13 @@ jobs:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      # The version shown in the app: 1.2.3 for a v1.2.3 tag, 1.2.3-dev.<commit> for main.
+      # The version shown in the app: 1.2.3 for a release, 1.2.3-dev.<commit> for main.
       - id: version
+        env:
+          RELEASE: ${{ inputs.version }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
-            v="${GITHUB_REF_NAME#v}"
+          if [ -n "$RELEASE" ]; then
+            v="$RELEASE"
           else
             v="$(node -p "require('./package.json').version")-dev.${GITHUB_SHA::7}"
           fi
@@ -37,15 +46,16 @@ jobs:
         uses: docker/metadata-action@v6
         with:
           images: ghcr.io/${{ github.repository_owner }}/circuit-breaker-tracker
-          # latest follows releases only: metadata-action adds it when a version tag is pushed.
+          # A pre-release (1.2.0-rc.1) gets only its own tag: never 1.2, 1 or latest.
           tags: |
-            type=raw,value=edge,enable={{is_default_branch}}
-            type=semver,pattern={{version}}
-            type=semver,pattern={{major}}.{{minor}}
-            type=semver,pattern={{major}}
+            type=raw,value=edge,enable=${{ !inputs.version }}
+            type=semver,pattern={{version}},value=${{ inputs.version }},enable=${{ !!inputs.version }}
+            type=semver,pattern={{major}}.{{minor}},value=${{ inputs.version }},enable=${{ !!inputs.version }}
+            type=semver,pattern={{major}},value=${{ inputs.version }},enable=${{ !!inputs.version }}
+            type=raw,value=latest,enable=${{ !!inputs.version && !contains(inputs.version, '-') }}
             type=sha
           flavor: |
-            latest=auto
+            latest=false
       - uses: docker/build-push-action@v7
         with:
           context: .

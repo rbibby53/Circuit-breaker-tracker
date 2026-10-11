@@ -44,16 +44,26 @@ pnpm build
 ## Releasing
 
 Versions follow [semantic versioning](https://semver.org/): a fix is 1.0.1, a new feature is
-1.1.0, and anything that breaks existing setups or data is 2.0.0.
+1.1.0, and anything that breaks existing setups or data is 2.0.0. Add notes for each change
+under **Unreleased** in `CHANGELOG.md` as you go.
 
-1. Set the new version in every `package.json` (the root one is what the app shows) and move
-   the **Unreleased** notes in `CHANGELOG.md` under a `## 1.1.0 — <date>` heading.
-2. Merge that to `main`, then tag the merge commit: `git tag v1.1.0 && git push origin v1.1.0`.
-3. The tag:
-   - creates the GitHub release, with that version's changelog section as its notes;
-   - publishes `ghcr.io/rbibby53/circuit-breaker-tracker:1.1.0`, plus `1.1`, `1` and
-     `latest`.
-4. Every merge to `main` publishes `edge`, which shows `<version>-dev.<commit>` in the footer.
+Releases are automated. To make one:
+
+1. Run `pnpm release patch` (or `minor`, `major`, or an exact version such as `1.2.0-rc.1`).
+   It sets the version in every `package.json` and moves the **Unreleased** notes under a
+   `## 1.1.0 — <date>` heading.
+2. Open a pull request with that change and merge it.
+
+The **Release** workflow sees a version on `main` with no release yet, and:
+
+- tags the merge commit `v1.1.0` and creates the GitHub release, with that version's
+  changelog section as its notes;
+- publishes `ghcr.io/rbibby53/circuit-breaker-tracker:1.1.0`, plus `1.1`, `1` and `latest`.
+  A pre-release such as `1.2.0-rc.1` gets only its own tag and is marked as a pre-release.
+
+If a release fails part way (say the image push), fix the cause and run **Release** from the
+Actions tab: it finishes what is missing. Every merge to `main` also publishes `edge`, which
+shows `<version>-dev.<commit>` in the footer.
 
 ## Licence
 
