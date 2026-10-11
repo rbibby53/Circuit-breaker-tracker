@@ -29,6 +29,12 @@ as a single Docker container with its data in one SQLite file.
   them if they lose their phone.
 - **Invite and reset links:** one-time links you copy and send yourself, so no email server
   is needed.
+- **People page:** find anyone by name, email or location, and open **Manage access** to see
+  everywhere they have access, change a role, remove access or grant a new location in one
+  place. You can also invite someone from there.
+- **Profile pictures from [Gravatar](https://gravatar.com)** for people who add an email to
+  their profile, with initials for everyone else. Browsers fetch the pictures straight from
+  gravatar.com using a hash of the email; admins can turn this off in Settings.
 - **View as user:** admins can see the app exactly as someone else sees it, read-only.
 - **Activity log:** every change is recorded. Managers see the changes inside their scope.
 - **Panel editor** for residential load centers and commercial panelboards:
@@ -169,6 +175,7 @@ and shows there as locked. This suits infrastructure-as-code setups:
 | Invite / reset link expiry | `INVITE_DAYS`, `RESET_HOURS`                                             |
 | New panel defaults         | `DEFAULT_PANEL_SPACES`, `DEFAULT_MAIN_AMPS`, `DEFAULT_VOLTAGE`           |
 | Printing and QR codes      | `PAPER_SIZE` (`letter`, `a4`), `PRINT_QR`, `PRINT_NOTE`, `PUBLIC_PANELS` |
+| Gravatar profile pictures  | `GRAVATAR`                                                               |
 | Behind a reverse proxy     | `TRUST_PROXY`                                                            |
 | HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                              |
 | Log level                  | `LOG_LEVEL`                                                              |

@@ -11,6 +11,8 @@ export interface UserSummary {
   displayName: string;
   email: string | null;
   isAdmin: boolean;
+  /** Gravatar picture for their email; the page shows initials when there is none. */
+  avatarUrl: string | null;
 }
 
 export interface MeResponse {
@@ -48,6 +50,8 @@ export interface AuthConfig {
   paperSize: PaperSize;
   /** Whether panels may have public pages opened from their QR codes. */
   publicPanels: boolean;
+  /** Whether to load Gravatar pictures. */
+  gravatar: boolean;
   oidc: { enabled: boolean; label: string };
 }
 

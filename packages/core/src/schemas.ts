@@ -78,6 +78,15 @@ export const acceptInviteSchema = z.object({
   password: passwordSchema,
 });
 
+export const updateMeSchema = z.object({
+  displayName: displayNameSchema.optional(),
+  /** Optional; used for Gravatar pictures and to sign in. Empty clears it. */
+  email: z
+    .union([z.literal(''), z.string().trim().toLowerCase().email().max(200)])
+    .nullable()
+    .optional(),
+});
+
 export const resetPasswordSchema = z.object({
   password: passwordSchema,
 });

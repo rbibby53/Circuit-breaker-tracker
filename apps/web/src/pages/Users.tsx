@@ -6,7 +6,8 @@ import { api, ApiError } from '../api';
 import { useCurrentUser } from '../auth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useTitle } from '../lib/useTitle';
-import { initials } from '../components/Layout';
+import { Avatar } from '../components/Avatar';
+import { InviteDialog, ManageAccess } from '../components/ManageAccess';
 import { ErrorNote, LinkBox, relativeTime } from '../components/ui';
 import { useViewAs } from './Access';
 
@@ -18,6 +19,9 @@ export function UsersPage() {
   const confirm = useConfirm();
   useTitle('People');
   const [link, setLink] = useState<{ name: string; link: CreatedLink } | null>(null);
+  const [inviting, setInviting] = useState(false);
+  const [managing, setManaging] = useState<number | null>(null);
+  const [query, setQuery] = useState('');
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] });
 
   const resetLink = useMutation({
@@ -44,6 +48,16 @@ export function UsersPage() {
   }
 
   const isAdmin = me.user.isAdmin && !me.viewingAs;
+  const q = query.trim().toLowerCase();
+  const shown = (users.data ?? []).filter(
+    (u) =>
+      !q ||
+      [u.displayName, u.username, u.email ?? '', ...u.grants.map((g) => g.locationPath)]
+        .join(' ')
+        .toLowerCase()
+        .includes(q),
+  );
+  const managed = users.data?.find((u) => u.id === managing) ?? null;
   const canViewAs = me.realUser.isAdmin && !me.viewingAs;
 
   return (
@@ -57,9 +71,9 @@ export function UsersPage() {
               : 'People with access somewhere you manage. You only see their access inside your scope.'}
           </p>
         </div>
-        <Link className="btn btn-dark" to="/access">
+        <button type="button" className="btn btn-dark" onClick={() => setInviting(true)}>
           Invite someone
-        </Link>
+        </button>
       </div>
       {link && (
         <div className="panel stack">
@@ -70,6 +84,16 @@ export function UsersPage() {
       <ErrorNote
         error={users.error ?? resetLink.error ?? update.error ?? remove.error ?? totpOff.error ?? viewAs.error}
       />
+      <input
+        type="search"
+        className="people-search"
+        placeholder="Find someone by name, username, email or location"
+        aria-label="Find someone"
+        value={query}
+        onChange={(e) => setQuery(e.target.value)}
+      />
+      {managed && <ManageAccess user={managed} open onClose={() => setManaging(null)} />}
+      <InviteDialog open={inviting} onClose={() => setInviting(false)} />
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -84,13 +108,11 @@ export function UsersPage() {
             </tr>
           </thead>
           <tbody>
-            {(users.data ?? []).map((u) => (
+            {shown.map((u) => (
               <tr key={u.id} className={u.disabled ? 'is-disabled' : undefined}>
                 <td>
                   <div className="person">
-                    <span className="avatar avatar-light" aria-hidden="true">
-                      {initials(u.displayName)}
-                    </span>
+                    <Avatar name={u.displayName} url={u.avatarUrl} light />
                     <span className="cell-stack">
                       <span className="strong">
                         {u.displayName} {u.isAdmin && <span className="role role-admin">Admin</span>}
@@ -129,6 +151,11 @@ export function UsersPage() {
                 </td>
                 <td>{relativeTime(u.lastSeenAt)}</td>
                 <td className="actions">
+                  {!u.isAdmin && !me.viewingAs && (
+                    <button className="btn btn-sm btn-dark" onClick={() => setManaging(u.id)}>
+                      Manage access
+                    </button>
+                  )}
                   {canViewAs && u.id !== me.realUser.id && (
                     <button className="btn btn-sm btn-outline" onClick={() => viewAs.mutate(u.id)}>
                       View as

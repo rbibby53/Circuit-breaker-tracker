@@ -5,6 +5,7 @@ import { getTheme, setTheme, type Theme } from '../lib/theme';
 import { useTitle } from '../lib/useTitle';
 import { api } from '../api';
 import { useAuthConfig, useCurrentUser } from '../auth';
+import { Avatar } from '../components/Avatar';
 import { TwoStepSettings } from '../components/TwoStep';
 import { ErrorNote, Field } from '../components/ui';
 import { MicrosoftIcon } from './Login';
@@ -16,14 +17,15 @@ export function AccountPage() {
   const qc = useQueryClient();
   const [params] = useSearchParams();
   const [name, setName] = useState(me.realUser.displayName);
+  const [email, setEmail] = useState(me.realUser.email ?? '');
   const [pw, setPw] = useState({ currentPassword: '', newPassword: '' });
   const [saved, setSaved] = useState<string | null>(null);
   const [theme, setThemeState] = useState<Theme>(getTheme);
 
   const rename = useMutation({
-    mutationFn: () => api.patch('/api/me', { displayName: name }),
+    mutationFn: () => api.patch('/api/me', { displayName: name, email: email.trim() }),
     onSuccess: async () => {
-      setSaved('Name saved.');
+      setSaved('Profile saved.');
       await qc.invalidateQueries({ queryKey: ['me'] });
     },
   });
@@ -93,14 +95,25 @@ export function AccountPage() {
       </section>
 
       <form className="panel stack" onSubmit={submitName}>
-        <h2 className="h-caps">Name</h2>
+        <h2 className="h-caps">Profile</h2>
+        <div className="profile-row">
+          <Avatar name={name || me.realUser.displayName} url={me.realUser.avatarUrl} light />
+          <span className="muted small">
+            {config.data?.gravatar
+              ? 'Your picture comes from gravatar.com for your email address. Without one, your initials are shown.'
+              : 'Pictures are turned off here, so your initials are shown.'}
+          </span>
+        </div>
         <Field label="Display name">
           <input required value={name} onChange={(e) => setName(e.target.value)} />
+        </Field>
+        <Field label="Email (optional)" hint="Used for your Gravatar picture. You can also sign in with it.">
+          <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} autoComplete="email" />
         </Field>
         <ErrorNote error={rename.error} />
         <div>
           <button className="btn btn-primary" disabled={rename.isPending}>
-            Save name
+            Save profile
           </button>
         </div>
       </form>

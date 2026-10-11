@@ -33,7 +33,8 @@ const CSP = [
   "default-src 'self'",
   "script-src 'self'",
   "style-src 'self' 'unsafe-inline'",
-  "img-src 'self' data:",
+  // Gravatar pictures (when turned on in Settings) are the only outside resource.
+  "img-src 'self' data: https://gravatar.com https://*.gravatar.com",
   "font-src 'self' data:",
   "connect-src 'self'",
   "object-src 'none'",
