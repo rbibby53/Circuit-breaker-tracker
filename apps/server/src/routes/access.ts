@@ -328,6 +328,7 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
         disabled: !!u.disabled,
         lastSeenAt: u.last_seen_at,
         hasPassword: !!u.password_hash,
+        totp: !!u.totp_enabled_at,
         identities: identities.filter((i) => i.user_id === u.id).map((i) => i.provider),
         grants: shown.map((g) =>
           access.grantDto(

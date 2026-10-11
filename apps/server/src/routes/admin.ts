@@ -1,6 +1,13 @@
+import { randomBytes } from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
-import { SETTING_BY_KEY, parseSetting, type AdminSettingsResponse, type SettingKey } from '@cbt/core';
+import {
+  SETTING_BY_KEY,
+  parseSetting,
+  type AdminSettingsResponse,
+  type RestoreUpload,
+  type SettingKey,
+} from '@cbt/core';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { audit } from '../audit';
@@ -9,6 +16,13 @@ import { requireAdmin, requireAuth } from '../context';
 import type { DB } from '../db';
 import { badRequest, parse } from '../errors';
 import { discover, redirectUri } from '../oidc';
+import { inspectBackup, restoreFrom } from '../restore';
+import { clearSessionCookie } from '../sessions';
+
+/** Largest backup accepted for restore. */
+const MAX_RESTORE_BYTES = 512 * 1024 * 1024;
+/** Uploaded backups waiting for confirmation are removed after this long. */
+const PENDING_RESTORE_MS = 60 * 60_000;
 
 const startedAt = new Date().toISOString();
 
@@ -96,6 +110,75 @@ export function adminRoutes(app: FastifyInstance, db: DB, config: Config): void 
     } catch (err) {
       return { ok: false, message: err instanceof Error ? err.message : 'Could not reach the identity provider.' };
     }
+  });
+
+  // ---- Restore: upload and check a backup, then apply it once the admin confirms ----------
+
+  app.addContentTypeParser(
+    'application/octet-stream',
+    { parseAs: 'buffer', bodyLimit: MAX_RESTORE_BYTES },
+    (_req, body, done) => done(null, body),
+  );
+
+  const pendingFile = (id: string) => {
+    if (!/^[a-f0-9]{32}$/.test(id)) throw badRequest('Unknown upload.');
+    return path.join(config.dataDir, `.restore-${id}.db`);
+  };
+  const removeStaleUploads = () => {
+    for (const f of fs.readdirSync(config.dataDir)) {
+      if (!/^\.restore-[a-f0-9]{32}\.db$/.test(f)) continue;
+      const full = path.join(config.dataDir, f);
+      if (Date.now() - fs.statSync(full).mtimeMs > PENDING_RESTORE_MS) fs.rmSync(full, { force: true });
+    }
+  };
+
+  app.post('/api/admin/restore', { bodyLimit: MAX_RESTORE_BYTES }, async (req): Promise<RestoreUpload> => {
+    requireAdmin(requireAuth(req));
+    if (!Buffer.isBuffer(req.body) || req.body.length === 0) {
+      throw badRequest('Choose a backup file to upload.');
+    }
+    fs.mkdirSync(config.dataDir, { recursive: true });
+    removeStaleUploads();
+    const id = randomBytes(16).toString('hex');
+    const file = pendingFile(id);
+    fs.writeFileSync(file, req.body);
+    try {
+      return { id, summary: inspectBackup(file) };
+    } catch (err) {
+      fs.rmSync(file, { force: true });
+      throw err;
+    }
+  });
+
+  app.post('/api/admin/restore/:id', async (req, reply) => {
+    const auth = requireAuth(req);
+    requireAdmin(auth);
+    const file = pendingFile((req.params as { id: string }).id);
+    if (!fs.existsSync(file)) throw badRequest('That upload has expired. Upload the backup again.');
+    const summary = inspectBackup(file);
+
+    // Keep what is there now, in case the wrong file was picked.
+    const stamp = new Date().toISOString().replace(/[:.]/g, '-').slice(0, 19);
+    const safetyCopy = `breakers-before-restore-${stamp}.db`;
+    await db.backup(path.join(config.dataDir, safetyCopy));
+
+    restoreFrom(db, file);
+    fs.rmSync(file, { force: true });
+    config.settings.reload();
+    audit(db, auth, {
+      action: 'backup.restore',
+      entity: 'settings',
+      summary: `Restored the database from a backup (${summary.counts.panels} panels, ${summary.counts.users} people). The previous data was saved as ${safetyCopy}.`,
+    });
+    // Sessions are not restored, so everyone, including this admin, signs in again.
+    clearSessionCookie(config, reply);
+    return { ok: true, safetyCopy };
+  });
+
+  app.delete('/api/admin/restore/:id', async (req) => {
+    requireAdmin(requireAuth(req));
+    fs.rmSync(pendingFile((req.params as { id: string }).id), { force: true });
+    return { ok: true };
   });
 
   /** A consistent copy of the whole database, safe to take while the app is running. */

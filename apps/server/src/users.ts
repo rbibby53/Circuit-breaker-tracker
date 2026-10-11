@@ -43,6 +43,14 @@ export function meResponse(db: DB, auth: AuthState): MeResponse {
     viewingAs: auth.readOnly,
     hasPassword: !!auth.realUser.password_hash,
     identities,
+    totp: !!auth.realUser.totp_enabled_at,
+    recoveryCodesLeft: auth.realUser.totp_enabled_at
+      ? (
+          db
+            .prepare('SELECT COUNT(*) AS n FROM totp_recovery_codes WHERE user_id = ? AND used_at IS NULL')
+            .get(auth.realUser.id) as { n: number }
+        ).n
+      : 0,
   };
 }
 

@@ -24,6 +24,9 @@ as a single Docker container with its data in one SQLite file.
   only up to their limit (_Viewers only_, _Viewers and editors_, or _Up to managers_).
 - **Two ways to sign in:** Microsoft Entra ID (or any OIDC provider), and local accounts
   with passwords for family, roommates and anyone without a work account.
+- **Two-step sign-in** for password accounts: a code from an authenticator app, with
+  one-time recovery codes. Whoever can send someone a reset link can also turn it off for
+  them if they lose their phone.
 - **Invite and reset links:** one-time links you copy and send yourself, so no email server
   is needed.
 - **View as user:** admins can see the app exactly as someone else sees it, read-only.
@@ -57,6 +60,10 @@ as a single Docker container with its data in one SQLite file.
   - Markers are printed as text (CRIT, UPS, GEN, GFCI, AFCI, DF), so they read fine in black
     and white. Each sheet has a QR code that opens the panel in the app.
   - US Letter or A4. People only ever print what they are allowed to see.
+- **CSV export:** every breaker of a panel, or of everything under a location, for Excel,
+  Numbers or Google Sheets (from the same **Print & export** button).
+- **Duplicate a panel** into another room, e.g. for identical apartments. Room tags come
+  along inside the same site.
 
 ## Screenshots
 
@@ -210,8 +217,12 @@ you cannot lock yourself out.
 ### Backups
 
 Everything is in `/data/breakers.db`. An admin can download a consistent copy at any time from
-**Settings → Backup**, even while people are using the app. To restore, stop the container and
-replace `breakers.db` in the data folder with the backup file.
+**Settings → Backup**, even while people are using the app.
+
+To restore, upload the backup file in the same place. The app shows what is in it before
+anything changes, saves the current data as `breakers-before-restore-<date>.db` in the data
+folder, then swaps the data in without a restart. Backups from older versions are upgraded
+on the way in. Everyone is signed out and signs in with an account from the backup.
 
 ## Develop
 

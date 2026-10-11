@@ -215,6 +215,7 @@ function LocationView({
           {!crumbOnly && (
             <PrintButton
               endpoint={`/api/locations/${node.id}/pdf`}
+              csv={`/api/locations/${node.id}/csv`}
               styles={locationPrintStyles(node.name)}
               subject={node.name}
             />

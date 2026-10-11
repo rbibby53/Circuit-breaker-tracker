@@ -5,6 +5,7 @@ import { getTheme, setTheme, type Theme } from '../lib/theme';
 import { useTitle } from '../lib/useTitle';
 import { api } from '../api';
 import { useAuthConfig, useCurrentUser } from '../auth';
+import { TwoStepSettings } from '../components/TwoStep';
 import { ErrorNote, Field } from '../components/ui';
 import { MicrosoftIcon } from './Login';
 
@@ -134,6 +135,8 @@ export function AccountPage() {
           </button>
         </div>
       </form>
+
+      <TwoStepSettings me={me} />
 
       {config.data?.oidc.enabled && (
         <section className="panel stack">

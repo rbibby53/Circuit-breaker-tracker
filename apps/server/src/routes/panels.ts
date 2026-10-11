@@ -5,6 +5,7 @@ import {
   canView,
   circuitLabel,
   createPanelSchema,
+  duplicatePanelSchema,
   effectiveRole,
   isWithin,
   pathIds,
@@ -12,6 +13,7 @@ import {
   validateLayout,
   validatePanelShape,
   visibleLocations,
+  type DuplicatePanelResponse,
   type FeedCandidate,
   type PanelHistoryItem,
   type PanelSummary,
@@ -311,6 +313,103 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     );
     db.prepare('DELETE FROM panels WHERE id = ?').run(panel.id);
     return { ok: true };
+  });
+
+  /**
+   * Copy a panel and its breakers into a room, e.g. for identical apartments. Room tags are
+   * kept only inside the same site; the copy is never fed from anything until someone says so.
+   */
+  app.post('/api/panels/:id/duplicate', async (req): Promise<DuplicatePanelResponse> => {
+    const auth = requireAuth(req);
+    const actor = actorOf(auth);
+    const access = new AccessData(db);
+    const source = visiblePanel(actor, access, idParam((req.params as { id: string }).id));
+    const body = parse(duplicatePanelSchema, req.body);
+    const dest = access.node(body.locationId);
+    if (!dest || !canView(actor, dest, access.grants)) throw notFound('Room not found.');
+    if (dest.kind !== 'room') throw badRequest('Panels go in a room. Pick a room for the copy.');
+    requireEdit(actor, access, dest.id);
+
+    const breakers = breakersOf(db, source.id);
+    const serves = servesOf(
+      db,
+      breakers.map((b) => b.id),
+    );
+    const visible = visibleLocations(actor, [...access.nodes.values()], access.grants);
+    const destSite = siteOf(access, dest.id);
+    const keep = (locationId: number) => {
+      const node = access.node(locationId);
+      return !!node && visible.get(locationId)?.access === 'full' && !!destSite && isWithin(node, destSite);
+    };
+    let keptTags = 0;
+    let droppedTags = 0;
+    const t = now();
+
+    const id = db.transaction(() => {
+      const r = db
+        .prepare(
+          `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        )
+        .run(
+          dest.id,
+          body.name,
+          source.layout,
+          source.spaces,
+          source.main_amps,
+          source.main_type,
+          source.voltage,
+          source.manufacturer,
+          source.model,
+          source.notes,
+          t,
+          t,
+        );
+      const panelId = Number(r.lastInsertRowid);
+      const insert = db.prepare(
+        `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      );
+      const addServe = db.prepare('INSERT INTO breaker_serves (breaker_id, location_id, note) VALUES (?, ?, ?)');
+      for (const b of breakers) {
+        const newId = Number(
+          insert.run(
+            panelId,
+            b.position,
+            b.slot,
+            b.poles,
+            b.amps,
+            b.protection,
+            b.label,
+            b.notes,
+            b.is_spare,
+            b.critical,
+            b.backup,
+          ).lastInsertRowid,
+        );
+        for (const s of serves.filter((x) => x.breaker_id === b.id)) {
+          if (keep(s.location_id)) {
+            addServe.run(newId, s.location_id, s.note);
+            keptTags++;
+          } else droppedTags++;
+        }
+      }
+      audit(
+        db,
+        auth,
+        {
+          action: 'panel.create',
+          entity: 'panel',
+          entityId: panelId,
+          locationId: dest.id,
+          summary: `Duplicated panel ${source.name} as ${body.name} (${breakers.length} breakers)`,
+        },
+        access,
+      );
+      return panelId;
+    })();
+
+    return { id, keptTags, droppedTags };
   });
 
   app.get('/api/panels/:id/history', async (req): Promise<PanelHistoryItem[]> => {

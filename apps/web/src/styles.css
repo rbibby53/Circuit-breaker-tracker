@@ -984,6 +984,10 @@ a:focus-visible {
   color: #14532d;
   box-shadow: inset 0 0 0 1px #14532d;
 }
+.badge-ok {
+  color: var(--ok);
+  box-shadow: inset 0 0 0 1px var(--ok);
+}
 .badge-gen {
   background: var(--surface);
   color: var(--ink);
@@ -1828,4 +1832,32 @@ code {
 }
 .facts.about {
   grid-template-columns: 120px minmax(0, 1fr);
+}
+
+.notice {
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  list-style: none;
+  font-size: 15px;
+}
+.totp-qr {
+  width: 180px;
+  height: 180px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #fff;
 }

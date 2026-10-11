@@ -18,10 +18,11 @@ export function ResetPage() {
   });
   const [password, setPassword] = useState('');
   const reset = useMutation({
-    mutationFn: () => api.post(`/api/reset/${token}`, { password }),
-    onSuccess: async () => {
+    mutationFn: () => api.post<{ ok: true; signIn?: boolean }>(`/api/reset/${token}`, { password }),
+    onSuccess: async (r) => {
       await qc.invalidateQueries();
-      navigate('/');
+      // With two-step sign-in on, they still need a code: send them to sign in.
+      navigate(r.signIn ? '/login?reset=1' : '/');
     },
   });
 

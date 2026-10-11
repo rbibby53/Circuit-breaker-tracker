@@ -20,6 +20,11 @@ export interface UserRow {
   disabled: number;
   created_at: string;
   last_seen_at: string | null;
+  /** Base32 secret; set during setup, active once totp_enabled_at is set. */
+  totp_secret: string | null;
+  totp_enabled_at: string | null;
+  /** Last accepted time step, so a code cannot be used twice. */
+  totp_last_step: number | null;
 }
 
 export interface LocationRow {

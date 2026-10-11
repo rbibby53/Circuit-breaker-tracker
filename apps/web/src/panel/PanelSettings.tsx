@@ -11,6 +11,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
+import { DuplicatePanel } from './DuplicatePanel';
 import type { EditPanel } from './state';
 
 export function PanelSettings({
@@ -151,7 +152,8 @@ export function PanelSettings({
           <textarea rows={2} value={doc.notes} onChange={(e) => onChange({ notes: e.target.value }, 'notes')} />
         </label>
       </div>
-      <div>
+      <div className="row">
+        <DuplicatePanel panel={server} />
         <button
           type="button"
           className="btn btn-danger"

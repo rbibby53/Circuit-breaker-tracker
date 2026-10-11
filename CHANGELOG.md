@@ -6,6 +6,15 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Two-step sign-in** for password accounts with any authenticator app. It comes with ten
+  one-time recovery codes. Password reset links still ask for a code, and managers or admins
+  can turn it off for someone who lost their phone.
+- **Restore from a backup** in Settings → Backup. You see what is in the file first, the
+  current data is saved alongside, and older backups are upgraded. No restart is needed.
+- **Duplicate a panel** into any room you can edit. Room tags are kept within the same site.
+- **CSV export** of a panel, or of everything under a location, from the Print & export dialog.
+  Spreadsheet formulas in labels are neutralised.
+
 - **Commercial 3-phase panelboards.** Pick _Commercial panelboard_ when adding a panel, or switch
   an existing one under Panel settings.
   - Rows are labelled A, B, C on the bus.

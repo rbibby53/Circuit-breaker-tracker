@@ -42,6 +42,7 @@ function timeZone(): string {
  */
 export function PrintButton({
   endpoint,
+  csv,
   styles,
   subject,
   beforeOpen,
@@ -49,6 +50,8 @@ export function PrintButton({
 }: {
   /** e.g. /api/panels/4/pdf */
   endpoint: string;
+  /** The same data as a spreadsheet, e.g. /api/panels/4/csv */
+  csv: string;
   styles: PrintStyle[];
   subject: string;
   /** Runs before the dialog opens, e.g. to save pending edits so the PDF includes them. */
@@ -90,7 +93,7 @@ export function PrintButton({
   return (
     <>
       <button type="button" className="btn" onClick={() => void show()} disabled={busy}>
-        {busy ? 'Saving…' : 'Print'}
+        {busy ? 'Saving…' : 'Print & export'}
       </button>
       <dialog
         ref={dialog}
@@ -103,7 +106,7 @@ export function PrintButton({
       >
         {open && (
           <div className="stack">
-            <h2 id="print-title">Print {subject}</h2>
+            <h2 id="print-title">Print or export {subject}</h2>
             {warning && <p className="error">{warning}</p>}
             <fieldset className="print-options">
               <legend className="field-label">What to print</legend>
@@ -143,6 +146,13 @@ export function PrintButton({
                 ))}
               </div>
             </div>
+            <p className="small muted">
+              Need it in a spreadsheet?{' '}
+              <a href={csv} download onClick={() => setOpen(false)}>
+                Download every breaker as CSV
+              </a>
+              , for Excel, Numbers or Google Sheets.
+            </p>
             <div className="dialog-actions">
               <button type="button" className="btn" onClick={() => setOpen(false)}>
                 Close
