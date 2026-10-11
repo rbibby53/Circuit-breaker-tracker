@@ -30,6 +30,7 @@ export const BREAKER_COLUMNS = [
   'Spare',
   'Serves',
   'Feeds',
+  'Tags',
   'Notes',
 ];
 
@@ -60,6 +61,7 @@ export function breakerRows(panel: PanelDetail): (string | number | boolean | nu
       b.isSpare,
       serves,
       feeds,
+      b.tags.join('; '),
       b.notes,
     ];
   });

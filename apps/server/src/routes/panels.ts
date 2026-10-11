@@ -37,8 +37,10 @@ import {
   panelDetail,
   panelSummary,
   servesOf,
+  setTags,
   siteOf,
   snapshot,
+  tagsOf,
   type BreakerRow,
 } from '../panels';
 import { AccessData } from '../repo';
@@ -188,7 +190,15 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       }
     }
 
-    const beforeSnap = snapshot(panel, existing, before);
+    const beforeSnap = snapshot(
+      panel,
+      existing,
+      before,
+      tagsOf(
+        db,
+        existing.map((b) => b.id),
+      ),
+    );
     const idMap: Record<string, number> = {};
 
     db.transaction(() => {
@@ -231,6 +241,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         }
         clearServes.run(id);
         for (const s of b.serves) addServe.run(id, s.locationId, s.note);
+        setTags(db, id, b.tags);
         for (const s of hiddenServes) if (s.breaker_id === id) addServe.run(id, s.location_id, s.note);
       }
 
@@ -253,14 +264,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
 
       const afterPanel = getPanel(db, panel.id)!;
       const afterBreakers = breakersOf(db, panel.id);
-      const afterSnap = snapshot(
-        afterPanel,
-        afterBreakers,
-        servesOf(
-          db,
-          afterBreakers.map((x) => x.id),
-        ),
-      );
+      const afterIds = afterBreakers.map((x) => x.id);
+      const afterSnap = snapshot(afterPanel, afterBreakers, servesOf(db, afterIds), tagsOf(db, afterIds));
       if (JSON.stringify(afterSnap) === JSON.stringify(beforeSnap)) return; // nothing changed: no new version
 
       db.prepare('UPDATE panels SET version = version + 1, updated_at = ? WHERE id = ?').run(now(), panel.id);
@@ -335,6 +340,10 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       db,
       breakers.map((b) => b.id),
     );
+    const tags = tagsOf(
+      db,
+      breakers.map((b) => b.id),
+    );
     const visible = visibleLocations(actor, [...access.nodes.values()], access.grants);
     const destSite = siteOf(access, dest.id);
     const keep = (locationId: number) => {
@@ -386,6 +395,11 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
             b.critical,
             b.backup,
           ).lastInsertRowid,
+        );
+        setTags(
+          db,
+          newId,
+          tags.filter((t) => t.breaker_id === b.id).map((t) => t.tag),
         );
         for (const s of serves.filter((x) => x.breaker_id === b.id)) {
           if (keep(s.location_id)) {

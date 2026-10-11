@@ -2018,3 +2018,60 @@ code {
   min-width: 0;
   overflow-wrap: anywhere;
 }
+
+.tag-input {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-height: 44px;
+  padding: 6px 8px;
+  border: 1px solid var(--line-strong);
+  border-radius: 4px;
+  background: var(--surface);
+}
+.tag-input input {
+  flex: 1 1 120px;
+  min-width: 0;
+  min-height: 28px;
+  border: 0;
+  padding: 0 2px;
+  background: transparent;
+  outline: none;
+}
+.tag-input:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 1px;
+}
+.tag-removable {
+  display: inline-flex;
+  align-items: center;
+  gap: 2px;
+  padding-right: 2px;
+}
+.tag-removable button {
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 15px;
+  line-height: 1;
+  padding: 0 4px;
+  cursor: pointer;
+}
+.tag-removable button:hover {
+  color: var(--ink);
+}
+.tag-filter {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.tag-filter button[aria-pressed='true'] {
+  background: var(--inverse-bg);
+  border-color: var(--inverse-bg);
+  color: var(--inverse-fg);
+}
+.pg-breaker.is-dim {
+  opacity: 0.25;
+}

@@ -88,7 +88,7 @@ export function PublicPanelPage() {
             <input
               type="search"
               className="public-filter"
-              placeholder="Find a breaker: fridge, kitchen, 20A…"
+              placeholder="Find a breaker: fridge, kitchen, lights, 20A…"
               aria-label="Find a breaker"
               value={filter}
               onChange={(e) => setFilter(e.target.value)}
@@ -105,7 +105,7 @@ export function PublicPanelPage() {
                 .filter(({ b, circuit }) =>
                   !q
                     ? true
-                    : [b.label, circuit, `${b.amps}a`, ...b.serves, b.notes, PROTECTION_LABELS[b.protection]]
+                    : [b.label, circuit, `${b.amps}a`, ...b.serves, ...b.tags, b.notes, PROTECTION_LABELS[b.protection]]
                         .join(' ')
                         .toLowerCase()
                         .includes(q),
@@ -119,6 +119,7 @@ export function PublicPanelPage() {
                     <span className="public-body">
                       <span className="public-label">{b.label || (b.isSpare ? 'Spare' : 'Unlabelled')}</span>
                       {b.serves.length > 0 && <span className="small muted">{b.serves.join(', ')}</span>}
+                      {b.tags.length > 0 && <span className="small">{b.tags.join(' · ')}</span>}
                       {b.notes && <span className="small">{b.notes}</span>}
                       {tags.length > 0 && (
                         <span className="public-tags">

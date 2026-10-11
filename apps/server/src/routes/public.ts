@@ -6,7 +6,7 @@ import type { Config } from '../config';
 import { actorOf, requireAuth } from '../context';
 import type { DB } from '../db';
 import { badRequest, forbidden, idParam, notFound, parse } from '../errors';
-import { breakersOf, canViewPanel, getBreaker, getPanel, servesOf, type PanelRow } from '../panels';
+import { breakersOf, canViewPanel, getBreaker, getPanel, servesOf, tagsOf, type PanelRow } from '../panels';
 import { AccessData } from '../repo';
 
 const newPublicToken = () => randomBytes(18).toString('base64url');
@@ -15,6 +15,10 @@ const newPublicToken = () => randomBytes(18).toString('base64url');
 export function publicPanel(db: DB, access: AccessData, panel: PanelRow): PublicPanel {
   const breakers = breakersOf(db, panel.id);
   const serves = servesOf(
+    db,
+    breakers.map((b) => b.id),
+  );
+  const tags = tagsOf(
     db,
     breakers.map((b) => b.id),
   );
@@ -54,6 +58,7 @@ export function publicPanel(db: DB, access: AccessData, panel: PanelRow): Public
           const name = placeName(s.location_id);
           return name ? [s.note ? `${name} (${s.note})` : name] : [];
         }),
+      tags: tags.filter((t) => t.breaker_id === b.id).map((t) => t.tag),
     })),
   };
 }

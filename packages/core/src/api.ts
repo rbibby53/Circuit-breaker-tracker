@@ -166,6 +166,7 @@ export interface BreakerDto {
   critical: boolean;
   backup: Backup;
   serves: ServesDto[];
+  tags: string[];
   /** Panels this breaker feeds, when the viewer can see them. */
   feeds: { panelId: number; panelName: string }[];
   /** Sub-panels it feeds that the viewer cannot see. */
@@ -229,8 +230,31 @@ export interface PublicPanel {
     backup: Backup;
     /** Names of the rooms and areas it serves. */
     serves: string[];
+    tags: string[];
   }[];
 }
+
+/** Tags in use on breakers the person can see, most used first. */
+export interface TagCount {
+  tag: string;
+  count: number;
+}
+
+/** Suggested when nobody has used any tags yet. */
+export const SUGGESTED_TAGS = [
+  'Lights',
+  'Outlets',
+  'Appliances',
+  'Kitchen',
+  'HVAC',
+  'Water heater',
+  'Servers',
+  'Network',
+  'Security',
+  'Outdoor',
+  'EV charger',
+  'Sub-panel',
+];
 
 export interface SavePanelResponse {
   panel: PanelDetail;
@@ -297,6 +321,7 @@ export interface SearchResponse {
     critical: boolean;
     /** Why it matched when the label did not: the room or area it serves. */
     serves: string | null;
+    tags: string[];
   }[];
 }
 

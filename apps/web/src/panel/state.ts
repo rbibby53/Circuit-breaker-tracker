@@ -32,6 +32,7 @@ export interface EditBreaker {
   critical: boolean;
   backup: Backup;
   serves: EditServe[];
+  tags: string[];
 }
 
 export interface EditPanel {
@@ -77,6 +78,7 @@ export function fromDetail(p: PanelDetail): EditPanel {
       critical: b.critical,
       backup: b.backup,
       serves: b.serves.map((s) => ({ locationId: s.locationId, note: s.note, hidden: s.name === null })),
+      tags: b.tags,
     })),
   };
 }
@@ -100,6 +102,7 @@ export function toRequest(doc: EditPanel, version: number, baselineFedFrom: numb
     critical: b.critical,
     backup: b.backup,
     serves: b.serves.filter((s) => !s.hidden).map((s) => ({ locationId: s.locationId, note: s.note })),
+    tags: b.tags,
   }));
   return {
     name: doc.name,
@@ -155,6 +158,7 @@ export function addBreaker(doc: EditPanel, position: number, slot: Slot = 'full'
     critical: false,
     backup: 'none',
     serves: [],
+    tags: [],
   });
   return r.ok ? { ...r, key } : r;
 }

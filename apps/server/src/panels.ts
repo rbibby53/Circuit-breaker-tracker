@@ -76,6 +76,34 @@ export function servesOf(db: DB, breakerIds: number[]): ServesRow[] {
     .all(...breakerIds) as ServesRow[];
 }
 
+export interface TagRow {
+  breaker_id: number;
+  tag: string;
+}
+
+export function tagsOf(db: DB, breakerIds: number[]): TagRow[] {
+  if (breakerIds.length === 0) return [];
+  return db
+    .prepare(
+      `SELECT * FROM breaker_tags WHERE breaker_id IN (${breakerIds.map(() => '?').join(',')}) ORDER BY tag COLLATE NOCASE`,
+    )
+    .all(...breakerIds) as TagRow[];
+}
+
+/** Trimmed, without case-insensitive duplicates, in the order given. */
+export function cleanTags(tags: string[]): string[] {
+  const seen = new Set<string>();
+  return tags
+    .map((t) => t.trim().replace(/\s+/g, ' '))
+    .filter((t) => t && !seen.has(t.toLowerCase()) && seen.add(t.toLowerCase()));
+}
+
+export function setTags(db: DB, breakerId: number, tags: string[]): void {
+  db.prepare('DELETE FROM breaker_tags WHERE breaker_id = ?').run(breakerId);
+  const insert = db.prepare('INSERT INTO breaker_tags (breaker_id, tag) VALUES (?, ?)');
+  for (const t of cleanTags(tags)) insert.run(breakerId, t);
+}
+
 export const allPanels = (db: DB) =>
   db.prepare('SELECT * FROM panels ORDER BY name COLLATE NOCASE').all() as PanelRow[];
 
@@ -164,6 +192,10 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     db,
     breakers.map((b) => b.id),
   );
+  const tags = tagsOf(
+    db,
+    breakers.map((b) => b.id),
+  );
   const visible = visibleLocations(actor, [...access.nodes.values()], access.grants);
   const fedPanels = db
     .prepare(`SELECT p.* FROM panels p JOIN breakers b ON b.id = p.fed_from_breaker_id WHERE b.panel_id = ?`)
@@ -198,6 +230,7 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
             path: seen ? access.pathLabel(l!.id) : null,
           };
         }),
+      tags: tags.filter((t) => t.breaker_id === b.id).map((t) => t.tag),
       feeds: shown.map((p) => ({ panelId: p.id, panelName: p.name })),
       hiddenFeeds: feeds.length - shown.length,
     };
@@ -229,7 +262,7 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
 }
 
 /** A plain snapshot used for change detection and history. */
-export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: ServesRow[]) {
+export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: ServesRow[], tags: TagRow[] = []) {
   return {
     name: panel.name,
     spaces: panel.spaces,
@@ -257,6 +290,10 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
           .filter((s) => s.breaker_id === b.id)
           .map((s) => `${s.location_id}:${s.note}`)
           .sort(),
+        tags: tags
+          .filter((t) => t.breaker_id === b.id)
+          .map((t) => t.tag)
+          .sort((x, y) => x.localeCompare(y)),
       }))
       .sort((a, b) => a.id - b.id),
   };
@@ -288,6 +325,7 @@ const BREAKER_FIELDS = [
   ['critical', 'critical'],
   ['backup', 'backup power'],
   ['serves', 'serves'],
+  ['tags', 'tags'],
 ] as const;
 
 /** Human-readable lines describing what changed between two snapshots. */
@@ -326,7 +364,10 @@ export function describeChanges(
           `serves ${names(old.serves).join(', ') || 'nothing'} → ${names(b.serves).join(', ') || 'nothing'}`,
         );
       } else if (k === 'notes') changes.push('notes changed');
-      else changes.push(`${label} ${String(old[k])} → ${String(b[k])}`);
+      else if (k === 'tags') {
+        const list = (t: string[] | undefined) => (t?.length ? t.join(', ') : 'none');
+        changes.push(`tags ${list(old.tags)} → ${list(b.tags)}`);
+      } else changes.push(`${label} ${String(old[k])} → ${String(b[k])}`);
     }
     if (changes.length) lines.push(`${name(b)}: ${changes.join('; ')}`);
   }
