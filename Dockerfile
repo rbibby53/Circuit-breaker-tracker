@@ -1,10 +1,11 @@
 # syntax=docker/dockerfile:1
 
 # ---- Build the web app and the server bundle --------------------------------------------
-FROM node:25-bookworm-slim AS build
+FROM node:24-bookworm-slim AS build
 WORKDIR /src
-RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+# The pnpm version pinned in package.json ("packageManager").
+RUN npm install -g --no-audit --no-fund "$(node -p "require('./package.json').packageManager")"
 COPY packages/core/package.json packages/core/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/
@@ -15,21 +16,21 @@ COPY apps apps
 ARG APP_VERSION=
 RUN APP_VERSION=$APP_VERSION pnpm --filter @cbt/web build && APP_VERSION=$APP_VERSION pnpm --filter @cbt/server build
 
-# ---- Install only the native modules the bundle keeps external --------------------------
-FROM node:25-bookworm-slim AS native
+# ---- Install only the modules the bundle keeps external ---------------------------------
+FROM node:24-bookworm-slim AS native
 WORKDIR /app
 # Build tools are a fallback in case no prebuilt better-sqlite3 binary matches.
 RUN apt-get update && apt-get install -y --no-install-recommends python3 make g++ && rm -rf /var/lib/apt/lists/*
 COPY apps/server/package.json /tmp/server-package.json
 RUN node -e "\
   const d = require('/tmp/server-package.json').dependencies; \
-  const keep = ['better-sqlite3', '@node-rs/argon2']; \
+  const keep = ['better-sqlite3', '@node-rs/argon2', 'pdfkit']; \
   require('fs').writeFileSync('package.json', JSON.stringify({ name: 'cbt-runtime', private: true, \
     dependencies: Object.fromEntries(keep.map((k) => [k, d[k]])) }));" \
   && npm install --omit=dev --no-audit --no-fund
 
 # ---- Runtime ----------------------------------------------------------------------------
-FROM node:25-bookworm-slim
+FROM node:24-bookworm-slim
 ENV NODE_ENV=production \
     PORT=2757 \
     DATA_DIR=/data \

@@ -9,7 +9,7 @@ For anything bigger than a small fix, open an issue first so we can agree on the
 
 ## Set up
 
-Requirements: Node 22 and pnpm 10 (`corepack enable`).
+Requirements: Node 24 (22 or newer works) and pnpm 12 (`npm install -g pnpm@12`; the exact version is pinned in `package.json`).
 
 ```sh
 pnpm install
@@ -40,6 +40,16 @@ pnpm build
 - **Plain words in the UI.** Say what happened and what to do next. Avoid jargon where a
   homeowner would read it.
 - Keep pull requests focused. Screenshots help for anything visual, in light and dark mode.
+
+## Releasing
+
+1. Set the new version in the root `package.json` and move the **Unreleased** notes in
+   `CHANGELOG.md` under it.
+2. Merge that to `main`, then tag it: `git tag v0.4.0 && git push origin v0.4.0`.
+3. The tag publishes `ghcr.io/rbibby53/circuit-breaker-tracker:0.4.0` (plus `0.4` and `latest`
+   from `main`) and creates the GitHub release. The app shows that version in its footer and
+   under **Settings → About**. Images built from `main` between releases show
+   `0.4.0-dev.<commit>`.
 
 ## Licence
 

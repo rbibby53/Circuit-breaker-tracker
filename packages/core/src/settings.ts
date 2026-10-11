@@ -24,12 +24,15 @@ export const SETTING_GROUPS = [
   { id: 'sso', title: 'Microsoft / single sign-on' },
   { id: 'links', title: 'Invite and reset links' },
   { id: 'panels', title: 'New panel defaults' },
+  { id: 'printing', title: 'Printing' },
   { id: 'network', title: 'Network and security' },
   { id: 'logging', title: 'Logging' },
 ] as const;
 export type SettingGroup = (typeof SETTING_GROUPS)[number]['id'];
 
 export const LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
+export const PAPER_SIZES = ['letter', 'a4'] as const;
+export type PaperSize = (typeof PAPER_SIZES)[number];
 
 export interface Settings {
   appName: string;
@@ -45,6 +48,9 @@ export interface Settings {
   defaultSpaces: number;
   defaultMainAmps: number;
   defaultVoltage: string;
+  paperSize: PaperSize;
+  printQr: boolean;
+  printNote: string;
   trustProxy: boolean;
   cookieSecure: 'auto' | 'always' | 'never';
   logLevel: (typeof LOG_LEVELS)[number];
@@ -185,6 +191,38 @@ export const SETTING_DEFS: SettingDef[] = [
     env: 'DEFAULT_VOLTAGE',
     default: '120/240 V split-phase',
     maxLength: 40,
+  },
+  {
+    key: 'paperSize',
+    group: 'printing',
+    label: 'Paper size',
+    description: 'The size PDFs start with. People can still pick the other one when they print.',
+    type: 'enum',
+    env: 'PAPER_SIZE',
+    default: 'letter',
+    options: [
+      { value: 'letter', label: 'US Letter' },
+      { value: 'a4', label: 'A4' },
+    ],
+  },
+  {
+    key: 'printQr',
+    group: 'printing',
+    label: 'Print a QR code on each panel',
+    description: 'Scanning it opens the panel in the app. Needs the public address under General.',
+    type: 'boolean',
+    env: 'PRINT_QR',
+    default: true,
+  },
+  {
+    key: 'printNote',
+    group: 'printing',
+    label: 'Note at the bottom of every page',
+    description: 'For example who to call before working on a panel. Leave blank for none.',
+    type: 'text',
+    env: 'PRINT_NOTE',
+    default: '',
+    maxLength: 120,
   },
   {
     key: 'trustProxy',

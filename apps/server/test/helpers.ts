@@ -37,6 +37,12 @@ export class Client {
     return { status: res.statusCode, body: json };
   }
 
+  /** A GET that keeps the raw body and headers, for files such as PDFs. */
+  async raw(url: string) {
+    const res = await this.app.inject({ method: 'GET', url, headers: this.cookie ? { cookie: this.cookie } : {} });
+    return { status: res.statusCode, headers: res.headers, body: res.rawPayload };
+  }
+
   get = (url: string) => this.req('GET', url);
   post = (url: string, body: unknown = {}) => this.req('POST', url, body);
   patch = (url: string, body: unknown) => this.req('PATCH', url, body);

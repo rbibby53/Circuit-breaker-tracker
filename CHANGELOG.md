@@ -6,6 +6,18 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Print to PDF.** A Print button on every panel and location offers:
+  - a **panel sheet** laid out like the panel;
+  - a **door card** to cut out and keep inside the panel door;
+  - a **room index** listing the breakers that serve each room, by floor;
+  - a **panel book** with a cover, contents, every panel inside a location and its room index.
+
+  Markers print as text, so black-and-white printers are fine. Each sheet has a QR code that
+  opens the panel. PDFs come in US Letter or A4 and only include what the reader can see.
+
+- **Printing settings:** default paper size, QR codes on or off, and a note printed at the
+  bottom of every page, such as who to call.
+
 - **Settings page for admins.** App name, public address, password sign-in, session length,
   Microsoft / OIDC sign-in (with a connection test and the redirect URI to register), invite and
   reset link lifetimes, defaults for new panels, reverse proxy trust, secure cookies and log level
@@ -18,6 +30,10 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Changed
 
+- The footer shows real version numbers: `1.2.3` for releases and `1.2.3-dev.<commit>` for
+  images built from `main`, instead of `vlatest`.
+- Development uses pnpm 12.
+- The Docker image runs on Node 24, the long-term-support release.
 - Docker only needs `PORT` and the `/data` volume. Environment variables still work and now pin
   the matching setting, which shows as locked on the Settings page.
 - The Unraid template is down to the port, the data path and the optional first admin.

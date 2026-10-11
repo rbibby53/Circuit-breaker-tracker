@@ -11,6 +11,7 @@ import { accessRoutes } from './routes/access';
 import { authRoutes } from './routes/auth';
 import { locationRoutes } from './routes/locations';
 import { panelRoutes } from './routes/panels';
+import { pdfRoutes } from './routes/pdf';
 import { adminRoutes } from './routes/admin';
 import { searchRoutes } from './routes/search';
 import { loadAuth } from './sessions';
@@ -66,7 +67,10 @@ export async function buildApp(
     reply.header('X-Frame-Options', 'DENY');
     reply.header('Cross-Origin-Opener-Policy', 'same-origin');
     reply.header('Permissions-Policy', 'camera=(), microphone=(), geolocation=(), payment=()');
-    reply.header('Content-Security-Policy', CSP);
+    // Browsers show PDFs in their own viewer, which a page policy can break.
+    if (!String(reply.getHeader('content-type') ?? '').startsWith('application/pdf')) {
+      reply.header('Content-Security-Policy', CSP);
+    }
     if (config.cookieSecure) reply.header('Strict-Transport-Security', 'max-age=15552000');
     if (req.url.startsWith('/api/')) reply.header('Cache-Control', 'no-store');
   });
@@ -107,6 +111,7 @@ export async function buildApp(
   locationRoutes(app, db);
   accessRoutes(app, db, config);
   panelRoutes(app, db);
+  pdfRoutes(app, db, config);
   adminRoutes(app, db, config);
   searchRoutes(app, db);
 
