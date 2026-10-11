@@ -67,6 +67,10 @@ export function PrintButton({
   // Until someone picks a size, follow the admin's default.
   const [chosenPaper, setChosenPaper] = useState<PaperSize | null>(rememberedPaper);
   const paper = chosenPaper ?? config.data?.paperSize ?? 'letter';
+  // Label sheet: blank labels to leave at the start of a partly used sheet.
+  const [skip, setSkip] = useState(0);
+  // Label strips: breaker spacing in inches.
+  const [pitch, setPitch] = useState<'1' | '0.75'>('1');
 
   useEffect(() => {
     const d = dialog.current;
@@ -86,6 +90,8 @@ export function PrintButton({
 
   const url = (download: boolean) => {
     const q = new URLSearchParams({ style, paper, tz: timeZone() });
+    if (style === 'labels' && skip > 0) q.set('skip', String(skip));
+    if (style === 'strips') q.set('pitch', pitch);
     if (download) q.set('download', '1');
     return `${endpoint}?${q}`;
   };
@@ -126,6 +132,40 @@ export function PrintButton({
                 </label>
               ))}
             </fieldset>
+            {style === 'labels' && (
+              <label className="field">
+                <span className="field-label">Labels already used on the sheet</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={paper === 'a4' ? 64 : 79}
+                  value={skip}
+                  onChange={(e) => setSkip(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                />
+                <span className="small muted">
+                  Printing starts after them, going down each column, so a part-used sheet is not wasted.
+                </span>
+              </label>
+            )}
+            {style === 'strips' && (
+              <div className="field">
+                <span className="field-label" id="pitch-label">
+                  Breaker spacing
+                </span>
+                <div className="segmented two" role="group" aria-labelledby="pitch-label">
+                  {(
+                    [
+                      ['1', '1 inch (Homeline, Eaton BR, Siemens, GE)'],
+                      ['0.75', '¾ inch (Square D QO, Eaton CH)'],
+                    ] as const
+                  ).map(([v, label]) => (
+                    <button key={v} type="button" aria-pressed={pitch === v} onClick={() => setPitch(v)}>
+                      {label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
             <div className="field">
               <span className="field-label" id="paper-label">
                 Paper
@@ -188,6 +228,17 @@ export const PANEL_PRINT_STYLES: PrintStyle[] = [
     value: 'door',
     title: 'Door card',
     description: 'A 4-inch-wide card to cut out and keep inside the panel door.',
+  },
+  {
+    value: 'labels',
+    title: 'Breaker labels (sticker sheet)',
+    description:
+      'One sticker per circuit: Avery 5167 on Letter (80 per sheet), Avery L7651 on A4 (65 per sheet). Print at 100%.',
+  },
+  {
+    value: 'strips',
+    title: 'Breaker label strips',
+    description: 'Strips to cut out and stick beside each column of breakers, spaced to line up with them.',
   },
 ];
 
