@@ -4,6 +4,17 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.0.0 — 2026-10-11
+
+The first stable release. Everything planned for 1.0 is in: scoped access for families and
+teams, Microsoft sign-in, residential and 3-phase panels, printing, and the tools to run it
+yourself (logs, backups, restore). Upgrading from 0.x is automatic: start the new image on
+the same `/data` folder. The database is updated on start, and a daily backup is taken.
+
+**Image tags change with this release:** `latest` is now the newest release (it used to follow
+every change on `main`), `1` follows every 1.x release, and `edge` is the development build
+from `main`.
+
 ### Added
 
 - **Printable breaker labels**, in the panel's Print & export dialog:
@@ -151,6 +162,12 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Fixed
 
+- After an upgrade, a browser tab opened on the old version reloads itself when it opens a page
+  whose code changed, instead of showing an error. The app's page is never cached without
+  checking for a newer one, and a missing file is reported as missing.
+- Updated `@fastify/static` to 10.1.6, which fixes path-traversal and route-guard bypass
+  advisories (GHSA-8pvw-jcv7-9cmj and others). This app does not protect any static files
+  behind those guards, but there is no reason to ship them.
 - Blank environment variables (as Unraid sends for empty fields) are treated as unset instead of
   stopping the container. Invalid values stop it with a message naming the variable.
 

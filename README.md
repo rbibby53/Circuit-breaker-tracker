@@ -8,9 +8,10 @@ A self-hosted web app for recreating your electrical panels, labelling what ever
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
 
-> **Status:** milestones 1 to 4 of 5 are done: accounts, single sign-on, scoped access, the
-> panel editor for residential load centers and commercial 3-phase panelboards, and printing.
-> See [docs/PLAN.md](docs/PLAN.md) for the whole plan.
+> **Status: 1.0, stable.** Accounts with scoped access, Microsoft sign-in, the panel editor for
+> residential load centers and commercial 3-phase panelboards, printing, logs and automatic
+> backups. Upgrades are automatic; see [Upgrading](#upgrading). What could come next is in
+> [docs/PLAN.md](docs/PLAN.md).
 
 ![The panel editor with a tandem breaker selected](docs/screenshots/editor.png)
 
@@ -40,7 +41,10 @@ as a single Docker container with its data in one SQLite file.
   was last used, and can sign out any of them or all the others. Managers and admins can sign
   someone out everywhere from People.
 - **View as user:** admins can see the app exactly as someone else sees it, read-only.
-- **Activity log:** every change is recorded. Managers see the changes inside their scope.
+- **Activity log:** every change is recorded, grouped by day, with a filter and links to the
+  panel or room. Managers see the changes inside their scope.
+- **Works on phones:** the panel, search and public pages fit a phone screen, and the location
+  tree folds away so the page comes first.
 - **Panel editor** for residential load centers and commercial panelboards:
   - Odd spaces on the left, even on the right. Click an empty space to add a breaker, drag
     to move it, and pick 1-pole, 2-pole or tandem (21A / 21B).
@@ -92,23 +96,25 @@ as a single Docker container with its data in one SQLite file.
 
 ## Screenshots
 
-|                                                                        |                                                          |
-| ---------------------------------------------------------------------- | -------------------------------------------------------- |
-| ![Dark mode](docs/screenshots/dark-editor.png)                         | ![Search from the header](docs/screenshots/search.png)   |
-| Dark mode follows your system, or pick one under Account.              | Press <kbd>/</kbd> to search rooms, panels and breakers. |
-| ![Users and access](docs/screenshots/access.png)                       | ![Settings](docs/screenshots/settings.png)               |
-| Grant access on any location; managers only invite within their scope. | Admins configure the app in Settings instead of Docker.  |
+|                                                                                                   |                                                                |
+| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| ![Dark mode](docs/screenshots/dark-editor.png)                                                    | ![Search from the header](docs/screenshots/search.png)         |
+| Dark mode follows your system, or pick one under Account. Leg balance shows the load on each leg. | Press <kbd>/</kbd> to search rooms, panels, breakers and tags. |
+| ![Users and access](docs/screenshots/access.png)                                                  | ![Settings](docs/screenshots/settings.png)                     |
+| Grant access on any location; managers only invite within their scope.                            | Admins configure the app in Settings instead of Docker.        |
+| ![Activity](docs/screenshots/activity.png)                                                        |                                                                |
+| Every change, newest first, linked to where it happened. Filter by person, change or place.       |                                                                |
 
 <p align="center"><img src="docs/screenshots/phone-editor.png" alt="The panel editor on a phone" width="300"></p>
 
-|                                                                            |                                                                 |
-| -------------------------------------------------------------------------- | --------------------------------------------------------------- |
-| ![A printed panel sheet](docs/screenshots/pdf-sheet.png)                   | ![A printed door card](docs/screenshots/pdf-door-card.png)      |
-| The panel sheet: what every breaker serves, with markers, key and notes.   | The door card, sized to slip inside the panel door.             |
-| ![The print dialog](docs/screenshots/print-dialog.png)                     |                                                                 |
-| Print a whole site as a book, or just its room index, on Letter or A4.     |                                                                 |
-| ![A three-phase panelboard](docs/screenshots/editor-3phase.png)            | ![A printed three-phase sheet](docs/screenshots/pdf-3phase.png) |
-| A 120/208 V panelboard: phases A, B, C on the bus, 2- and 3-pole breakers. | Its printed sheet, with a phase column down the middle.         |
+|                                                                                                                 |                                                                                |
+| --------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------------ |
+| ![A printed panel sheet](docs/screenshots/pdf-sheet.png)                                                        | ![A printed door card](docs/screenshots/pdf-door-card.png)                     |
+| The panel sheet: what every breaker serves, with markers, key and notes.                                        | The door card, sized to slip inside the panel door.                            |
+| ![The print dialog](docs/screenshots/print-dialog.png)                                                          | ![Printed breaker label strips](docs/screenshots/pdf-label-strips.png)         |
+| Print a panel sheet, door card, sticker labels or label strips, on Letter or A4. A whole site prints as a book. | Label strips spaced to line up with the breakers, to stick beside each column. |
+| ![A three-phase panelboard](docs/screenshots/editor-3phase.png)                                                 | ![A printed three-phase sheet](docs/screenshots/pdf-3phase.png)                |
+| A 120/208 V panelboard: phases A, B, C on the bus, 2- and 3-pole breakers.                                      | Its printed sheet, with a phase column down the middle.                        |
 
 ## Run it
 
@@ -129,6 +135,15 @@ volumes:
 ```sh
 docker compose up -d
 ```
+
+Image tags:
+
+| Tag      | What it is                                                         |
+| -------- | ------------------------------------------------------------------ |
+| `latest` | The newest release. Use this unless you have a reason not to.      |
+| `1`      | The newest 1.x release: updates, but never a breaking 2.0.         |
+| `1.0.0`  | Exactly that release.                                              |
+| `edge`   | The development build from `main`, between releases. May be rough. |
 
 The app listens on port **2757** by default (it spells "BRKR" on a phone keypad, and little
 else uses it). To run with the host's network instead of port mapping, and pick any free port:
@@ -161,6 +176,17 @@ on port 2757.
    ```
 3. **Docker** tab → **Add Container** → pick **circuit-breaker-tracker** under Template → **Apply**.
 4. Open `http://<server-ip>:2757`, create the first admin, then finish setup under **Settings**.
+
+### Upgrading
+
+Pull the new image and recreate the container (on Unraid: **Check for updates**, then
+**Apply update**). Keep the same `/data` volume. On start, the app updates its database
+in place, and the log says which schema it is on. A daily backup is in `/data/backups`
+already; take one from **Settings → Backup** first if you want to be extra safe. Browsers
+pick up the new version on their own, including tabs left open.
+
+Going back to an older version is not supported once the database has been updated. Restore
+the backup taken before the upgrade instead.
 
 ### Configuration
 
@@ -200,8 +226,8 @@ The container log (Unraid's log viewer, `docker logs`) has one readable line per
 container's time zone (`TZ`):
 
 ```
-2026-10-11 14:05:09 INFO  Circuit Breaker Tracker 1.4.0 starting · Node v24.11.0 · times in this log are America/Chicago
-2026-10-11 14:05:09 INFO  Database /data/breakers.db (1.2 MB, schema 6): 4 people, 31 locations, 6 panels, 212 breakers
+2026-10-11 14:05:09 INFO  Circuit Breaker Tracker 1.0.0 starting · Node v24.21.0 · times in this log are America/Chicago
+2026-10-11 14:05:09 INFO  Database /data/breakers.db (1.2 MB, schema 8): 4 people, 31 locations, 6 panels, 212 breakers
 2026-10-11 14:05:09 INFO  Sign-in: passwords, Microsoft / OIDC via login.microsoftonline.com · sessions last 30 days
 2026-10-11 14:06:41 INFO  Signed in: ryan (password and two-step code) from 192.168.1.20
 2026-10-11 14:07:02 INFO  ryan: Edited panel Main panel: Changed 14 label · Personal › Home › Basement › Utility room

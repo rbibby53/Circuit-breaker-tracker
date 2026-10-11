@@ -12,7 +12,12 @@ bottom of every page). You should get a reply within a week.
 
 ## Supported versions
 
-Fixes go into the latest release and the `latest` image. Please update before reporting.
+| Version | Supported                                                     |
+| ------- | ------------------------------------------------------------- |
+| 1.x     | Yes. Fixes ship as a new 1.x release (`latest` and `1` tags). |
+| 0.x     | No. Upgrade to 1.x; it updates your data automatically.       |
+
+Please update to the latest release before reporting.
 
 ## Running it safely
 

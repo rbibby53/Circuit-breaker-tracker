@@ -171,15 +171,19 @@ export async function buildApp(
       root: webDist,
       wildcard: false,
       // Built assets have content hashes in their names; everything else must revalidate.
-      setHeaders: (res, filePath) => {
-        res.setHeader(
+      setHeaders: (reply, filePath) => {
+        reply.header(
           'Cache-Control',
           filePath.includes(`${path.sep}assets${path.sep}`) ? 'public, max-age=31536000, immutable' : 'no-cache',
         );
       },
     });
     app.setNotFoundHandler((req, reply) => {
-      if (req.method === 'GET' && !req.url.startsWith('/api/')) return reply.sendFile('index.html');
+      // Missing built files are a real 404, so a stale page sees "not found" rather than HTML.
+      if (req.method === 'GET' && !req.url.startsWith('/api/') && !req.url.startsWith('/assets/')) {
+        // Always revalidate the page, so an upgrade is picked up and old file names are not asked for.
+        return reply.header('Cache-Control', 'no-cache').sendFile('index.html');
+      }
       return reply.code(404).send({ error: 'not_found', message: 'Not found.' });
     });
   } else {
