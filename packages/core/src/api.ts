@@ -21,6 +21,20 @@ export interface MeResponse {
   viewingAs: boolean;
   hasPassword: boolean;
   identities: { provider: string; email: string | null }[];
+  /** Two-step sign-in with an authenticator app is on for password sign-in. */
+  totp: boolean;
+  /** Unused recovery codes left, when two-step sign-in is on. */
+  recoveryCodesLeft: number;
+}
+
+/** Sign-in answer: done, or the password was right and a code is needed next. */
+export type LoginResponse = { ok: true } | { totpRequired: true; challenge: string };
+
+export interface TotpSetup {
+  secret: string;
+  otpauthUrl: string;
+  /** SVG markup of a QR code for the authenticator app. */
+  qrSvg: string;
 }
 
 export interface AuthConfig {
@@ -78,6 +92,7 @@ export interface UserListItem extends UserSummary {
   lastSeenAt: string | null;
   hasPassword: boolean;
   identities: string[];
+  totp: boolean;
   grants: GrantDto[];
   canReset: boolean;
 }
@@ -188,6 +203,13 @@ export interface SavePanelResponse {
   idMap: Record<string, number>;
 }
 
+export interface DuplicatePanelResponse {
+  id: number;
+  /** Room tags copied across, and tags left off because the copy is in another site. */
+  keptTags: number;
+  droppedTags: number;
+}
+
 export interface FeedCandidate {
   breakerId: number;
   panelId: number;
@@ -265,4 +287,16 @@ export interface AdminSettingsResponse {
     startedAt: string;
     counts: { users: number; locations: number; panels: number; breakers: number };
   };
+}
+
+export interface BackupSummary {
+  schemaVersion: number;
+  bytes: number;
+  counts: { users: number; locations: number; panels: number; breakers: number };
+  lastChange: string | null;
+}
+
+export interface RestoreUpload {
+  id: string;
+  summary: BackupSummary;
 }

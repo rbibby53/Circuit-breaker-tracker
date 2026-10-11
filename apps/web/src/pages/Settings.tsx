@@ -3,15 +3,17 @@ import {
   SETTING_GROUPS,
   type AdminSetting,
   type AdminSettingsResponse,
+  type RestoreUpload,
   type SettingDef,
   type SettingKey,
   type SettingValue,
 } from '@cbt/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useState, type FormEvent } from 'react';
+import { useRef, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useCurrentUser } from '../auth';
-import { ErrorNote } from '../components/ui';
+import { useConfirm } from '../components/ConfirmDialog';
+import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 
 export function SettingsPage() {
@@ -73,9 +75,7 @@ export function SettingsPage() {
             Download backup
           </a>
         </div>
-        <p className="muted small">
-          To restore, stop the container and replace <code>breakers.db</code> in the data folder with the backup file.
-        </p>
+        <RestoreBackup />
       </section>
 
       <section className="panel stack" aria-labelledby="about-h">
@@ -318,6 +318,92 @@ function SsoStatus({ data }: { data: AdminSettingsResponse }) {
         </div>
       )}
       <ErrorNote error={check.error} />
+    </div>
+  );
+}
+
+/** Upload a backup, see what is in it, then restore it after confirming. */
+function RestoreBackup() {
+  const confirm = useConfirm();
+  const input = useRef<HTMLInputElement>(null);
+  const [pending, setPending] = useState<RestoreUpload | null>(null);
+
+  const upload = useMutation({
+    mutationFn: (file: File) => api.upload<RestoreUpload>('/api/admin/restore', file),
+    onSuccess: (r) => setPending(r),
+  });
+  const discard = () => {
+    if (pending) void api.del(`/api/admin/restore/${pending.id}`).catch(() => undefined);
+    setPending(null);
+    upload.reset();
+    if (input.current) input.current.value = '';
+  };
+  const apply = useMutation({
+    mutationFn: (id: string) => api.post<{ ok: true; safetyCopy: string }>(`/api/admin/restore/${id}`),
+    // Everyone is signed out by a restore; the sign-in page explains why.
+    onSuccess: () => window.location.assign('/login?restored=1'),
+  });
+
+  const c = pending?.summary.counts;
+  return (
+    <div className="subtle-box stack-sm">
+      <span className="strong">Restore from a backup</span>
+      {!pending ? (
+        <>
+          <span className="small">
+            Pick a <code>.db</code> file downloaded here. You will see what is in it before anything changes.
+          </span>
+          <input
+            ref={input}
+            type="file"
+            accept=".db,.sqlite,.sqlite3,application/vnd.sqlite3,application/octet-stream"
+            aria-label="Backup file"
+            disabled={upload.isPending}
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              if (file) upload.mutate(file);
+            }}
+          />
+          {upload.isPending && <span className="small muted">Checking the backup…</span>}
+          <ErrorNote error={upload.error} />
+        </>
+      ) : (
+        <>
+          <span className="small">
+            This backup has {c!.users} {c!.users === 1 ? 'person' : 'people'}, {c!.locations} locations, {c!.panels}{' '}
+            panels and {c!.breakers} breakers
+            {pending.summary.lastChange ? `, last changed ${formatDate(pending.summary.lastChange)}` : ''} (
+            {formatBytes(pending.summary.bytes)}).
+          </span>
+          <span className="small">
+            Restoring replaces <strong>everything</strong> in the app with it. The current data is saved first as{' '}
+            <code>breakers-before-restore-….db</code> in the data folder. Everyone, including you, is signed out and
+            signs in with an account from the backup.
+          </span>
+          <ErrorNote error={apply.error} />
+          <div className="row">
+            <button type="button" className="btn" onClick={discard} disabled={apply.isPending}>
+              Cancel
+            </button>
+            <button
+              type="button"
+              className="btn btn-danger"
+              disabled={apply.isPending}
+              onClick={async () => {
+                const ok = await confirm({
+                  title: 'Restore this backup?',
+                  message: 'Everything in the app is replaced with the backup and everyone is signed out.',
+                  confirmLabel: 'Restore',
+                  danger: true,
+                });
+                if (ok) apply.mutate(pending.id);
+              }}
+            >
+              {apply.isPending ? 'Restoring…' : 'Restore this backup'}
+            </button>
+          </div>
+        </>
+      )}
     </div>
   );
 }

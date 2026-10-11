@@ -644,6 +644,55 @@ a:focus-visible {
 
 /* ---------- Tree ---------- */
 
+.tree-wrap {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.tree-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 12px;
+}
+.tree-filter {
+  flex: 1 1 100%;
+  min-height: 36px;
+  font-size: 14px;
+}
+.tree-item {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+.tree-toggle,
+.tree-toggle-space {
+  flex: 0 0 24px;
+  height: 28px;
+}
+.tree-toggle {
+  display: grid;
+  place-items: center;
+  padding: 0;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+.tree-toggle:hover:not(:disabled) {
+  background: var(--surface-2);
+  color: var(--ink);
+}
+.tree-toggle:disabled {
+  cursor: default;
+}
+.tree-count {
+  font-size: 11px;
+  font-weight: 700;
+  color: var(--muted);
+}
+
 .tree {
   list-style: none;
   margin: 0;
@@ -983,6 +1032,10 @@ a:focus-visible {
   background: #e8f5e9;
   color: #14532d;
   box-shadow: inset 0 0 0 1px #14532d;
+}
+.badge-ok {
+  color: var(--ok);
+  box-shadow: inset 0 0 0 1px var(--ok);
 }
 .badge-gen {
   background: var(--surface);
@@ -1828,4 +1881,32 @@ code {
 }
 .facts.about {
   grid-template-columns: 120px minmax(0, 1fr);
+}
+
+.notice {
+  padding: 10px 12px;
+  border: 1px solid var(--line-strong);
+  border-left: 4px solid var(--accent);
+  border-radius: 4px;
+  background: var(--accent-soft);
+  font-size: 14px;
+}
+
+.recovery-codes {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+  gap: 6px 16px;
+  margin: 0;
+  padding: 12px 14px;
+  border: 1px dashed var(--line-strong);
+  border-radius: 6px;
+  list-style: none;
+  font-size: 15px;
+}
+.totp-qr {
+  width: 180px;
+  height: 180px;
+  padding: 8px;
+  border-radius: 6px;
+  background: #fff;
 }

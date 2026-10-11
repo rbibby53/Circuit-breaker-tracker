@@ -9,14 +9,15 @@ export class ApiError extends Error {
 }
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
+  const raw = body instanceof Blob;
   const res = await fetch(url, {
     method,
     credentials: 'same-origin',
     headers: {
-      ...(body !== undefined ? { 'content-type': 'application/json' } : {}),
+      ...(body !== undefined ? { 'content-type': raw ? 'application/octet-stream' : 'application/json' } : {}),
       ...(method !== 'GET' ? { 'x-cbt-csrf': '1' } : {}),
     },
-    body: body === undefined ? undefined : JSON.stringify(body),
+    body: body === undefined ? undefined : raw ? body : JSON.stringify(body),
   });
   const text = await res.text();
   const data = text ? JSON.parse(text) : null;
@@ -32,6 +33,8 @@ export const api = {
   patch: <T = { ok: true }>(url: string, body: unknown) => request<T>('PATCH', url, body),
   put: <T = { ok: true }>(url: string, body: unknown) => request<T>('PUT', url, body),
   del: <T = { ok: true }>(url: string) => request<T>('DELETE', url),
+  /** Send a file as the raw request body. */
+  upload: <T>(url: string, file: Blob) => request<T>('POST', url, file),
 };
 
 export const errorMessage = (err: unknown): string => (err instanceof Error ? err.message : 'Something went wrong.');

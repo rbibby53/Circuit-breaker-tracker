@@ -30,6 +30,7 @@ export function UsersPage() {
     onSuccess: invalidate,
   });
   const remove = useMutation({ mutationFn: (id: number) => api.del(`/api/users/${id}`), onSuccess: invalidate });
+  const totpOff = useMutation({ mutationFn: (id: number) => api.del(`/api/users/${id}/totp`), onSuccess: invalidate });
 
   if (users.error instanceof ApiError && users.error.status === 403) {
     return (
@@ -66,7 +67,9 @@ export function UsersPage() {
           <LinkBox url={link.link.url} expiresAt={link.link.expiresAt} onClose={() => setLink(null)} />
         </div>
       )}
-      <ErrorNote error={users.error ?? resetLink.error ?? update.error ?? remove.error ?? viewAs.error} />
+      <ErrorNote
+        error={users.error ?? resetLink.error ?? update.error ?? remove.error ?? totpOff.error ?? viewAs.error}
+      />
       <div className="table-wrap">
         <table className="table">
           <thead>
@@ -101,7 +104,10 @@ export function UsersPage() {
                   </div>
                 </td>
                 <td>
-                  {[u.hasPassword ? 'Password' : null, u.identities.length ? 'Microsoft' : null]
+                  {[
+                    u.hasPassword ? (u.totp ? 'Password + code' : 'Password') : null,
+                    u.identities.length ? 'Microsoft' : null,
+                  ]
                     .filter(Boolean)
                     .join(' + ') || '—'}
                 </td>
@@ -131,6 +137,23 @@ export function UsersPage() {
                   {u.canReset && u.id !== me.realUser.id && !me.viewingAs && (
                     <button className="btn btn-sm" onClick={() => resetLink.mutate(u)}>
                       Reset link
+                    </button>
+                  )}
+                  {u.canReset && u.totp && u.id !== me.realUser.id && !me.viewingAs && (
+                    <button
+                      className="btn btn-sm"
+                      onClick={async () => {
+                        const ok = await confirm({
+                          title: `Turn off two-step sign-in for ${u.displayName}?`,
+                          message:
+                            'For when they have lost their phone. They can sign in with just their password and set it up again under Account.',
+                          confirmLabel: 'Turn off',
+                          danger: true,
+                        });
+                        if (ok) totpOff.mutate(u.id);
+                      }}
+                    >
+                      Turn off 2-step
                     </button>
                   )}
                   {isAdmin && u.id !== me.realUser.id && (

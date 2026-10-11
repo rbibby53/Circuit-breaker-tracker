@@ -31,7 +31,18 @@ export class SettingsStore {
       if (!r.ok) throw new Error(`${def.env} ${r.error} (got "${raw}").`);
       this.fromEnv.set(def.key, r.value);
     }
-    const rows = db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
+    this.load();
+  }
+
+  /** Read saved values from the database, e.g. after a restore replaced them. */
+  reload(): void {
+    this.saved.clear();
+    this.load();
+    for (const def of SETTING_DEFS) for (const l of this.listeners) l(def.key, this.get(def.key));
+  }
+
+  private load(): void {
+    const rows = this.db.prepare('SELECT key, value FROM settings').all() as { key: string; value: string }[];
     for (const row of rows) {
       const def = SETTING_BY_KEY.get(row.key as SettingKey);
       if (!def) continue; // a setting from a newer or older version

@@ -179,3 +179,48 @@ describe('room index', () => {
     expect(fromGround.sections[0]!.rooms.map((r) => r.name)).toEqual(['Garage', 'Kitchen']);
   });
 });
+
+describe('CSV export', () => {
+  const lines = (body: Buffer) =>
+    body
+      .toString('utf8')
+      .replace(/^\uFEFF/, '')
+      .trimEnd()
+      .split('\r\n');
+
+  it('exports a panel with one row per breaker', async () => {
+    const h = await home();
+    const r = await h.admin.raw(`/api/panels/${h.main}/csv`);
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toBe('text/csv; charset=utf-8');
+    expect(r.headers['content-disposition']).toContain('attachment; filename="Main panel breakers.csv"');
+    expect(r.body.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
+    const rows = lines(r.body);
+    expect(rows[0]).toBe(
+      'Location,Panel,Circuit,Phase,Poles,Amps,Label,Protection,Critical,Backup power,Spare,Serves,Feeds,Notes',
+    );
+    expect(rows).toHaveLength(7);
+    expect(rows[1]).toBe(
+      'Personal › Home › Basement › Utility room,Main panel,1 + 3,,2,50,Range,Standard,No,,No,Personal › Home › Ground › Kitchen,,',
+    );
+    expect(rows.find((l) => l.includes('Garage feeder'))).toContain(',Garage sub,');
+    expect(rows.find((l) => l.includes('Alarm'))).toContain('9B,,1,15,Alarm,Standard,No,UPS,No,,,Panel in the closet.');
+  });
+
+  it('exports everything the reader can see under a location', async () => {
+    const h = await home();
+    expect(lines((await h.admin.raw(`/api/locations/${h.site}/csv`)).body)).toHaveLength(8);
+    const viewer = await invite(app, h.admin, h.ground, 'viewer', 'viewer');
+    const rows = lines((await viewer.raw(`/api/locations/${h.ground}/csv`)).body);
+    expect(rows.slice(1).map((l) => l.split(',')[1])).toEqual(['Garage sub']);
+    expect((await viewer.raw(`/api/panels/${h.main}/csv`)).status).toBe(404);
+  });
+
+  it('keeps spreadsheet formulas from running', async () => {
+    const h = await home();
+    await save(h.admin, h.sub, [breaker('=HYPERLINK("http://x","y")', 1, { notes: 'a, "quoted" note' })]);
+    const row = lines((await h.admin.raw(`/api/panels/${h.sub}/csv`)).body)[1]!;
+    expect(row).toContain(`"'=HYPERLINK(""http://x"",""y"")"`);
+    expect(row).toContain('"a, ""quoted"" note"');
+  });
+});

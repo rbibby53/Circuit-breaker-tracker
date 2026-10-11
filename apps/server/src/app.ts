@@ -10,10 +10,12 @@ import { HttpError } from './errors';
 import { accessRoutes } from './routes/access';
 import { authRoutes } from './routes/auth';
 import { locationRoutes } from './routes/locations';
+import { exportRoutes } from './routes/export';
 import { panelRoutes } from './routes/panels';
 import { pdfRoutes } from './routes/pdf';
 import { adminRoutes } from './routes/admin';
 import { searchRoutes } from './routes/search';
+import { totpRoutes } from './routes/totp';
 import { loadAuth } from './sessions';
 import { SettingsStore } from './settings';
 
@@ -112,8 +114,10 @@ export async function buildApp(
   accessRoutes(app, db, config);
   panelRoutes(app, db);
   pdfRoutes(app, db, config);
+  exportRoutes(app, db);
   adminRoutes(app, db, config);
   searchRoutes(app, db);
+  totpRoutes(app, db, config);
 
   const webDist = config.webDist;
   if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {

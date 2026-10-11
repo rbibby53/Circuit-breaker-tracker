@@ -9,12 +9,13 @@ const OIDC_STATE_MS = 10 * 60_000;
 export function purgeExpired(
   db: DB,
   now = Date.now(),
-): { sessions: number; states: number; invites: number; resets: number } {
+): { sessions: number; states: number; challenges: number; invites: number; resets: number } {
   const iso = (ms: number) => new Date(ms).toISOString();
   const cutoff = iso(now - KEEP_USED_LINKS_DAYS * DAY_MS);
   return db.transaction(() => ({
     sessions: db.prepare('DELETE FROM sessions WHERE expires_at <= ?').run(iso(now)).changes,
     states: db.prepare('DELETE FROM oidc_states WHERE created_at <= ?').run(iso(now - OIDC_STATE_MS)).changes,
+    challenges: db.prepare('DELETE FROM login_challenges WHERE expires_at <= ?').run(iso(now)).changes,
     invites: db
       .prepare('DELETE FROM invites WHERE expires_at <= ? OR (used_at IS NOT NULL AND used_at <= ?)')
       .run(cutoff, cutoff).changes,

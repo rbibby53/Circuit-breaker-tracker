@@ -295,11 +295,11 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    - Phase labels, 3-pole breakers, 277/480 V, 42/84 circuits.
    - Sub-panel feed links.
 4. **PDF export (done):** panel sheet, door card, room index, site book, QR code.
-5. **Quality of life**
+5. **Quality of life (done)**
    - Search.
-   - Admin backup (done early, in the Settings page) and restore.
+   - Admin backup and restore, in the Settings page.
    - Duplicate a panel.
    - CSV export.
-   - TOTP two-factor for local accounts.
+   - TOTP two-step sign-in for local accounts, with recovery codes.
 
 Later: DIN-rail layout, quad breakers, load calculations, custom tags, photo attachments.

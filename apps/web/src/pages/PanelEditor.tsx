@@ -333,6 +333,7 @@ function Editor({
             </button>
             <PrintButton
               endpoint={`/api/panels/${initial.id}/pdf`}
+              csv={`/api/panels/${initial.id}/csv`}
               styles={PANEL_PRINT_STYLES}
               subject={doc.name}
               beforeOpen={readOnly ? undefined : printFlush}

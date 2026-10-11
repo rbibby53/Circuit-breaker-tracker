@@ -169,4 +169,25 @@ export const MIGRATIONS: string[] = [
     updated_by INTEGER REFERENCES users (id) ON DELETE SET NULL
   );
   `,
+  `
+  ALTER TABLE users ADD COLUMN totp_secret TEXT;
+  ALTER TABLE users ADD COLUMN totp_enabled_at TEXT;
+  ALTER TABLE users ADD COLUMN totp_last_step INTEGER;
+
+  CREATE TABLE totp_recovery_codes (
+    id        INTEGER PRIMARY KEY,
+    user_id   INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    code_hash TEXT NOT NULL,
+    used_at   TEXT
+  );
+  CREATE INDEX totp_recovery_user ON totp_recovery_codes (user_id);
+
+  -- A password that was right, waiting for the second step. Short-lived.
+  CREATE TABLE login_challenges (
+    id         TEXT PRIMARY KEY,
+    user_id    INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    expires_at TEXT NOT NULL,
+    attempts   INTEGER NOT NULL DEFAULT 0
+  );
+  `,
 ];

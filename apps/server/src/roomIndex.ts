@@ -11,7 +11,7 @@ import {
   type PanelLayout,
 } from '@cbt/core';
 import type { DB } from './db';
-import type { BreakerRow } from './panels';
+import { allPanels, canViewPanel, type BreakerRow, type PanelRow } from './panels';
 import type { AccessData, LocationRow } from './repo';
 
 export interface IndexBreaker {
@@ -64,6 +64,14 @@ export function treeOrder(access: AccessData, root: LocationRow): LocationRow[] 
   };
   walk(root);
   return out;
+}
+
+/** Panels inside `root` that the actor can see, in tree order and then by name. */
+export function panelsUnder(db: DB, actor: Actor, access: AccessData, root: LocationRow): PanelRow[] {
+  const order = new Map(treeOrder(access, root).map((l, i) => [l.id, i]));
+  return allPanels(db)
+    .filter((p) => order.has(p.location_id) && canViewPanel(actor, access, p))
+    .sort((a, b) => order.get(a.location_id)! - order.get(b.location_id)!);
 }
 
 /**

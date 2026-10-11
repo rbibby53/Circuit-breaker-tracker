@@ -294,3 +294,51 @@ describe('three-phase panelboards', () => {
     expect(pdf.status).toBe(200);
   });
 });
+
+describe('duplicating a panel', () => {
+  it('copies the breakers into another room, keeping room tags inside the same site', async () => {
+    const h = await home();
+    await save(h.admin, h.main, [
+      breaker('Range', 1, { poles: 2, amps: 50, serves: [{ locationId: h.kitchen, note: 'oven' }] }),
+      breaker('Alarm', 9, { slot: 'A', critical: true, notes: 'Keep on' }),
+    ]);
+    const r = await h.admin.post(`/api/panels/${h.main}/duplicate`, {
+      name: 'Main panel (copy)',
+      locationId: h.garage,
+    });
+    expect(r.status).toBe(200);
+    expect(r.body).toMatchObject({ keptTags: 1, droppedTags: 0 });
+    const copy = (await h.admin.get(`/api/panels/${r.body.id}`)).body;
+    expect(copy).toMatchObject({ name: 'Main panel (copy)', locationId: h.garage, spaces: 24, fedFromBreakerId: null });
+    expect(copy.breakers.map((b: any) => [b.position, b.slot, b.poles, b.label, b.critical, b.notes])).toEqual([
+      [1, 'full', 2, 'Range', false, ''],
+      [9, 'A', 1, 'Alarm', true, 'Keep on'],
+    ]);
+    expect(copy.breakers[0].serves).toEqual([expect.objectContaining({ locationId: h.kitchen, note: 'oven' })]);
+    const history = await h.admin.get(`/api/panels/${r.body.id}/history`);
+    expect(history.body[0].summary).toBe('Duplicated panel Main panel as Main panel (copy) (2 breakers)');
+  });
+
+  it('leaves room tags off when the copy goes to another site', async () => {
+    const h = await home();
+    await save(h.admin, h.main, [breaker('Range', 1, { serves: [{ locationId: h.kitchen, note: '' }] })]);
+    const apt = await createLocation(h.admin, h.personal, 'site', 'Apartment');
+    const floor = await createLocation(h.admin, apt, 'floor', 'Unit 2');
+    const closet = await createLocation(h.admin, floor, 'room', 'Closet');
+    const r = await h.admin.post(`/api/panels/${h.main}/duplicate`, { name: 'Unit 2 panel', locationId: closet });
+    expect(r.body).toMatchObject({ keptTags: 0, droppedTags: 1 });
+    const copy = (await h.admin.get(`/api/panels/${r.body.id}`)).body;
+    expect(copy.breakers[0].serves).toEqual([]);
+  });
+
+  it('needs Editor access where the copy goes, and a room', async () => {
+    const h = await home();
+    const viewer = await invite(app, h.admin, h.site, 'viewer', 'viewer');
+    expect((await viewer.post(`/api/panels/${h.main}/duplicate`, { name: 'X', locationId: h.garage })).status).toBe(
+      403,
+    );
+    expect((await h.admin.post(`/api/panels/${h.main}/duplicate`, { name: 'X', locationId: h.ground })).status).toBe(
+      400,
+    );
+  });
+});

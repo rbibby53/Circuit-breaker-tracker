@@ -19,6 +19,7 @@ import { countUsers, findUserByLogin, getUser, type UserRow } from '../repo';
 import { clearSessionCookie, createSession, destroySession, destroyUserSessions } from '../sessions';
 import { hashToken, isExpired } from '../tokens';
 import { createUser, meResponse, uniqueUsername } from '../users';
+import { startTotpChallenge } from './totp';
 
 const strictLimit = { rateLimit: { max: 10, timeWindow: '1 minute' } };
 
@@ -71,6 +72,8 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     if (!config.settings.get('allowLocalLogin') && !user.is_admin) {
       throw forbidden('Password sign-in is turned off here. Use the single sign-on button.');
     }
+    // With two-step sign-in on, the session only starts once a code is checked.
+    if (user.totp_enabled_at) return { totpRequired: true, challenge: startTotpChallenge(db, user.id) };
     createSession(db, config, reply, user.id, req.headers['user-agent']);
     return { ok: true };
   });
@@ -169,6 +172,8 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
       entityId: user.id,
       summary: `${user.username} set a new password from a reset link`,
     });
+    // A reset link does not get around two-step sign-in: they sign in with the new password and a code.
+    if (user.totp_enabled_at) return { ok: true, signIn: true };
     createSession(db, config, reply, user.id, req.headers['user-agent']);
     return { ok: true };
   });

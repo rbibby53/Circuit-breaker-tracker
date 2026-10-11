@@ -5,12 +5,13 @@ import type { Config } from '../config';
 import { actorOf, requireAuth } from '../context';
 import type { DB } from '../db';
 import { idParam, notFound, parse } from '../errors';
-import { allPanels, canViewPanel, getPanel, panelDetail } from '../panels';
+import { disposition } from '../download';
+import { canViewPanel, getPanel, panelDetail } from '../panels';
 import { drawBook, drawRoomIndex } from '../pdf/book';
 import { Pdf, safeTimeZone, type PrintContext } from '../pdf/document';
 import { drawDoorCard, drawPanelSheet } from '../pdf/panel';
 import { AccessData } from '../repo';
-import { roomIndex, treeOrder } from '../roomIndex';
+import { panelsUnder, roomIndex } from '../roomIndex';
 
 const common = {
   paper: z.enum(PAPER_SIZES).optional(),
@@ -19,13 +20,6 @@ const common = {
 };
 const panelQuery = z.object({ ...common, style: z.enum(['sheet', 'door']).default('sheet') });
 const locationQuery = z.object({ ...common, style: z.enum(['book', 'index']).default('book') });
-
-/** A filename that is safe in a header, keeping the readable name for browsers that support it. */
-function disposition(name: string, download: boolean): string {
-  const base = name.replace(/[\\/:*?"<>|\r\n]+/g, ' ').trim() || 'panel';
-  const ascii = base.replace(/[^\x20-\x7e]/g, '_');
-  return `${download ? 'attachment' : 'inline'}; filename="${ascii}.pdf"; filename*=UTF-8''${encodeURIComponent(base)}.pdf`;
-}
 
 export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
   const context = (tz: string | undefined): PrintContext => {
@@ -47,7 +41,7 @@ export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
   const send = (reply: FastifyReply, pdf: Buffer, name: string, download: boolean) =>
     reply
       .header('Content-Type', 'application/pdf')
-      .header('Content-Disposition', disposition(name, download))
+      .header('Content-Disposition', disposition(name, 'pdf', download))
       .send(pdf);
 
   app.get('/api/panels/:id/pdf', async (req, reply) => {
@@ -86,12 +80,7 @@ export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
       return send(reply, await pdf.finish(), `${root.name} room index`, q.download === '1');
     }
 
-    // Panels in the same order as the location tree, then by name.
-    const order = new Map(treeOrder(access, root).map((l, i) => [l.id, i]));
-    const panels = allPanels(db)
-      .filter((p) => order.has(p.location_id) && canViewPanel(actor, access, p))
-      .sort((a, b) => order.get(a.location_id)! - order.get(b.location_id)!)
-      .map((p) => panelDetail(db, actor, access, p));
+    const panels = panelsUnder(db, actor, access, root).map((p) => panelDetail(db, actor, access, p));
     const hasIndex = index.sections.length > 0 || index.above.length > 0;
     drawBook(pdf, { name: root.name, path: access.pathLabel(id), kindLabel }, panels, hasIndex ? index : null);
     return send(reply, await pdf.finish(), `${root.name} panel directory`, q.download === '1');

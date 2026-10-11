@@ -28,6 +28,15 @@ export const loginSchema = z.object({
   password: z.string().min(1).max(200),
 });
 
+export const totpCodeSchema = z.object({ code: z.string().trim().min(6).max(20) });
+
+export const totpLoginSchema = z.object({
+  challenge: z.string().min(1).max(100),
+  code: z.string().trim().min(6).max(20),
+});
+
+export const confirmPasswordSchema = z.object({ password: z.string().min(1).max(200) });
+
 export const changePasswordSchema = z.object({
   currentPassword: z.string().max(200).optional(),
   newPassword: passwordSchema,
@@ -125,6 +134,12 @@ export const savePanelSchema = createPanelSchema.extend({
   /** Omit to leave unchanged; null to clear. */
   fedFromBreakerId: z.number().int().positive().nullable().optional(),
   breakers: z.array(breakerInputSchema).max(MAX_SPACES * 2),
+});
+
+export const duplicatePanelSchema = z.object({
+  name: z.string().trim().min(1).max(80),
+  /** The room the copy goes in. */
+  locationId: z.number().int().positive(),
 });
 
 export type CreatePanelInput = z.infer<typeof createPanelSchema>;
