@@ -35,6 +35,7 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
       voltage: config.settings.get('defaultVoltage'),
     },
     paperSize: config.settings.get('paperSize'),
+    publicPanels: config.settings.get('publicPanels'),
     oidc: { enabled: !!config.oidc, label: config.oidc?.label ?? '' },
   }));
 

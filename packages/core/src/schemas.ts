@@ -142,6 +142,12 @@ export const duplicatePanelSchema = z.object({
   locationId: z.number().int().positive(),
 });
 
+export const sharePanelSchema = z.object({
+  enabled: z.boolean(),
+  /** Replace the link, so the old one (and QR codes printed with it) stops working. */
+  renew: z.boolean().default(false),
+});
+
 export type CreatePanelInput = z.infer<typeof createPanelSchema>;
 export type BreakerInput = z.infer<typeof breakerInputSchema>;
 export type SavePanelInput = z.infer<typeof savePanelSchema>;

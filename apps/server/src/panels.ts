@@ -33,6 +33,7 @@ export interface PanelRow {
   model: string;
   notes: string;
   fed_from_breaker_id: number | null;
+  public_token: string | null;
   version: number;
   created_at: string;
   updated_at: string;
@@ -222,6 +223,8 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     breakers: breakers.map(dto),
     feedChain: feedChain(db, actor, access, panel),
     fedFromBreakerId: panel.fed_from_breaker_id,
+    publicPath: panel.public_token ? `/p/${panel.public_token}` : null,
+    canShare: role === 'admin' || role === 'manager',
   };
 }
 

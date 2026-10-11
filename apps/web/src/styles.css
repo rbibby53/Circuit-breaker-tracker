@@ -1910,3 +1910,111 @@ code {
   border-radius: 6px;
   background: #fff;
 }
+
+/* ---------- Public panel page ---------- */
+
+.public-page {
+  min-height: 100vh;
+  background: var(--ground);
+}
+.public-bar {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 10px 16px;
+  background: var(--chrome);
+  color: #f4f5f3;
+}
+.public-brand {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+  font-weight: 800;
+  font-stretch: 85%;
+  letter-spacing: 0.02em;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.public-main {
+  max-width: 760px;
+  margin: 0 auto;
+  padding: 20px 16px 40px;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+.public-filter {
+  min-height: 46px;
+  font-size: 16px;
+}
+.public-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.public-breaker {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+  padding: 10px 12px;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--surface);
+}
+.public-breaker.is-critical {
+  border-left: 4px solid #c4261d;
+}
+.public-circuit {
+  display: flex;
+  flex-direction: column;
+  font-weight: 700;
+  font-size: 15px;
+}
+.public-phase {
+  font-size: 11px;
+  color: var(--muted);
+}
+.public-body {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 0;
+}
+.public-label {
+  font-weight: 700;
+}
+.public-tags {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px;
+  margin-top: 2px;
+}
+.print-tag {
+  padding: 0 4px;
+  border: 1px solid var(--ink);
+  border-radius: 2px;
+  font-size: 10px;
+  font-weight: 800;
+  line-height: 15px;
+}
+.print-tag.is-solid {
+  background: var(--ink);
+  color: var(--surface);
+}
+.public-amps {
+  font-weight: 700;
+  white-space: nowrap;
+}
+
+.share-url {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}

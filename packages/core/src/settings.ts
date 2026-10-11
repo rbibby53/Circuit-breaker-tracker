@@ -24,7 +24,7 @@ export const SETTING_GROUPS = [
   { id: 'sso', title: 'Microsoft / single sign-on' },
   { id: 'links', title: 'Invite and reset links' },
   { id: 'panels', title: 'New panel defaults' },
-  { id: 'printing', title: 'Printing' },
+  { id: 'printing', title: 'Printing and QR codes' },
   { id: 'network', title: 'Network and security' },
   { id: 'logging', title: 'Logging' },
 ] as const;
@@ -50,6 +50,7 @@ export interface Settings {
   defaultVoltage: string;
   paperSize: PaperSize;
   printQr: boolean;
+  publicPanels: boolean;
   printNote: string;
   trustProxy: boolean;
   cookieSecure: 'auto' | 'always' | 'never';
@@ -212,6 +213,16 @@ export const SETTING_DEFS: SettingDef[] = [
     description: 'Scanning it opens the panel in the app. Needs the public address under General.',
     type: 'boolean',
     env: 'PRINT_QR',
+    default: true,
+  },
+  {
+    key: 'publicPanels',
+    group: 'printing',
+    label: 'Allow public panel pages',
+    description:
+      'Managers can let a panel be opened from its QR code without signing in. Turn off to make every QR code ask for a sign-in, even on panels marked public.',
+    type: 'boolean',
+    env: 'PUBLIC_PANELS',
     default: true,
   },
   {

@@ -190,4 +190,9 @@ export const MIGRATIONS: string[] = [
     attempts   INTEGER NOT NULL DEFAULT 0
   );
   `,
+  `
+  -- Set when a panel has a public page (opened from its QR code without signing in).
+  ALTER TABLE panels ADD COLUMN public_token TEXT;
+  CREATE UNIQUE INDEX panels_public_token ON panels (public_token) WHERE public_token IS NOT NULL;
+  `,
 ];

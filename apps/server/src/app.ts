@@ -13,6 +13,7 @@ import { locationRoutes } from './routes/locations';
 import { exportRoutes } from './routes/export';
 import { panelRoutes } from './routes/panels';
 import { pdfRoutes } from './routes/pdf';
+import { publicRoutes } from './routes/public';
 import { adminRoutes } from './routes/admin';
 import { searchRoutes } from './routes/search';
 import { totpRoutes } from './routes/totp';
@@ -65,6 +66,8 @@ export async function buildApp(
 
   app.addHook('onSend', async (req, reply) => {
     reply.header('X-Content-Type-Options', 'nosniff');
+    // Panels and public pages are not meant for search engines.
+    reply.header('X-Robots-Tag', 'noindex, nofollow');
     reply.header('Referrer-Policy', 'same-origin');
     reply.header('X-Frame-Options', 'DENY');
     reply.header('Cross-Origin-Opener-Policy', 'same-origin');
@@ -115,6 +118,7 @@ export async function buildApp(
   panelRoutes(app, db);
   pdfRoutes(app, db, config);
   exportRoutes(app, db);
+  publicRoutes(app, db, config);
   adminRoutes(app, db, config);
   searchRoutes(app, db);
   totpRoutes(app, db, config);

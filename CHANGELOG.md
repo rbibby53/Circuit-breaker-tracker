@@ -12,6 +12,11 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 - **Restore from a backup** in Settings → Backup. You see what is in the file first, the
   current data is saved alongside, and older backups are upgraded. No restart is needed.
 - **Duplicate a panel** into any room you can edit. Room tags are kept within the same site.
+- **Public panel pages from the QR code.** Under Panel settings, a manager can let anyone with
+  the QR code see the panel without signing in. It is a read-only, phone-friendly list with a
+  breaker search and a "Sign in to edit" button. Printed QR codes point at it while it is on.
+  "Make a new link" retires old printouts, and admins can turn public pages off for everyone in
+  Settings.
 - **Foldable location tree.** Buildings and floors start folded and remember how you left them;
   the way to the selected location always opens. A filter box finds a location by name, and
   there are Expand all / Collapse all buttons.
