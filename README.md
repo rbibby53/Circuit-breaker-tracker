@@ -58,6 +58,8 @@ as a single Docker container with its data in one SQLite file.
     in use. Search finds breakers by tag, and a tag bar on each panel highlights every breaker
     with that tag.
   - **History** shows every change in plain words.
+- **Surge protectors** that install in breaker spaces, with or without breakers of their own.
+  They are marked SPD in the panel, on PDFs and in CSV exports.
 - **Panel summary:** circuits, spares and free spaces under each panel, and how evenly
   breaker ratings are spread across the legs (split-phase) or phases A/B/C (3-phase).
 - **Sub-panels:** set which breaker feeds a panel. Anyone who can see a panel also sees

@@ -1,13 +1,14 @@
 // What a panel's breakers add up to: circuits, free spaces, and breaker ratings per leg or
 // phase. These are ratings, not measured load; they show how evenly circuits are spread.
 
-import { cellOf, phaseOf, positionsOf, type PanelShape } from './panel';
+import { cellOf, isSurgeOnly, phaseOf, positionsOf, type Device, type PanelShape } from './panel';
 
 export interface LoadBreaker {
   position: number;
   poles: number;
   amps: number;
   isSpare: boolean;
+  device?: Device;
 }
 
 export interface LegLoad {
@@ -21,6 +22,8 @@ export interface LegLoad {
 export interface PanelLoad {
   circuits: number;
   spares: number;
+  /** Where surge protectors sit, as circuit numbers ("1", "13 + 15"). Empty when there are none. */
+  surge: number[][];
   /** Spaces with nothing in them. */
   freeSpaces: number;
   legs: LegLoad[];
@@ -48,9 +51,13 @@ export function panelLoad(panel: PanelShape, breakers: readonly LoadBreaker[]): 
   const used = new Set<number>();
   let circuits = 0;
   let spares = 0;
+  const surge: number[][] = [];
   for (const b of breakers) {
     const spots = positionsOf(panel, b).filter((p) => p >= 1 && p <= panel.spaces);
     spots.forEach((p) => used.add(p));
+    if (b.device === 'surge') surge.push(spots);
+    // A surge protector without breakers feeds nothing, so it is not a circuit.
+    if (isSurgeOnly({ device: b.device, amps: b.amps })) continue;
     if (b.isSpare) {
       spares++;
       continue;
@@ -76,5 +83,6 @@ export function panelLoad(panel: PanelShape, breakers: readonly LoadBreaker[]): 
     const what = panel.layout === 'commercial' ? 'Phase' : 'Leg';
     warning = `${what} ${high.leg} has ${high.amps} A of breakers on it and ${what.toLowerCase()} ${low.leg} only ${low.amps} A. Moving a circuit or two could even them out.`;
   }
-  return { circuits, spares, freeSpaces: panel.spaces - used.size, legs: list, imbalance, warning };
+  surge.sort((x, y) => x[0]! - y[0]!);
+  return { circuits, spares, surge, freeSpaces: panel.spaces - used.size, legs: list, imbalance, warning };
 }

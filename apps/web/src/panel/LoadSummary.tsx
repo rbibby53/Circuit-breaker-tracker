@@ -30,6 +30,12 @@ export function LoadSummary({
         <span>
           <strong>{load.freeSpaces}</strong> free {load.freeSpaces === 1 ? 'space' : 'spaces'}
         </span>
+        {load.surge.length > 0 && (
+          <span className="load-surge">
+            <span className="badge badge-spd">SPD</span> Surge protector{load.surge.length > 1 ? 's' : ''} at{' '}
+            {load.surge.map((spots) => spots.join(' + ')).join(', ')}
+          </span>
+        )}
         {load.legs.length > 1 && (
           <button type="button" className="link-btn small" aria-expanded={open} onClick={() => setOpen(!open)}>
             {open ? 'Hide' : 'Show'} {phase ? 'phase' : 'leg'} balance

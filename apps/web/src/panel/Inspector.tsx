@@ -2,6 +2,9 @@ import {
   BACKUPS,
   BACKUP_LABELS,
   COMMON_AMPS,
+  DEVICES,
+  DEVICE_LABELS,
+  ampsLabel,
   PROTECTIONS,
   PROTECTION_LABELS,
   allowsTandem,
@@ -69,14 +72,20 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
     return (
       <aside className="inspector" aria-label="Breaker details">
         <span className="eyebrow">{where}</span>
-        <h2>{b.label || 'Unlabelled'}</h2>
+        <h2>{b.label || (b.device === 'surge' ? 'Surge protector' : 'Unlabelled')}</h2>
         <dl className="facts">
           <dt>Size</dt>
           <dd>{size === 'tandem' ? 'Tandem (half space)' : `${b.poles}-pole`}</dd>
+          <dt>Device</dt>
+          <dd>{DEVICE_LABELS[b.device]}</dd>
           <dt>Amps</dt>
-          <dd>{b.amps}A</dd>
-          <dt>Type</dt>
-          <dd>{PROTECTION_LABELS[b.protection]}</dd>
+          <dd>{b.device === 'surge' && b.amps === 0 ? 'No breakers (surge protection only)' : ampsLabel(b)}</dd>
+          {b.device === 'breaker' && (
+            <>
+              <dt>Type</dt>
+              <dd>{PROTECTION_LABELS[b.protection]}</dd>
+            </>
+          )}
           <dt>Flags</dt>
           <dd>
             {[b.critical && 'Critical', b.backup !== 'none' && `On ${BACKUP_LABELS[b.backup]}`, b.isSpare && 'Spare']
@@ -102,7 +111,7 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
     <aside className="inspector" aria-label="Breaker details">
       <div className="stack-sm">
         <span className="eyebrow">{where}</span>
-        <h2>{b.label || 'New breaker'}</h2>
+        <h2>{b.label || (b.device === 'surge' ? 'Surge protector' : 'New breaker')}</h2>
       </div>
 
       <label className="field">
@@ -114,6 +123,34 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
           onChange={(e) => onPatch({ label: e.target.value }, `label:${b.key}`)}
         />
       </label>
+
+      <fieldset className="field">
+        <legend className="field-label">Device</legend>
+        <div className="segmented two">
+          {DEVICES.map((d) => (
+            <button
+              key={d}
+              type="button"
+              aria-pressed={b.device === d}
+              onClick={() =>
+                onPatch(
+                  d === 'surge'
+                    ? // Most in-panel surge protectors are 2-pole and have no breakers of their own.
+                      { device: d, amps: 0, protection: 'standard', isSpare: false }
+                    : { device: d, amps: b.amps || 20 },
+                )
+              }
+            >
+              {DEVICE_LABELS[d]}
+            </button>
+          ))}
+        </div>
+        {b.device === 'surge' && (
+          <span className="muted small">
+            A surge protector that fits in breaker spaces, such as a Square D SurgeBreaker or Eaton CHSPT2ULTRA.
+          </span>
+        )}
+      </fieldset>
 
       <fieldset className="field">
         <legend className="field-label">Size</legend>
@@ -159,37 +196,46 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
 
       <div className="two-col">
         <label className="field">
-          <span className="field-label">Amps</span>
+          <span className="field-label">{b.device === 'surge' ? 'Built-in breakers (A)' : 'Amps'}</span>
           <input
             type="number"
-            min={1}
+            min={b.device === 'surge' ? 0 : 1}
             max={4000}
             list="amp-sizes"
             value={b.amps}
             onChange={(e) => {
               const v = Number(e.target.value);
-              if (Number.isInteger(v) && v > 0) onPatch({ amps: v }, `amps:${b.key}`);
+              if (Number.isInteger(v) && (v > 0 || (v === 0 && b.device === 'surge'))) {
+                onPatch({ amps: v }, `amps:${b.key}`);
+              }
             }}
           />
+          {b.device === 'surge' && (
+            <span className="muted small">0 if it only protects, with no breakers of its own.</span>
+          )}
           <datalist id="amp-sizes">
             {COMMON_AMPS.map((a) => (
               <option key={a} value={a} />
             ))}
           </datalist>
         </label>
-        <label className="field">
-          <span className="field-label">Protection</span>
-          <select
-            value={b.protection}
-            onChange={(e) => onPatch({ protection: e.target.value as EditBreaker['protection'] })}
-          >
-            {PROTECTIONS.map((p) => (
-              <option key={p} value={p}>
-                {PROTECTION_LABELS[p]}
-              </option>
-            ))}
-          </select>
-        </label>
+        {b.device === 'breaker' ? (
+          <label className="field">
+            <span className="field-label">Protection</span>
+            <select
+              value={b.protection}
+              onChange={(e) => onPatch({ protection: e.target.value as EditBreaker['protection'] })}
+            >
+              {PROTECTIONS.map((p) => (
+                <option key={p} value={p}>
+                  {PROTECTION_LABELS[p]}
+                </option>
+              ))}
+            </select>
+          </label>
+        ) : (
+          <span />
+        )}
       </div>
 
       <fieldset className="flags">
@@ -211,13 +257,15 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
             ))}
           </div>
         </div>
-        <label className="check">
-          <input type="checkbox" checked={b.isSpare} onChange={(e) => onPatch({ isSpare: e.target.checked })} />
-          <span>
-            <span className="strong">Spare</span>
-            <span className="muted small block">A breaker is installed but nothing is connected.</span>
-          </span>
-        </label>
+        {b.device === 'breaker' && (
+          <label className="check">
+            <input type="checkbox" checked={b.isSpare} onChange={(e) => onPatch({ isSpare: e.target.checked })} />
+            <span>
+              <span className="strong">Spare</span>
+              <span className="muted small block">A breaker is installed but nothing is connected.</span>
+            </span>
+          </label>
+        )}
       </fieldset>
 
       <div className="field">
@@ -273,7 +321,7 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
           if (ok) onRemove();
         }}
       >
-        Remove breaker
+        {b.device === 'surge' ? 'Remove surge protector' : 'Remove breaker'}
       </button>
     </aside>
   );

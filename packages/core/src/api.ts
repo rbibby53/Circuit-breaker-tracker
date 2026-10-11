@@ -1,7 +1,7 @@
 // Response shapes shared by the server and the web app.
 import type { LocationKind } from './locations';
 import type { PaperSize, SettingKey, SettingValue } from './settings';
-import type { Backup, MainType, PanelLayout, Protection, Slot } from './panel';
+import type { Backup, Device, MainType, PanelLayout, Protection, Slot } from './panel';
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
 
@@ -163,6 +163,7 @@ export interface BreakerDto {
   slot: Slot;
   poles: number;
   amps: number;
+  device: Device;
   protection: Protection;
   label: string;
   notes: string;
@@ -226,6 +227,7 @@ export interface PublicPanel {
     slot: Slot;
     poles: number;
     amps: number;
+    device: Device;
     protection: Protection;
     label: string;
     notes: string;
@@ -288,6 +290,7 @@ export interface ServedByItem {
   circuit: string;
   label: string;
   amps: number;
+  device: Device;
   poles: number;
   protection: Protection;
   critical: boolean;

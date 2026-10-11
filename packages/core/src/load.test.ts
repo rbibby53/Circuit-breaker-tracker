@@ -44,4 +44,20 @@ describe('panel load', () => {
     expect(load.imbalance).toBe(1);
     expect(load.warning).toBeNull();
   });
+
+  it('lists surge protectors and counts only the ones with breakers as circuits', () => {
+    const panel = { layout: 'residential' as const, spaces: 12 };
+    const load = panelLoad(panel, [
+      { position: 5, poles: 2, amps: 0, isSpare: false, device: 'surge' },
+      { position: 1, poles: 2, amps: 20, isSpare: false, device: 'surge' },
+      b(2, 15),
+    ]);
+    expect(load.surge).toEqual([
+      [1, 3],
+      [5, 7],
+    ]);
+    expect(load.circuits).toBe(2);
+    expect(load.legs.map((l) => l.amps)).toEqual([35, 20]);
+    expect(load.freeSpaces).toBe(7);
+  });
 });

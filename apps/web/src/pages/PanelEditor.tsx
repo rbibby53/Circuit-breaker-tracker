@@ -266,6 +266,7 @@ function Editor({
   const chain = ancestry(byId, initial.locationId);
   const used = new Set(doc.breakers.flatMap((b) => positionsOf(doc, b)));
   const critical = doc.breakers.filter((b) => b.critical).length;
+  const surgeCount = doc.breakers.filter((b) => b.device === 'surge').length;
   const onBackup = doc.breakers.filter((b) => b.backup !== 'none').length;
 
   // Save pending edits first so the PDF matches what is on screen.
@@ -431,7 +432,8 @@ function Editor({
             }
           />
           <p className="panel-stats">
-            {used.size} of {doc.spaces} spaces filled · {doc.breakers.length} breakers · {critical} critical ·{' '}
+            {used.size} of {doc.spaces} spaces filled · {doc.breakers.length - surgeCount} breakers
+            {surgeCount > 0 && ` · ${surgeCount} surge protector${surgeCount === 1 ? '' : 's'}`} · {critical} critical ·{' '}
             {onBackup} on backup power
           </p>
         </section>

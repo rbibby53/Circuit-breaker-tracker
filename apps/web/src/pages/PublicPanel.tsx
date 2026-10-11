@@ -117,7 +117,9 @@ export function PublicPanelPage() {
                       {phases.length > 0 && <span className="public-phase">Ø {phases.join(' ')}</span>}
                     </span>
                     <span className="public-body">
-                      <span className="public-label">{b.label || (b.isSpare ? 'Spare' : 'Unlabelled')}</span>
+                      <span className="public-label">
+                        {b.label || (b.device === 'surge' ? 'Surge protector' : b.isSpare ? 'Spare' : 'Unlabelled')}
+                      </span>
                       {b.serves.length > 0 && <span className="small muted">{b.serves.join(', ')}</span>}
                       {b.tags.length > 0 && <span className="small">{b.tags.join(' · ')}</span>}
                       {b.notes && <span className="small">{b.notes}</span>}

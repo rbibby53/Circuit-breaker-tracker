@@ -92,7 +92,7 @@ interface ScheduleInfo {
   compact: boolean;
 }
 
-const COMPACT_TAGS: DirectoryTag[] = ['SPARE', 'CRIT', 'UPS', 'GEN'];
+const COMPACT_TAGS: DirectoryTag[] = ['SPARE', 'CRIT', 'UPS', 'GEN', 'SPD'];
 
 /** Draw the panel's breakers as a grid shaped like the panel. Returns the tags used. */
 function drawSchedule(
@@ -144,7 +144,7 @@ function drawSchedule(
 
     function ampsAt(b: Breaker, top: number, h: number) {
       const s = { font: 'mono' as Font, size: ampsSize };
-      const text = style.compact ? `${b.amps}A` : ampsLabel(b);
+      const text = style.compact ? (b.amps === 0 && b.device === 'surge' ? 'SPD' : `${b.amps}A`) : ampsLabel(b);
       pdf.line(text, g.amps.x, top + (h - pdf.lineHeight(s)) / 2, { ...s, width: g.amps.w, align: 'center' });
     }
 
@@ -156,7 +156,7 @@ function drawSchedule(
       const innerX = g.desc.x + pad;
       const innerW = g.desc.w - pad * 2;
       const labelW = innerW - (tagsW ? tagsW + 3 : 0);
-      const label = b.label.trim() || (b.isSpare ? 'Spare' : 'Unlabelled');
+      const label = b.label.trim() || (b.device === 'surge' ? 'Surge protector' : b.isSpare ? 'Spare' : 'Unlabelled');
       const labelStyle = { font: 'semi' as Font, size: labelSize, color: b.label.trim() ? INK : FAINT };
       const servesStyle = { font: 'body' as Font, size: servesSize, color: MUTED };
       const lhL = pdf.lineHeight(labelStyle);

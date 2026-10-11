@@ -46,6 +46,7 @@ export function publicPanel(db: DB, access: AccessData, panel: PanelRow): Public
       slot: b.slot,
       poles: b.poles,
       amps: b.amps,
+      device: b.device,
       protection: b.protection,
       label: b.label,
       notes: b.notes,

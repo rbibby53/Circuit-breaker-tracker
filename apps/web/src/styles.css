@@ -1001,6 +1001,9 @@ a:focus-visible {
 .segmented.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
+.segmented.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .segmented.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -1054,6 +1057,10 @@ a:focus-visible {
 .badge-ok {
   color: var(--ok);
   box-shadow: inset 0 0 0 1px var(--ok);
+}
+.badge-spd {
+  background: #5b3fd1;
+  color: #fff;
 }
 .badge-gen {
   background: var(--surface);
@@ -2260,4 +2267,16 @@ code {
 }
 .load-leg-amps {
   font-variant-numeric: tabular-nums;
+}
+
+/* Surge protectors: a violet edge, so they stand apart from breakers in the panel. */
+.pg-breaker.is-surge {
+  box-shadow: inset 4px 0 0 #7c5cff;
+}
+.pg-breaker.is-surge.is-right {
+  box-shadow: inset -4px 0 0 #7c5cff;
+}
+
+.load-surge .badge {
+  margin-right: 4px;
 }

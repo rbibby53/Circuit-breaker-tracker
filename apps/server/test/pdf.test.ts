@@ -210,15 +210,15 @@ describe('CSV export', () => {
     expect(r.body.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
     const rows = lines(r.body);
     expect(rows[0]).toBe(
-      'Location,Panel,Circuit,Phase,Poles,Amps,Label,Protection,Critical,Backup power,Spare,Serves,Feeds,Tags,Notes',
+      'Location,Panel,Circuit,Phase,Poles,Type,Amps,Label,Protection,Critical,Backup power,Spare,Serves,Feeds,Tags,Notes',
     );
     expect(rows).toHaveLength(7);
     expect(rows[1]).toBe(
-      'Personal › Home › Basement › Utility room,Main panel,1 + 3,,2,50,Range,Standard,No,,No,Personal › Home › Ground › Kitchen,,,',
+      'Personal › Home › Basement › Utility room,Main panel,1 + 3,,2,Breaker,50,Range,Standard,No,,No,Personal › Home › Ground › Kitchen,,,',
     );
     expect(rows.find((l) => l.includes('Garage feeder'))).toContain(',Garage sub,');
     expect(rows.find((l) => l.includes('Alarm'))).toContain(
-      '9B,,1,15,Alarm,Standard,No,UPS,No,,,,Panel in the closet.',
+      '9B,,1,Breaker,15,Alarm,Standard,No,UPS,No,,,,Panel in the closet.',
     );
   });
 

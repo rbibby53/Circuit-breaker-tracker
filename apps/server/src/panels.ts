@@ -1,4 +1,5 @@
 import {
+  DEVICE_LABELS,
   KIND_LABELS,
   canView,
   circuitLabel,
@@ -9,6 +10,7 @@ import {
   type Actor,
   type Backup,
   type BreakerDto,
+  type Device,
   type FeedLink,
   type MainType,
   type PanelDetail,
@@ -46,6 +48,7 @@ export interface BreakerRow {
   slot: Slot;
   poles: number;
   amps: number;
+  device: Device;
   protection: Protection;
   label: string;
   notes: string;
@@ -211,6 +214,7 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
       slot: b.slot,
       poles: b.poles,
       amps: b.amps,
+      device: b.device,
       protection: b.protection,
       label: b.label,
       notes: b.notes,
@@ -280,6 +284,7 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
         slot: b.slot,
         poles: b.poles,
         amps: b.amps,
+        device: b.device as Device | undefined,
         protection: b.protection,
         label: b.label,
         notes: b.notes,
@@ -318,6 +323,7 @@ const BREAKER_FIELDS = [
   ['slot', 'slot'],
   ['poles', 'poles'],
   ['amps', 'amps'],
+  ['device', 'type'],
   ['protection', 'protection'],
   ['label', 'label'],
   ['notes', 'notes'],
@@ -351,12 +357,16 @@ export function describeChanges(
   for (const b of after.breakers) {
     const old = beforeById.get(b.id);
     if (!old) {
-      lines.push(`Added ${name(b)} (${b.amps}A)`);
+      const what = b.device === 'surge' ? (b.amps ? `surge protector, ${b.amps}A` : 'surge protector') : `${b.amps}A`;
+      lines.push(`Added ${name(b)} (${what})`);
       continue;
     }
     const changes: string[] = [];
+    // History saved before surge protectors existed has no device: those were all breakers.
+    const value = (x: Snapshot['breakers'][number], k: (typeof BREAKER_FIELDS)[number][0]) =>
+      k === 'device' ? DEVICE_LABELS[x.device ?? 'breaker'].toLowerCase() : x[k];
     for (const [k, label] of BREAKER_FIELDS) {
-      if (JSON.stringify(old[k]) === JSON.stringify(b[k])) continue;
+      if (JSON.stringify(value(old, k)) === JSON.stringify(value(b, k))) continue;
       if (k === 'position') changes.push(`moved from ${circuitLabel(layout, old)}`);
       else if (k === 'serves') {
         const names = (list: string[]) => list.map((s) => locationName(Number(s.split(':')[0])));
@@ -367,7 +377,7 @@ export function describeChanges(
       else if (k === 'tags') {
         const list = (t: string[] | undefined) => (t?.length ? t.join(', ') : 'none');
         changes.push(`tags ${list(old.tags)} → ${list(b.tags)}`);
-      } else changes.push(`${label} ${String(old[k])} → ${String(b[k])}`);
+      } else changes.push(`${label} ${String(value(old, k))} → ${String(value(b, k))}`);
     }
     if (changes.length) lines.push(`${name(b)}: ${changes.join('; ')}`);
   }

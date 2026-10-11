@@ -6,6 +6,14 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Surge protectors in breaker spaces**, such as a Square D SurgeBreaker or Eaton CHSPT2ULTRA.
+  - Switch any breaker to **Surge protector** in the breaker details. It keeps its spaces and
+    poles.
+  - **Built-in breakers (A)** records a combination unit's breaker rating, or 0 for one that
+    only protects.
+  - In the panel they get an **SPD** badge and a violet edge, and the summary says where they
+    are. Surge-only units are not counted as circuits.
+  - PDFs mark them **SPD**, CSV exports gain a **Type** column, and history shows the change.
 - **Panel summary** under each panel: circuits, spares and free spaces. **Show leg balance**
   (or phase balance on 3-phase panels) adds up breaker ratings on each leg or phase, with a
   note when one carries much more than another. These are ratings, not measured current.

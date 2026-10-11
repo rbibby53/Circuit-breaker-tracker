@@ -1,4 +1,4 @@
-import { BACKUP_LABELS, PROTECTION_LABELS, circuitLabel, phasesOf, type PanelDetail } from '@cbt/core';
+import { DEVICE_LABELS, BACKUP_LABELS, PROTECTION_LABELS, circuitLabel, phasesOf, type PanelDetail } from '@cbt/core';
 
 /**
  * Spreadsheet-safe cell: quoted when needed, and text that a spreadsheet would run as a formula
@@ -22,6 +22,7 @@ export const BREAKER_COLUMNS = [
   'Circuit',
   'Phase',
   'Poles',
+  'Type',
   'Amps',
   'Label',
   'Protection',
@@ -53,7 +54,9 @@ export function breakerRows(panel: PanelDetail): (string | number | boolean | nu
       circuitLabel(panel, b),
       phasesOf(panel, b).join(' '),
       b.poles,
-      b.amps,
+      DEVICE_LABELS[b.device],
+      // A surge protector without breakers has no rating.
+      b.amps === 0 ? '' : b.amps,
       b.label,
       PROTECTION_LABELS[b.protection],
       b.critical,
