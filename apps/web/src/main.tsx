@@ -19,6 +19,7 @@ import { LoginPage } from './pages/Login';
 import { NotFoundPage } from './pages/NotFound';
 import { PanelEditorPage } from './pages/PanelEditor';
 import { ResetPage } from './pages/Reset';
+import { SettingsPage } from './pages/Settings';
 import { SetupPage } from './pages/Setup';
 import { SitesPage } from './pages/Sites';
 import { UsersPage } from './pages/Users';
@@ -59,6 +60,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="/users" element={<UsersPage />} />
               <Route path="/activity" element={<ActivityPage />} />
               <Route path="/account" element={<AccountPage />} />
+              <Route path="/settings" element={<SettingsPage />} />
               <Route path="*" element={<NotFoundPage />} />
             </Route>
           </Routes>

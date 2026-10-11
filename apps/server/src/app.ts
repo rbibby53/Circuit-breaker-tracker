@@ -4,15 +4,17 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { type FastifyInstance } from 'fastify';
-import type { Config } from './config';
+import { withSettings, type StartupConfig } from './config';
 import type { DB } from './db';
 import { HttpError } from './errors';
 import { accessRoutes } from './routes/access';
 import { authRoutes } from './routes/auth';
 import { locationRoutes } from './routes/locations';
 import { panelRoutes } from './routes/panels';
+import { adminRoutes } from './routes/admin';
 import { searchRoutes } from './routes/search';
 import { loadAuth } from './sessions';
+import { SettingsStore } from './settings';
 
 export const CSRF_HEADER = 'x-cbt-csrf';
 
@@ -36,10 +38,21 @@ const CSP = [
   "frame-ancestors 'none'",
 ].join('; ');
 
-export async function buildApp(config: Config, db: DB, opts: { logger?: boolean } = {}): Promise<FastifyInstance> {
+export async function buildApp(
+  startup: StartupConfig,
+  db: DB,
+  opts: { logger?: boolean } = {},
+): Promise<FastifyInstance> {
+  // Throws on an invalid environment variable, which stops startup with a clear message.
+  const settings = new SettingsStore(db, startup.env);
+  const config = withSettings(startup, settings);
   const app = Fastify({
-    logger: opts.logger === false ? false : { level: config.logLevel },
-    trustProxy: config.trustProxy,
+    logger: opts.logger === false ? false : { level: settings.get('logLevel') },
+    // A function so the admin page can switch it without a restart.
+    trustProxy: () => settings.get('trustProxy'),
+  });
+  settings.onChange((key, value) => {
+    if (key === 'logLevel' && opts.logger !== false) app.log.level = String(value);
   });
 
   await app.register(cookie);
@@ -94,6 +107,7 @@ export async function buildApp(config: Config, db: DB, opts: { logger?: boolean 
   locationRoutes(app, db);
   accessRoutes(app, db, config);
   panelRoutes(app, db);
+  adminRoutes(app, db, config);
   searchRoutes(app, db);
 
   const webDist = config.webDist;

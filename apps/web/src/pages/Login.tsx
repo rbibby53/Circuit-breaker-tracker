@@ -30,6 +30,9 @@ export function LoginPage() {
   const navigate = useNavigate();
   const [params] = useSearchParams();
   const [form, setForm] = useState({ username: '', password: '' });
+  const [showPassword, setShowPassword] = useState(false);
+  // With password sign-in off, the form stays for admins but tucked behind a button.
+  const adminsOnly = !!config.data && !config.data.localLogin && config.data.oidc.enabled;
   const login = useMutation({
     mutationFn: () => api.post('/api/auth/login', form),
     onSuccess: async () => {
@@ -62,11 +65,11 @@ export function LoginPage() {
               {config.data.oidc.label}
             </a>
             <div className="divider">
-              <span>or with a local account</span>
+              <span>{adminsOnly ? 'admins can also use a password' : 'or with a local account'}</span>
             </div>
           </>
         )}
-        <form onSubmit={submit} className="stack">
+        <form onSubmit={submit} className="stack" hidden={adminsOnly && !showPassword}>
           <Field label="Username or email">
             <input
               required
@@ -89,7 +92,12 @@ export function LoginPage() {
             Sign in
           </button>
         </form>
-        <p className="muted small">Forgot your password? Ask whoever invited you for a reset link.</p>
+        {adminsOnly && !showPassword && (
+          <button type="button" className="btn btn-block" onClick={() => setShowPassword(true)}>
+            Admin sign-in with a password
+          </button>
+        )}
+        {!adminsOnly && <p className="muted small">Forgot your password? Ask whoever invited you for a reset link.</p>}
       </section>
     </AuthShell>
   );

@@ -29,9 +29,6 @@ import { destroyUserSessions } from '../sessions';
 import { daysFromNow, hoursFromNow, newToken } from '../tokens';
 import { adminCount } from '../users';
 
-const INVITE_DAYS = 7;
-const RESET_HOURS = 48;
-
 function baseUrl(config: Config, req: FastifyRequest): string {
   return config.publicUrl ?? `${req.protocol}://${req.host}`;
 }
@@ -210,7 +207,7 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     if (!node || !canView(actor, node, access.grants)) throw notFound();
     assertCheck(canGrant(actor, node, { userId: -1, role: body.role, inviteLimit: body.inviteLimit }, access.grants));
     const { token, hash } = newToken();
-    const expiresAt = daysFromNow(INVITE_DAYS);
+    const expiresAt = daysFromNow(config.settings.get('inviteDays'));
     const r = db
       .prepare(
         'INSERT INTO invites (token_hash, location_id, role, invite_limit, note, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
@@ -450,7 +447,7 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     if (!actor.isAdmin && !canSeeUser(actor, theirs, access.nodes, access.grants)) throw notFound();
     assertCheck(canResetUser(actor, toActor(user), theirs, access.nodes, access.grants));
     const { token, hash } = newToken();
-    const expiresAt = hoursFromNow(RESET_HOURS);
+    const expiresAt = hoursFromNow(config.settings.get('resetHours'));
     db.prepare(
       'INSERT INTO reset_tokens (token_hash, user_id, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?)',
     ).run(hash, id, auth.user.id, now(), expiresAt);

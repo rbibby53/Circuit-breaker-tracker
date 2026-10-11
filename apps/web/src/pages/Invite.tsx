@@ -28,6 +28,7 @@ export function InvitePage() {
     retry: false,
   });
   const [form, setForm] = useState({ username: '', displayName: '', password: '' });
+  const localLogin = config.data?.localLogin ?? true;
 
   const accept = useMutation({
     mutationFn: (body: object) => api.post(`/api/invites/${token}/accept`, body),
@@ -107,12 +108,20 @@ export function InvitePage() {
                   <MicrosoftIcon />
                   Accept with a Microsoft work account
                 </a>
-                <div className="divider">
-                  <span>or create a local account</span>
-                </div>
+                {localLogin && (
+                  <div className="divider">
+                    <span>or create a local account</span>
+                  </div>
+                )}
               </>
             )}
-            <form onSubmit={submit} className="stack">
+            {!localLogin && !config.data?.oidc.enabled && (
+              <p className="error">
+                Password accounts are turned off and single sign-on is not set up yet. Ask an admin to finish setting up
+                sign-in.
+              </p>
+            )}
+            <form onSubmit={submit} className="stack" hidden={!localLogin}>
               <Field label="Your name">
                 <input
                   required

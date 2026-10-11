@@ -30,6 +30,7 @@ export function Layout() {
   const locations = useLocations();
   const config = useAuthConfig();
   const manages = me.user.isAdmin || (locations.data ?? []).some((l) => l.role === 'manager');
+  const appName = config.data?.appName ?? 'Circuit Breaker Tracker';
 
   return (
     <div className="app">
@@ -39,7 +40,7 @@ export function Layout() {
       <header className="topbar">
         <NavLink to="/" className="brand" aria-label="Circuit Breaker Tracker home">
           <Logo />
-          <span className="brand-text">Circuit Breaker Tracker</span>
+          <span className="brand-text">{appName}</span>
         </NavLink>
         <nav className="topnav" aria-label="Main">
           <NavLink to="/" end>
@@ -52,6 +53,7 @@ export function Layout() {
               <NavLink to="/activity">Activity</NavLink>
             </>
           )}
+          {me.user.isAdmin && <NavLink to="/settings">Settings</NavLink>}
         </nav>
         <Search />
         <div className="topbar-user">
@@ -90,7 +92,9 @@ export function Layout() {
         <Outlet />
       </div>
       <footer className="app-footer">
-        <span>Circuit Breaker Tracker {config.data?.version ? `v${config.data.version}` : ''}</span>
+        <span>
+          {appName} {config.data?.version ? `v${config.data.version}` : ''}
+        </span>
         <a href="https://github.com/rbibby53/Circuit-breaker-tracker" target="_blank" rel="noreferrer">
           Source on GitHub
         </a>
