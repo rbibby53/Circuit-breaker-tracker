@@ -4,6 +4,11 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+### Changed
+
+- Updated zod (request validation) to version 4. A few error messages for invalid input are
+  worded differently, e.g. "name: Too small: expected string to have >=1 characters".
+
 ## 1.0.0 — 2026-10-11
 
 The first stable release. Everything planned for 1.0 is in: scoped access for families and
