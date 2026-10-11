@@ -100,7 +100,13 @@ export function roomIndex(db: DB, actor: Actor, access: AccessData, rootId: numb
       circuit: circuitLabel({ layout: r.p_layout, spaces: r.p_spaces }, r),
       label: r.label,
       amps: ampsLabel(r),
-      tags: breakerTags({ protection: r.protection, critical: !!r.critical, backup: r.backup, isSpare: !!r.is_spare }),
+      tags: breakerTags({
+        protection: r.protection,
+        critical: !!r.critical,
+        backup: r.backup,
+        isSpare: !!r.is_spare,
+        device: r.device,
+      }),
       panelName: r.p_name,
       note: r.note_link,
     };

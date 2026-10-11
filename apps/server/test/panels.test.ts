@@ -117,6 +117,47 @@ describe('panels', () => {
     expect(history[1].details).toEqual(['Added 2 + 4 Dryer (30A)']);
   });
 
+  it('takes surge protectors in breaker spaces, with or without breakers of their own', async () => {
+    const h = await home();
+    const r = await save(h.admin, h.main, [
+      breaker('spd', 1, { device: 'surge', poles: 2, amps: 0, label: '', protection: 'gfci' }),
+      breaker('Kitchen + bath', 2, { device: 'surge', poles: 2, amps: 20 }),
+      breaker('Lights', 5),
+    ]);
+    expect(r.status).toBe(200);
+    const panel = (await h.admin.get(`/api/panels/${h.main}`)).body;
+    const [spd, combo, lights] = panel.breakers;
+    // GFCI/AFCI describe breakers, so a surge protector is always stored as standard.
+    expect(spd).toMatchObject({ device: 'surge', poles: 2, amps: 0, protection: 'standard' });
+    expect(combo).toMatchObject({ device: 'surge', amps: 20 });
+    expect(lights).toMatchObject({ device: 'breaker', amps: 20 });
+    const history = (await h.admin.get(`/api/panels/${h.main}/history`)).body;
+    expect(history[0].details).toEqual([
+      'Added 1 + 3 unlabelled (surge protector)',
+      'Added 2 + 4 Kitchen + bath (surge protector, 20A)',
+      'Added 5 Lights (20A)',
+    ]);
+
+    // A plain breaker still needs a rating.
+    expect((await save(h.admin, h.main, [breaker('Zero', 1, { amps: 0 })])).status).toBe(400);
+
+    // Changing a breaker into a surge protector shows in history.
+    const ids = panel.breakers.map((b: { id: number }) => b.id);
+    await save(h.admin, h.main, [
+      breaker('spd', 1, { id: ids[0], device: 'surge', poles: 2, amps: 0, label: '' }),
+      breaker('Kitchen + bath', 2, { id: ids[1], device: 'surge', poles: 2, amps: 20 }),
+      breaker('Lights', 5, { id: ids[2], device: 'surge', amps: 0 }),
+    ]);
+    const latest = (await h.admin.get(`/api/panels/${h.main}/history`)).body[0].details;
+    expect(latest).toEqual(['5 Lights: amps 20 → 0; type breaker → surge protector']);
+
+    // It prints, exports, and stays out of the circuit count on PDFs and CSVs.
+    const csv = (await h.admin.raw(`/api/panels/${h.main}/csv`)).body.toString('utf8').split('\r\n');
+    expect(csv[1]).toContain(',1 + 3,,2,Surge protector,,,');
+    expect((await h.admin.raw(`/api/panels/${h.main}/pdf`)).status).toBe(200);
+    expect((await h.admin.raw(`/api/panels/${h.main}/pdf?style=door`)).status).toBe(200);
+  });
+
   it('keeps tags a less-privileged editor cannot see when they save', async () => {
     const h = await home();
     await save(h.admin, h.main, [breaker('mixed', 1, { serves: [{ locationId: h.kitchen }, { locationId: h.bath }] })]);

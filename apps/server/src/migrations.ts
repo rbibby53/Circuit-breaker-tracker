@@ -210,4 +210,8 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE sessions ADD COLUMN ip TEXT;
   ALTER TABLE sessions ADD COLUMN method TEXT;
   `,
+  `
+  -- Surge protectors install in breaker spaces. amps is 0 when one has no breakers of its own.
+  ALTER TABLE breakers ADD COLUMN device TEXT NOT NULL DEFAULT 'breaker' CHECK (device IN ('breaker', 'surge'));
+  `,
 ];

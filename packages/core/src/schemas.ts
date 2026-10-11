@@ -1,6 +1,6 @@
 import { z } from 'zod';
 import { LOCATION_KINDS } from './locations';
-import { BACKUPS, MAIN_TYPES, MAX_SPACES, MIN_SPACES, PANEL_LAYOUTS, PROTECTIONS, SLOTS } from './panel';
+import { BACKUPS, DEVICES, MAIN_TYPES, MAX_SPACES, MIN_SPACES, PANEL_LAYOUTS, PROTECTIONS, SLOTS } from './panel';
 import { ROLES } from './roles';
 
 export const usernameSchema = z
@@ -124,24 +124,31 @@ export const servesInputSchema = z.object({
   note: optionalText(80),
 });
 
-export const breakerInputSchema = z.object({
-  id: z.number().int().positive().optional(),
-  /** Client-side key, echoed back so new breakers can be matched to their new ids. */
-  clientKey: z.string().min(1).max(64),
-  position: z.number().int().min(1).max(MAX_SPACES),
-  slot: z.enum(SLOTS).default('full'),
-  poles: z.number().int().min(1).max(3),
-  amps,
-  protection: z.enum(PROTECTIONS).default('standard'),
-  label: optionalText(80),
-  notes: optionalText(1000),
-  isSpare: z.boolean().default(false),
-  critical: z.boolean().default(false),
-  backup: z.enum(BACKUPS).default('none'),
-  serves: z.array(servesInputSchema).max(50).default([]),
-  /** What it powers, e.g. Lights, Outlets, Servers. Duplicates (any case) are dropped. */
-  tags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
-});
+export const breakerInputSchema = z
+  .object({
+    id: z.number().int().positive().optional(),
+    /** Client-side key, echoed back so new breakers can be matched to their new ids. */
+    clientKey: z.string().min(1).max(64),
+    position: z.number().int().min(1).max(MAX_SPACES),
+    slot: z.enum(SLOTS).default('full'),
+    poles: z.number().int().min(1).max(3),
+    /** 0 only for a surge protector without breakers of its own. */
+    amps: z.number().int().min(0).max(4000),
+    device: z.enum(DEVICES).default('breaker'),
+    protection: z.enum(PROTECTIONS).default('standard'),
+    label: optionalText(80),
+    notes: optionalText(1000),
+    isSpare: z.boolean().default(false),
+    critical: z.boolean().default(false),
+    backup: z.enum(BACKUPS).default('none'),
+    serves: z.array(servesInputSchema).max(50).default([]),
+    /** What it powers, e.g. Lights, Outlets, Servers. Duplicates (any case) are dropped. */
+    tags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
+  })
+  .refine((b) => b.amps > 0 || b.device === 'surge', {
+    message: 'A breaker needs a rating of at least 1 A.',
+    path: ['amps'],
+  });
 
 export const savePanelSchema = createPanelSchema.extend({
   /** The version the client last loaded. A mismatch means someone else saved first. */

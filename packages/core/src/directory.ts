@@ -8,12 +8,15 @@ import {
   rowsFor,
   type Backup,
   type BreakerShape,
+  type Device,
   type PanelShape,
   type Protection,
 } from './panel';
 
 export interface DirectoryBreaker extends BreakerShape {
   amps: number;
+  /** Absent means a breaker. */
+  device?: Device;
   protection: Protection;
   critical: boolean;
   backup: Backup;
@@ -104,6 +107,7 @@ export const DIRECTORY_TAGS = [
   { tag: 'AFCI', meaning: 'Arc-fault protected' },
   { tag: 'DF', meaning: 'Dual function (GFCI + AFCI)' },
   { tag: 'SPARE', meaning: 'Spare breaker, nothing connected' },
+  { tag: 'SPD', meaning: 'Surge protective device' },
 ] as const;
 
 export type DirectoryTag = (typeof DIRECTORY_TAGS)[number]['tag'];
@@ -117,9 +121,10 @@ const PROTECTION_TAG: Record<Protection, DirectoryTag | null> = {
 const BACKUP_TAG: Record<Backup, DirectoryTag | null> = { none: null, ups: 'UPS', generator: 'GEN' };
 
 export function breakerTags(
-  b: Pick<DirectoryBreaker, 'protection' | 'critical' | 'backup' | 'isSpare'>,
+  b: Pick<DirectoryBreaker, 'protection' | 'critical' | 'backup' | 'isSpare' | 'device'>,
 ): DirectoryTag[] {
   const out: DirectoryTag[] = [];
+  if (b.device === 'surge') out.push('SPD');
   if (b.isSpare) out.push('SPARE');
   if (b.critical) out.push('CRIT');
   const backup = BACKUP_TAG[b.backup];
@@ -129,7 +134,7 @@ export function breakerTags(
   return out;
 }
 
-/** "20A", or "2P 50A" for a multi-pole breaker. */
-export function ampsLabel(b: Pick<DirectoryBreaker, 'amps' | 'poles'>): string {
-  return `${b.poles > 1 ? `${b.poles}P ` : ''}${b.amps}A`;
+/** "20A", "2P 50A" for a multi-pole breaker, or "2P SPD" for a surge protector without breakers. */
+export function ampsLabel(b: Pick<DirectoryBreaker, 'amps' | 'poles' | 'device'>): string {
+  return `${b.poles > 1 ? `${b.poles}P ` : ''}${b.amps === 0 && b.device === 'surge' ? 'SPD' : `${b.amps}A`}`;
 }

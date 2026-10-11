@@ -4,6 +4,7 @@ import {
   validateLayout,
   type Backup,
   type BreakerInput,
+  type Device,
   type MainType,
   type PanelDetail,
   type PanelLayout,
@@ -24,7 +25,9 @@ export interface EditBreaker {
   position: number;
   slot: Slot;
   poles: number;
+  /** 0 for a surge protector with no breakers of its own. */
   amps: number;
+  device: Device;
   protection: Protection;
   label: string;
   notes: string;
@@ -71,6 +74,7 @@ export function fromDetail(p: PanelDetail): EditPanel {
       slot: b.slot,
       poles: b.poles,
       amps: b.amps,
+      device: b.device,
       protection: b.protection,
       label: b.label,
       notes: b.notes,
@@ -95,6 +99,7 @@ export function toRequest(doc: EditPanel, version: number, baselineFedFrom: numb
     slot: b.slot,
     poles: b.poles,
     amps: b.amps,
+    device: b.device,
     protection: b.protection,
     label: b.label,
     notes: b.notes,
@@ -151,6 +156,7 @@ export function addBreaker(doc: EditPanel, position: number, slot: Slot = 'full'
     slot,
     poles: 1,
     amps: 20,
+    device: 'breaker',
     protection: 'standard',
     label: '',
     notes: '',

@@ -207,11 +207,11 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
 
       const update = db.prepare(
         `UPDATE breakers SET position = ?, slot = ?, poles = ?, amps = ?, protection = ?, label = ?, notes = ?,
-           is_spare = ?, critical = ?, backup = ? WHERE id = ?`,
+           is_spare = ?, critical = ?, backup = ?, device = ? WHERE id = ?`,
       );
       const insert = db.prepare(
-        `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const clearServes = db.prepare('DELETE FROM breaker_serves WHERE breaker_id = ?');
       const addServe = db.prepare(
@@ -224,12 +224,14 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
           b.slot,
           b.poles,
           b.amps,
-          b.protection,
+          // GFCI/AFCI describe breakers; a surge protector has none of its own.
+          b.device === 'surge' ? 'standard' : b.protection,
           b.label,
           b.notes,
           b.isSpare ? 1 : 0,
           b.critical ? 1 : 0,
           b.backup,
+          b.device,
         ] as const;
         let id: number;
         if (b.id !== undefined) {
@@ -376,8 +378,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         );
       const panelId = Number(r.lastInsertRowid);
       const insert = db.prepare(
-        `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const addServe = db.prepare('INSERT INTO breaker_serves (breaker_id, location_id, note) VALUES (?, ?, ?)');
       for (const b of breakers) {
@@ -394,6 +396,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
             b.is_spare,
             b.critical,
             b.backup,
+            b.device,
           ).lastInsertRowid,
         );
         setTags(
@@ -534,6 +537,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         circuit: circuitLabel({ layout: r.p_layout, spaces: r.p_spaces }, r),
         label: r.label,
         amps: r.amps,
+        device: r.device,
         poles: r.poles,
         protection: r.protection,
         critical: !!r.critical,

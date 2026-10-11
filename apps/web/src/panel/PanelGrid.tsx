@@ -152,13 +152,13 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
               <button
                 key={b.key}
                 type="button"
-                className={`pg-breaker${left ? '' : ' is-right'}${tandem ? ' is-tandem' : ''}${b.isSpare ? ' is-spare' : ''}${selected ? ' is-selected' : ''}${dim ? ' is-dim' : ''}`}
+                className={`pg-breaker${left ? '' : ' is-right'}${tandem ? ' is-tandem' : ''}${b.isSpare ? ' is-spare' : ''}${b.device === 'surge' ? ' is-surge' : ''}${selected ? ' is-selected' : ''}${dim ? ' is-dim' : ''}`}
                 style={{
                   gridColumn: gridCol(column),
                   gridRow: `${row} / span ${b.poles}`,
                   alignSelf: tandem ? (b.slot === 'A' ? 'start' : 'end') : 'stretch',
                 }}
-                aria-label={`Circuit ${circuitLabel(doc, b)}${phases.length ? `, phase ${phases.join(' ')}` : ''}, ${b.label || 'unlabelled'}, ${b.amps} amps${b.critical ? ', critical' : ''}${b.backup !== 'none' ? `, on ${b.backup}` : ''}`}
+                aria-label={`Circuit ${circuitLabel(doc, b)}${phases.length ? `, phase ${phases.join(' ')}` : ''}, ${b.device === 'surge' ? 'surge protector, ' : ''}${b.label || 'unlabelled'}, ${b.amps ? `${b.amps} amps` : 'no breaker'}${b.critical ? ', critical' : ''}${b.backup !== 'none' ? `, on ${b.backup}` : ''}`}
                 aria-pressed={selected}
                 draggable={!readOnly}
                 onDragStart={(e) => {
@@ -176,7 +176,10 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
                 </span>
                 <span className="pg-text">
                   <span className="pg-label-row">
-                    <span className="pg-label">{b.label || (b.isSpare ? 'Spare' : 'Unlabelled')}</span>
+                    <span className="pg-label">
+                      {b.label || (b.device === 'surge' ? 'Surge protector' : b.isSpare ? 'Spare' : 'Unlabelled')}
+                    </span>
+                    {b.device === 'surge' && <span className="badge badge-spd">SPD</span>}
                     {b.critical && <span className="badge badge-crit">CRIT</span>}
                     {b.backup === 'ups' && <span className="badge badge-ups">UPS</span>}
                     {b.backup === 'generator' && <span className="badge badge-gen">GEN</span>}
@@ -190,7 +193,7 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
                   )}
                 </span>
                 <span className="pg-amps">
-                  <span>{b.amps}A</span>
+                  <span>{b.amps === 0 && b.device === 'surge' ? 'SPD' : `${b.amps}A`}</span>
                   {!tandem && <span className="pg-test" style={{ background: test ?? 'transparent' }} />}
                 </span>
                 <span className="pg-handles">

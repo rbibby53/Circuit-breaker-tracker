@@ -27,6 +27,17 @@ export type Backup = (typeof BACKUPS)[number];
 export const BACKUP_LABELS: Record<Backup, string> = { none: 'None', ups: 'UPS', generator: 'Generator' };
 
 /** `full` takes the whole space; `A`/`B` are the two halves of a tandem space. */
+/**
+ * What sits in the spaces. A surge protector (SPD) installs like a breaker; some include
+ * breakers (their rating is the amps), others protect only (amps 0).
+ */
+export const DEVICES = ['breaker', 'surge'] as const;
+export type Device = (typeof DEVICES)[number];
+export const DEVICE_LABELS: Record<Device, string> = { breaker: 'Breaker', surge: 'Surge protector' };
+
+/** A surge protector with no breaker of its own, so no circuit and no rating. */
+export const isSurgeOnly = (b: { device?: Device; amps: number }) => b.device === 'surge' && b.amps === 0;
+
 export const SLOTS = ['full', 'A', 'B'] as const;
 export type Slot = (typeof SLOTS)[number];
 

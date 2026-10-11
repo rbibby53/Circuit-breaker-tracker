@@ -77,4 +77,12 @@ describe('tags and amps', () => {
     expect(ampsLabel({ amps: 20, poles: 1 })).toBe('20A');
     expect(ampsLabel({ amps: 50, poles: 2 })).toBe('2P 50A');
   });
+
+  it('marks surge protectors and shows SPD instead of a rating when they have no breakers', () => {
+    const spd = { protection: 'standard' as const, critical: false, backup: 'none' as const, isSpare: false };
+    expect(breakerTags({ ...spd, device: 'surge' })).toEqual(['SPD']);
+    expect(ampsLabel({ amps: 0, poles: 2, device: 'surge' })).toBe('2P SPD');
+    expect(ampsLabel({ amps: 20, poles: 2, device: 'surge' })).toBe('2P 20A');
+    expect(ampsLabel({ amps: 20, poles: 1 })).toBe('20A');
+  });
 });

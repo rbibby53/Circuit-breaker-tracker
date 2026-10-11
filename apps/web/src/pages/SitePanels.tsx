@@ -1,6 +1,7 @@
 import {
   AVAILABLE_LAYOUTS,
   BACKUP_LABELS,
+  DEVICE_LABELS,
   LAYOUT_DEFAULTS,
   LAYOUT_LABELS,
   PANEL_LAYOUTS,
@@ -10,6 +11,7 @@ import {
   type PanelLayout,
   type PanelSummary,
   type ServedByItem,
+  ampsLabel,
 } from '@cbt/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
@@ -233,7 +235,9 @@ export function ServedBy({ node }: { node: TreeNode }) {
               <tr key={i.breakerId}>
                 <td className="mono strong">{i.circuit}</td>
                 <td>
-                  <span className="strong">{i.label || 'Unlabelled'}</span>{' '}
+                  <span className="strong">
+                    {i.label || (i.device === 'surge' ? DEVICE_LABELS.surge : 'Unlabelled')}
+                  </span>{' '}
                   {i.critical && <span className="badge badge-crit">CRIT</span>}
                   {i.backup !== 'none' && (
                     <span className={`badge badge-${i.backup === 'ups' ? 'ups' : 'gen'}`}>
@@ -241,8 +245,8 @@ export function ServedBy({ node }: { node: TreeNode }) {
                     </span>
                   )}
                 </td>
-                <td className="mono">{i.amps}A</td>
-                <td>{PROTECTION_LABELS[i.protection]}</td>
+                <td className="mono">{ampsLabel(i)}</td>
+                <td>{i.device === 'surge' ? DEVICE_LABELS.surge : PROTECTION_LABELS[i.protection]}</td>
                 <td>
                   <div className="cell-stack">
                     {i.canViewPanel ? (

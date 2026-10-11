@@ -15,6 +15,7 @@ import { PANEL_PRINT_STYLES, PrintButton } from '../components/PrintDialog';
 import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { Inspector } from '../panel/Inspector';
+import { LoadSummary } from '../panel/LoadSummary';
 import { PanelGrid } from '../panel/PanelGrid';
 import { PanelSettings } from '../panel/PanelSettings';
 import { siteOf } from '../panel/serves';
@@ -265,6 +266,7 @@ function Editor({
   const chain = ancestry(byId, initial.locationId);
   const used = new Set(doc.breakers.flatMap((b) => positionsOf(doc, b)));
   const critical = doc.breakers.filter((b) => b.critical).length;
+  const surgeCount = doc.breakers.filter((b) => b.device === 'surge').length;
   const onBackup = doc.breakers.filter((b) => b.backup !== 'none').length;
 
   // Save pending edits first so the PDF matches what is on screen.
@@ -403,6 +405,7 @@ function Editor({
       <div className="editor-body">
         <section className="editor-center" aria-label="Panel">
           <Legend />
+          <LoadSummary panel={doc} breakers={doc.breakers} mainAmps={doc.mainType === 'lugs' ? null : doc.mainAmps} />
           <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
           <PanelGrid
             doc={doc}
@@ -429,7 +432,8 @@ function Editor({
             }
           />
           <p className="panel-stats">
-            {used.size} of {doc.spaces} spaces filled · {doc.breakers.length} breakers · {critical} critical ·{' '}
+            {used.size} of {doc.spaces} spaces filled · {doc.breakers.length - surgeCount} breakers
+            {surgeCount > 0 && ` · ${surgeCount} surge protector${surgeCount === 1 ? '' : 's'}`} · {critical} critical ·{' '}
             {onBackup} on backup power
           </p>
         </section>
