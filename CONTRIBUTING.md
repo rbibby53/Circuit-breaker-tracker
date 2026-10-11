@@ -9,7 +9,7 @@ For anything bigger than a small fix, open an issue first so we can agree on the
 
 ## Set up
 
-Requirements: Node 22 and pnpm 12 (`npm install -g pnpm@12`; the exact version is pinned in `package.json`).
+Requirements: Node 24 (22 or newer works) and pnpm 12 (`npm install -g pnpm@12`; the exact version is pinned in `package.json`).
 
 ```sh
 pnpm install

@@ -24,7 +24,7 @@ both the browser and the server.
 | Part       | Choice                                                      | Why                                                                              |
 | ---------- | ----------------------------------------------------------- | -------------------------------------------------------------------------------- |
 | Frontend   | React + Vite, TanStack Router and Query, dnd-kit            | Mature, fast, good drag-and-drop for moving breakers                             |
-| Backend    | Fastify on Node 22                                          | Small, fast, schema-validated routes                                             |
+| Backend    | Fastify on Node 24 LTS                                      | Small, fast, schema-validated routes                                             |
 | Database   | SQLite (better-sqlite3) with plain SQL migrations           | One file on a volume, easy backups; the tree queries are hand-written SQL anyway |
 | Validation | Zod schemas shared by client and server                     | One definition of what a valid panel is                                          |
 | PDF        | PDFKit driven by the shared layout engine                   | Vector output that matches the screen, no headless Chrome (image stays ~150 MB)  |

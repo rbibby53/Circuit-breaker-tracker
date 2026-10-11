@@ -33,6 +33,7 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 - The footer shows real version numbers: `1.2.3` for releases and `1.2.3-dev.<commit>` for
   images built from `main`, instead of `vlatest`.
 - Development uses pnpm 12.
+- The Docker image runs on Node 24, the long-term-support release.
 - Docker only needs `PORT` and the `/data` volume. Environment variables still work and now pin
   the matching setting, which shows as locked on the Settings page.
 - The Unraid template is down to the port, the data path and the optional first admin.

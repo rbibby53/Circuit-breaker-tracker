@@ -23,3 +23,7 @@ updates:
     directory: /
     schedule:
       interval: monthly
+    ignore:
+      # Move between Node majors by hand, to long-term-support releases only (even numbers).
+      - dependency-name: node
+        update-types: ['version-update:semver-major']
