@@ -31,11 +31,13 @@ interface Props {
   onMove: (key: string, position: number, slot?: Slot) => void;
   /** Sub-panels each saved breaker feeds, by breaker id. */
   feeds: Map<number, string[]>;
+  /** When set, breakers without this tag are dimmed. */
+  highlightTag?: string | null;
 }
 
 const DRAG_TYPE = 'application/x-cbt-breaker';
 
-export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, onMove, feeds }: Props) {
+export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, onMove, feeds, highlightTag }: Props) {
   const cols = columnsFor(doc);
   const rows = rowsFor(doc);
   const shapes = doc.breakers.map((b) => ({ key: b.key, position: b.position, slot: b.slot, poles: b.poles }));
@@ -145,11 +147,12 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
             const test = TEST_COLOR[b.protection];
             const selected = b.key === selectedKey;
             const phases = phasesOf(doc, b);
+            const dim = !!highlightTag && !b.tags.some((t) => t.toLowerCase() === highlightTag.toLowerCase());
             return (
               <button
                 key={b.key}
                 type="button"
-                className={`pg-breaker${left ? '' : ' is-right'}${tandem ? ' is-tandem' : ''}${b.isSpare ? ' is-spare' : ''}${selected ? ' is-selected' : ''}`}
+                className={`pg-breaker${left ? '' : ' is-right'}${tandem ? ' is-tandem' : ''}${b.isSpare ? ' is-spare' : ''}${selected ? ' is-selected' : ''}${dim ? ' is-dim' : ''}`}
                 style={{
                   gridColumn: gridCol(column),
                   gridRow: `${row} / span ${b.poles}`,

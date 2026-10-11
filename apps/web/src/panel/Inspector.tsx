@@ -18,6 +18,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import type { TreeNode } from '../tree';
 import { servesByFloor } from './serves';
 import { ServesPicker } from './ServesPicker';
+import { TagInput } from './TagInput';
 import { sizeOf, validStarts, type EditBreaker, type EditPanel, type Size } from './state';
 
 interface Props {
@@ -82,6 +83,8 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
               .filter(Boolean)
               .join(', ') || 'None'}
           </dd>
+          <dt>Tags</dt>
+          <dd>{b.tags.join(', ') || 'None'}</dd>
           <dt>Serves</dt>
           <dd>
             {groups.flatMap((g) => g.items.map((i) => (g.floor ? `${g.floor} · ${i.label}` : i.label))).join(', ') ||
@@ -245,6 +248,8 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
           </div>
         )}
       </div>
+
+      <TagInput tags={b.tags} onChange={(tags) => onPatch({ tags })} />
 
       <label className="field">
         <span className="field-label">Notes</span>

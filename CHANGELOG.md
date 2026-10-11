@@ -6,6 +6,11 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Breaker tags** for what a breaker powers, such as Lights, Outlets or Servers. You add them in
+  the breaker details, with suggestions from the tags already in use. Header search finds
+  breakers by tag, and a "Highlight" bar on each panel dims every breaker without the chosen tag.
+  Tags are kept in history, copied with a panel, and included in CSV exports and on public pages.
+
 - **Two-step sign-in** for password accounts with any authenticator app. It comes with ten
   one-time recovery codes. Password reset links still ask for a code, and managers or admins
   can turn it off for someone who lost their phone.

@@ -89,6 +89,7 @@ export function Search() {
                         <span className="muted small block">
                           {b.panelName}
                           {b.serves ? ` · serves ${b.serves}` : ''}
+                          {b.tags.length > 0 && ` · ${b.tags.join(', ')}`}
                           {!b.canViewPanel && ' · panel outside your access'}
                         </span>
                       </span>

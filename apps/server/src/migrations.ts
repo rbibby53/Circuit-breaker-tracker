@@ -195,4 +195,13 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE panels ADD COLUMN public_token TEXT;
   CREATE UNIQUE INDEX panels_public_token ON panels (public_token) WHERE public_token IS NOT NULL;
   `,
+  `
+  -- Free-form labels for what a breaker powers (Lights, Outlets, Servers…), for search.
+  CREATE TABLE breaker_tags (
+    breaker_id INTEGER NOT NULL REFERENCES breakers (id) ON DELETE CASCADE,
+    tag        TEXT NOT NULL COLLATE NOCASE,
+    PRIMARY KEY (breaker_id, tag)
+  );
+  CREATE INDEX breaker_tags_tag ON breaker_tags (tag);
+  `,
 ];

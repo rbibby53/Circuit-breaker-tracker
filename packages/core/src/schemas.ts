@@ -126,6 +126,8 @@ export const breakerInputSchema = z.object({
   critical: z.boolean().default(false),
   backup: z.enum(BACKUPS).default('none'),
   serves: z.array(servesInputSchema).max(50).default([]),
+  /** What it powers, e.g. Lights, Outlets, Servers. Duplicates (any case) are dropped. */
+  tags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
 });
 
 export const savePanelSchema = createPanelSchema.extend({

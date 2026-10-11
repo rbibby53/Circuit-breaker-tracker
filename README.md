@@ -44,6 +44,9 @@ as a single Docker container with its data in one SQLite file.
     the whole site.
   - Changes save automatically, with undo and redo (Ctrl+Z / Ctrl+Shift+Z). If two people
     edit at once, the second save is refused instead of silently overwriting.
+  - **Tags** for what a breaker powers (Lights, Outlets, Servers…), suggested from tags already
+    in use. Search finds breakers by tag, and a tag bar on each panel highlights every breaker
+    with that tag.
   - **History** shows every change in plain words.
 - **Sub-panels:** set which breaker feeds a panel. Anyone who can see a panel also sees
   what feeds it, all the way up to the service, even when the upstream panels are outside

@@ -111,6 +111,8 @@ function Editor({
   const [saveError, setSaveError] = useState<string | null>(null);
   const [showSettings, setShowSettings] = useState(false);
   const [showHistory, setShowHistory] = useState(false);
+  // Highlight the breakers with one tag, e.g. every "Servers" circuit.
+  const [tagFilter, setTagFilter] = useState<string | null>(null);
 
   const docRef = useRef(doc);
   const version = useRef(initial.version);
@@ -197,6 +199,7 @@ function Editor({
       setSaveState(editSeq.current === seq ? 'saved' : 'pending');
       void qc.invalidateQueries({ queryKey: ['panels'] });
       void qc.invalidateQueries({ queryKey: ['panel-history', initial.id] });
+      void qc.invalidateQueries({ queryKey: ['tags'] });
     } catch (err) {
       if (err instanceof ApiError && err.status === 409) setSaveState('conflict');
       else {
@@ -400,8 +403,10 @@ function Editor({
       <div className="editor-body">
         <section className="editor-center" aria-label="Panel">
           <Legend />
+          <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
           <PanelGrid
             doc={doc}
+            highlightTag={tagFilter}
             byId={byId}
             selectedKey={selected}
             readOnly={readOnly}
@@ -559,5 +564,46 @@ function History({ panelId }: { panelId: number }) {
         ))}
       </ol>
     </section>
+  );
+}
+
+/** Tags used on this panel; picking one dims every breaker without it. */
+function TagFilter({
+  breakers,
+  value,
+  onChange,
+}: {
+  breakers: { tags: string[] }[];
+  value: string | null;
+  onChange: (tag: string | null) => void;
+}) {
+  const counts = new Map<string, { tag: string; n: number }>();
+  for (const b of breakers) {
+    for (const t of b.tags) {
+      const c = counts.get(t.toLowerCase()) ?? { tag: t, n: 0 };
+      c.n++;
+      counts.set(t.toLowerCase(), c);
+    }
+  }
+  const tags = [...counts.values()].sort((a, b) => b.n - a.n || a.tag.localeCompare(b.tag));
+  if (tags.length === 0) return null;
+  return (
+    <div className="tag-filter" role="group" aria-label="Highlight by tag">
+      <span className="small muted">Highlight:</span>
+      {tags.map(({ tag, n }) => {
+        const on = value?.toLowerCase() === tag.toLowerCase();
+        return (
+          <button
+            key={tag}
+            type="button"
+            className="btn btn-sm"
+            aria-pressed={on}
+            onClick={() => onChange(on ? null : tag)}
+          >
+            {tag} <span className="muted">{n}</span>
+          </button>
+        );
+      })}
+    </div>
   );
 }

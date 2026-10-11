@@ -1,8 +1,8 @@
-import { canView, circuitLabel, visibleLocations, type SearchResponse } from '@cbt/core';
+import { canView, circuitLabel, visibleLocations, type SearchResponse, type TagCount } from '@cbt/core';
 import type { FastifyInstance } from 'fastify';
 import { actorOf, requireAuth } from '../context';
 import type { DB } from '../db';
-import { allPanels, canViewPanel, type BreakerRow, type PanelRow } from '../panels';
+import { allPanels, canViewPanel, tagsOf, type BreakerRow, type PanelRow } from '../panels';
 import { AccessData } from '../repo';
 
 const LIMIT = 8;
@@ -42,7 +42,14 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
       .slice(0, LIMIT)
       .map((p) => ({ id: p.id, name: p.name, path: access.pathLabel(p.location_id) }));
 
-    // Breakers matching by label or notes, or serving a matching place.
+    // Breakers matching by tag, label or notes, or serving a matching place. Tags come first:
+    // searching "servers" should list every breaker tagged Servers.
+    const byTag = db
+      .prepare(
+        `SELECT b.* FROM breaker_tags t JOIN breakers b ON b.id = t.breaker_id
+         WHERE t.tag LIKE ? ESCAPE '\\' ORDER BY b.panel_id, b.position LIMIT 200`,
+      )
+      .all(`${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`) as BreakerRow[];
     const byText = db
       .prepare("SELECT * FROM breakers WHERE label LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' LIMIT 200")
       .all(pattern, pattern) as BreakerRow[];
@@ -83,11 +90,37 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
         amps: b.amps,
         critical: !!b.critical,
         serves: servedName,
+        tags: tagsOf(db, [b.id]).map((t) => t.tag),
       });
     };
+    for (const b of byTag) add(b, null);
     for (const b of byText) add(b, null);
     for (const b of byPlace) add(b, access.byId.get(b.served)?.name ?? null);
 
     return { locations, panels, breakers };
+  });
+
+  /** Tags on breakers the person can see, most used first, for suggestions and filters. */
+  app.get('/api/tags', async (req): Promise<TagCount[]> => {
+    const auth = requireAuth(req);
+    const actor = actorOf(auth);
+    const access = new AccessData(db);
+    const visiblePanels = new Set(
+      allPanels(db)
+        .filter((p) => canViewPanel(actor, access, p))
+        .map((p) => p.id),
+    );
+    const rows = db
+      .prepare('SELECT b.panel_id, t.tag FROM breaker_tags t JOIN breakers b ON b.id = t.breaker_id')
+      .all() as { panel_id: number; tag: string }[];
+    const counts = new Map<string, TagCount>();
+    for (const r of rows) {
+      if (!visiblePanels.has(r.panel_id)) continue;
+      const key = r.tag.toLowerCase();
+      const c = counts.get(key) ?? { tag: r.tag, count: 0 };
+      c.count++;
+      counts.set(key, c);
+    }
+    return [...counts.values()].sort((a, b) => b.count - a.count || a.tag.localeCompare(b.tag));
   });
 }

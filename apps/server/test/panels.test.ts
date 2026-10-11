@@ -342,3 +342,61 @@ describe('duplicating a panel', () => {
     );
   });
 });
+
+describe('breaker tags', () => {
+  it('saves tags without duplicates, shows them in history, and copies them with the panel', async () => {
+    const h = await home();
+    const r = await save(h.admin, h.main, [
+      breaker('Rack', 1, { tags: ['Servers', ' servers ', 'Network', '  UPS  load '] }),
+      breaker('Porch', 2, { tags: ['Lights'] }),
+    ]);
+    expect(r.status).toBe(200);
+    const rack = r.body.panel.breakers.find((b: any) => b.label === 'Rack');
+    expect(rack.tags).toEqual(['Network', 'Servers', 'UPS load']);
+
+    const cur = (await h.admin.get(`/api/panels/${h.main}`)).body;
+    await save(h.admin, h.main, [
+      { ...breaker('Rack', 1), id: rack.id, tags: ['Servers'] },
+      { ...breaker('Porch', 2), id: cur.breakers[1].id, tags: ['Lights'] },
+    ]);
+    const history = (await h.admin.get(`/api/panels/${h.main}/history`)).body;
+    expect(history[0].details).toContain('1 Rack: tags Network, Servers, UPS load → Servers');
+
+    const copy = await h.admin.post(`/api/panels/${h.main}/duplicate`, { name: 'Copy', locationId: h.garage });
+    const copied = (await h.admin.get(`/api/panels/${copy.body.id}`)).body;
+    expect(copied.breakers.map((b: any) => b.tags)).toEqual([['Servers'], ['Lights']]);
+  });
+
+  it('lists tags in use and finds breakers by tag', async () => {
+    const h = await home();
+    await save(h.admin, h.main, [
+      breaker('Rack A', 1, { tags: ['Servers'] }),
+      breaker('Rack B', 2, { tags: ['servers', 'Network'] }),
+      breaker('Porch', 3, { tags: ['Lights'] }),
+    ]);
+    expect((await h.admin.get('/api/tags')).body).toEqual([
+      { tag: 'Servers', count: 2 },
+      { tag: 'Lights', count: 1 },
+      { tag: 'Network', count: 1 },
+    ]);
+    const found = (await h.admin.get('/api/search?q=serv')).body.breakers;
+    expect(found.map((b: any) => [b.label, b.tags])).toEqual([
+      ['Rack A', ['Servers']],
+      ['Rack B', ['Network', 'servers']],
+    ]);
+    // Someone who cannot see the panel sees none of its tags.
+    const work = await createLocation(h.admin, null, 'company', 'Work');
+    const outsider = await invite(app, h.admin, work, 'viewer', 'outsider');
+    expect((await outsider.get('/api/tags')).body).toEqual([]);
+  });
+
+  it('refuses too many or too long tags', async () => {
+    const h = await home();
+    const many = await save(h.admin, h.main, [
+      breaker('A', 1, { tags: Array.from({ length: 11 }, (_, i) => `t${i}`) }),
+    ]);
+    expect(many.status).toBe(400);
+    const long = await save(h.admin, h.main, [breaker('A', 1, { tags: ['x'.repeat(31)] })]);
+    expect(long.status).toBe(400);
+  });
+});
