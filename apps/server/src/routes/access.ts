@@ -350,11 +350,20 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
 
   app.patch('/api/users/:id', async (req) => {
     const auth = requireAuth(req);
-    requireAdmin(auth);
+    const actor = actorOf(auth);
     const id = idParam((req.params as { id: string }).id);
     const body = parse(updateUserSchema, req.body);
     const user = getUser(db, id);
     if (!user) throw notFound();
+    // Admin rights and disabling are for admins. A name or email (for their picture) can also
+    // be set by managers who could send this person a reset link.
+    if (body.isAdmin !== undefined || body.disabled !== undefined) requireAdmin(auth);
+    else if (!actor.isAdmin) {
+      const access = new AccessData(db);
+      const theirs = access.grants.filter((g) => g.userId === id);
+      if (!canSeeUser(actor, theirs, access.nodes, access.grants)) throw notFound();
+      assertCheck(canResetUser(actor, toActor(user), theirs, access.nodes, access.grants));
+    }
     if (id === auth.user.id && (body.isAdmin === false || body.disabled === true)) {
       throw badRequest('You cannot remove your own admin rights or disable yourself.');
     }
@@ -366,7 +375,7 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     }
     const next = {
       displayName: body.displayName ?? user.display_name,
-      email: body.email === undefined ? user.email : body.email,
+      email: body.email === undefined ? user.email : body.email || null,
       isAdmin: body.isAdmin ?? !!user.is_admin,
       disabled: body.disabled ?? !!user.disabled,
     };

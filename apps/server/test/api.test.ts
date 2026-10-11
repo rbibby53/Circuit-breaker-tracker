@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
-import { completeOidcLogin } from '../src/routes/auth';
+import { completeOidcLogin, ssoEmail } from '../src/routes/auth';
 import type { DB } from '../src/db';
 import { Client, PASSWORD, createLocation, invite, setupAdmin, testApp } from './helpers';
 
@@ -266,6 +266,48 @@ describe('single sign-on', () => {
     const roommateId = (await s.roommate.get('/api/auth/me')).body.user.id;
     await s.admin.patch(`/api/users/${roommateId}`, { email: 'sup@ksu.example' });
     await expect(completeOidcLogin(db, claims, { inviteToken: null, linkUserId: null })).rejects.toThrow(/invite/);
+  });
+
+  it('reads the email from preferred_username when Entra sends no email claim', () => {
+    expect(ssoEmail({ email: null, preferredUsername: 'Ryan.B@Contoso.com' })).toBe('ryan.b@contoso.com');
+    expect(ssoEmail({ email: 'Mail@Contoso.com', preferredUsername: 'upn@contoso.com' })).toBe('mail@contoso.com');
+    expect(ssoEmail({ email: null, preferredUsername: 'ryan' })).toBeNull();
+  });
+
+  it("fills in a missing email on sign-in or linking, without overwriting or taking someone else's", async () => {
+    const s = await scenario();
+    const emailOf = (id: number) =>
+      (db.prepare('SELECT email FROM users WHERE id = ?').get(id) as { email: string | null }).email;
+    const link = (await s.admin.post(`/api/locations/${s.campus}/invites`, { role: 'viewer' })).body.url as string;
+    const noEmail = { ...claims, email: null, preferredUsername: 'Sup@KSU.example' };
+    const first = await completeOidcLogin(db, noEmail, { inviteToken: link.split('/invite/')[1]!, linkUserId: null });
+    expect(emailOf(first.userId)).toBe('sup@ksu.example');
+
+    // Someone who signed in before emails were picked up gets theirs on the next sign-in.
+    db.prepare('UPDATE users SET email = NULL WHERE id = ?').run(first.userId);
+    await completeOidcLogin(db, noEmail, { inviteToken: null, linkUserId: null });
+    expect(emailOf(first.userId)).toBe('sup@ksu.example');
+
+    // An email the person chose is kept.
+    db.prepare("UPDATE users SET email = 'chosen@example.com' WHERE id = ?").run(first.userId);
+    await completeOidcLogin(db, noEmail, { inviteToken: null, linkUserId: null });
+    expect(emailOf(first.userId)).toBe('chosen@example.com');
+
+    // Linking Microsoft to an existing account fills it in, unless another account uses it.
+    const roommateId = (await s.roommate.get('/api/auth/me')).body.user.id;
+    await completeOidcLogin(
+      db,
+      { ...claims, subject: 'room', email: 'roomie@example.com' },
+      { inviteToken: null, linkUserId: roommateId },
+    );
+    expect(emailOf(roommateId)).toBe('roomie@example.com');
+    const supervisorId = (await s.supervisor.get('/api/auth/me')).body.user.id;
+    await completeOidcLogin(
+      db,
+      { ...claims, subject: 'sv', email: 'chosen@example.com' },
+      { inviteToken: null, linkUserId: supervisorId },
+    );
+    expect(emailOf(supervisorId)).toBeNull();
   });
 
   it('is hidden when not configured', async () => {

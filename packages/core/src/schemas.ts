@@ -93,7 +93,11 @@ export const resetPasswordSchema = z.object({
 
 export const updateUserSchema = z.object({
   displayName: displayNameSchema.optional(),
-  email: z.string().trim().email().max(200).nullable().optional(),
+  /** An empty string clears it. */
+  email: z
+    .union([z.literal(''), z.string().trim().toLowerCase().email().max(200)])
+    .nullable()
+    .optional(),
   isAdmin: z.boolean().optional(),
   disabled: z.boolean().optional(),
 });

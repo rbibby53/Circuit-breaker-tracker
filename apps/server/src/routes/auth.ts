@@ -222,6 +222,28 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
 }
 
 /**
+ * The email an SSO sign-in vouches for. Entra ID often leaves out the `email` claim and sends
+ * the address as `preferred_username` (the sign-in name), so that is used when it is an email.
+ */
+export function ssoEmail(claims: Pick<OidcClaims, 'email' | 'preferredUsername'>): string | null {
+  const isEmail = (v: string | null | undefined): v is string => !!v && /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(v.trim());
+  const email = isEmail(claims.email)
+    ? claims.email
+    : isEmail(claims.preferredUsername)
+      ? claims.preferredUsername
+      : null;
+  return email ? email.trim().toLowerCase() : null;
+}
+
+/** Give an account the SSO email when it has none yet and nobody else uses it. Never overwrites. */
+function fillEmail(db: DB, userId: number, email: string | null): void {
+  if (!email) return;
+  db.prepare(
+    'UPDATE users SET email = ? WHERE id = ? AND email IS NULL AND NOT EXISTS (SELECT 1 FROM users WHERE email = ?)',
+  ).run(email, userId, email);
+}
+
+/**
  * Decide what an SSO sign-in means: an existing linked account, linking to the signed-in
  * user, or a new account created from an invite. Identities are matched by issuer and
  * subject, never by email.
@@ -234,6 +256,7 @@ export async function completeOidcLogin(
   const linked = db
     .prepare('SELECT user_id FROM user_identities WHERE issuer = ? AND subject = ?')
     .get(claims.issuer, claims.subject) as { user_id: number } | undefined;
+  const email = ssoEmail(claims);
 
   if (state.linkUserId) {
     if (linked && linked.user_id !== state.linkUserId) {
@@ -242,7 +265,7 @@ export async function completeOidcLogin(
     if (!linked) {
       db.prepare(
         'INSERT INTO user_identities (user_id, provider, issuer, subject, email, linked_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(state.linkUserId, 'oidc', claims.issuer, claims.subject, claims.email, now());
+      ).run(state.linkUserId, 'oidc', claims.issuer, claims.subject, email, now());
       audit(db, null, {
         action: 'user.link',
         entity: 'user',
@@ -250,6 +273,7 @@ export async function completeOidcLogin(
         summary: 'Linked a single sign-on account',
       });
     }
+    fillEmail(db, state.linkUserId, email);
     return { userId: state.linkUserId, redirect: '/account?linked=1' };
   }
 
@@ -260,15 +284,15 @@ export async function completeOidcLogin(
     const { invite, access } = usableInvite(db, state.inviteToken);
     if (!user) {
       const base = claims.preferredUsername ?? claims.email ?? `sso-${claims.subject.slice(0, 8)}`;
-      const emailFree = claims.email && !db.prepare('SELECT 1 FROM users WHERE email = ?').get(claims.email);
       user = await createUser(db, {
         username: uniqueUsername(db, base),
         displayName: claims.name ?? claims.preferredUsername ?? claims.email ?? 'New user',
-        email: emailFree ? claims.email : null,
+        email: null,
       });
+      fillEmail(db, user.id, email);
       db.prepare(
         'INSERT INTO user_identities (user_id, provider, issuer, subject, email, linked_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(user.id, 'oidc', claims.issuer, claims.subject, claims.email, now());
+      ).run(user.id, 'oidc', claims.issuer, claims.subject, email, now());
       audit(db, null, {
         action: 'user.create',
         entity: 'user',
@@ -283,5 +307,7 @@ export async function completeOidcLogin(
   if (!user) {
     throw new Error('No account is linked to that sign-in yet. Ask for an invite link.');
   }
+  // People who signed in before their email was picked up get it now.
+  fillEmail(db, user.id, email);
   return { userId: user.id, redirect: '/' };
 }

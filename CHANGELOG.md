@@ -6,6 +6,13 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Set someone's name and email from People.** People → **Manage** now has a Profile section
+  with their picture, display name and email (used for their Gravatar). Admins can edit anyone;
+  managers can edit the people they could send a reset link to.
+- **Microsoft sign-in fills in the email.** Entra ID often sends the address only as the
+  sign-in name (`preferred_username`), so that is used when the email claim is missing. Accounts
+  without an email get one on their next Microsoft sign-in or when they link Microsoft. An email
+  someone already set is never replaced, and one used by another account is never taken.
 - **Manage access from the People page.** Each person has a **Manage access** dialog listing
   everywhere they have access, where you can change a role or invite limit, remove access, or
   grant a new location. People can be found by name, username, email or location, and invites
