@@ -56,6 +56,7 @@ export interface Settings {
   trustProxy: boolean;
   cookieSecure: 'auto' | 'always' | 'never';
   logLevel: (typeof LOG_LEVELS)[number];
+  logFormat: 'text' | 'json';
 }
 export type SettingKey = keyof Settings;
 
@@ -274,11 +275,25 @@ export const SETTING_DEFS: SettingDef[] = [
     key: 'logLevel',
     group: 'logging',
     label: 'Log level',
-    description: 'How much the server writes to the container log. Debug is noisy.',
+    description:
+      'How much the server writes to the container log. Info: start-up, sign-ins, every change and any problems. Debug: also every request.',
     type: 'enum',
     env: 'LOG_LEVEL',
     default: 'info',
     options: LOG_LEVELS.map((l) => ({ value: l, label: l[0]!.toUpperCase() + l.slice(1) })),
+  },
+  {
+    key: 'logFormat',
+    group: 'logging',
+    label: 'Log format',
+    description: 'Readable lines for log viewers such as Unraid, or JSON for log collectors (Loki, Graylog…).',
+    type: 'enum',
+    env: 'LOG_FORMAT',
+    default: 'text',
+    options: [
+      { value: 'text', label: 'Readable text' },
+      { value: 'json', label: 'JSON' },
+    ],
   },
 ];
 

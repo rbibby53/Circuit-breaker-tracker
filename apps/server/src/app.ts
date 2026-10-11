@@ -3,10 +3,11 @@ import path from 'node:path';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
-import Fastify, { type FastifyInstance } from 'fastify';
+import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import { withSettings, type StartupConfig } from './config';
 import type { DB } from './db';
 import { HttpError } from './errors';
+import { logRequest, LogStream, safePath, setLogger } from './log';
 import { accessRoutes } from './routes/access';
 import { authRoutes } from './routes/auth';
 import { locationRoutes } from './routes/locations';
@@ -19,6 +20,7 @@ import { searchRoutes } from './routes/search';
 import { totpRoutes } from './routes/totp';
 import { loadAuth } from './sessions';
 import { SettingsStore } from './settings';
+import { startupLines } from './startup';
 
 export const CSRF_HEADER = 'x-cbt-csrf';
 
@@ -46,22 +48,45 @@ const CSP = [
 export async function buildApp(
   startup: StartupConfig,
   db: DB,
-  opts: { logger?: boolean } = {},
+  opts: { logger?: boolean; logStream?: LogStream; startupReport?: boolean } = {},
 ): Promise<FastifyInstance> {
   // Throws on an invalid environment variable, which stops startup with a clear message.
   const settings = new SettingsStore(db, startup.env);
   const config = withSettings(startup, settings);
+  const stream = opts.logStream ?? new LogStream(settings.get('logFormat'));
+  const logging = opts.logger !== false || !!opts.logStream;
   const app = Fastify({
-    logger: opts.logger === false ? false : { level: settings.get('logLevel') },
+    // No pid or hostname: in a container they say nothing. Requests get one line each, below.
+    logger: logging ? { level: settings.get('logLevel'), stream, base: null } : false,
+    logController: new LogController({ disableRequestLogging: true }),
     // A function so the admin page can switch it without a restart.
     trustProxy: () => settings.get('trustProxy'),
   });
+  setLogger(logging ? app.log : null);
   settings.onChange((key, value) => {
-    if (key === 'logLevel' && opts.logger !== false) app.log.level = String(value);
+    if (!logging) return;
+    if (key === 'logLevel') app.log.level = String(value);
+    if (key === 'logFormat') stream.format = value === 'json' ? 'json' : 'text';
   });
 
   await app.register(cookie);
-  await app.register(rateLimit, { global: false });
+  await app.register(rateLimit, {
+    global: false,
+    onExceeded: (req) =>
+      req.log.warn(`Too many requests to ${req.method} ${safePath(req)} from ${req.ip}; refusing for now`),
+  });
+
+  app.addHook('onResponse', async (req, reply) => logRequest(req, reply));
+
+  // Behind a reverse proxy without Trust proxy, every address in the log is the proxy's.
+  let proxyWarned = false;
+  app.addHook('onRequest', async (req) => {
+    if (proxyWarned || !req.headers['x-forwarded-for'] || settings.get('trustProxy')) return;
+    proxyWarned = true;
+    req.log.warn(
+      `Requests arrive through a reverse proxy (${req.ip}) but "Behind a reverse proxy" is off, so addresses in this log are the proxy's. Turn it on in Settings, or set TRUST_PROXY=true.`,
+    );
+  });
 
   app.decorateRequest('auth', null);
 
@@ -98,15 +123,19 @@ export async function buildApp(
 
   app.setErrorHandler((err, req, reply) => {
     if (err instanceof HttpError) {
+      req.failure ??= err.message;
       return reply.code(err.statusCode).send({ error: err.code, message: err.message });
     }
     const e = err as { statusCode?: number; message?: string };
     if (e.statusCode && e.statusCode < 500) {
+      req.failure ??= e.message;
       return reply.code(e.statusCode).send({ error: 'request', message: e.message ?? 'Bad request.' });
     }
-    req.log.error({ err }, 'Unhandled error');
+    req.log.error({ err }, `Error in ${req.method} ${safePath(req)}`);
     return reply.code(500).send({ error: 'server', message: 'Something went wrong.' });
   });
+
+  if (opts.startupReport) for (const line of startupLines(db, config)) app.log[line.level](line.msg);
 
   app.get('/healthz', async () => {
     db.prepare('SELECT 1').get();

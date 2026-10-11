@@ -1,4 +1,5 @@
 import { now, type DB } from './db';
+import { logger } from './log';
 import type { AccessData } from './repo';
 import type { AuthState } from './sessions';
 
@@ -38,4 +39,9 @@ export function audit(db: DB, auth: AuthState | null, entry: AuditEntry, access?
     entry.before === undefined ? null : JSON.stringify(entry.before),
     entry.after === undefined ? null : JSON.stringify(entry.after),
   );
+  // The same record in the container log: who did what, and where (unless the summary says).
+  const by = auth ? `${auth.realUser.username}${auth.readOnly ? ` (as ${auth.user.username})` : ''}: ` : '';
+  const label = loc && access ? access.pathLabel(loc.id) : '';
+  const where = label && !entry.summary.includes(label) ? ` · ${label}` : '';
+  logger()?.info(`${by}${entry.summary}${where}`);
 }

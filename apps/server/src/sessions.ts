@@ -29,7 +29,15 @@ interface SessionRow {
   expires_at: string;
 }
 
-export function createSession(db: DB, config: Config, reply: FastifyReply, userId: number, userAgent?: string): void {
+/** Start a session. `how` says how they signed in, for the log: "password", "Microsoft"… */
+export function createSession(
+  db: DB,
+  config: Config,
+  reply: FastifyReply,
+  userId: number,
+  userAgent: string | undefined,
+  how: string,
+): void {
   const { token, hash } = newToken();
   db.prepare('INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, ?)').run(
     hash,
@@ -45,6 +53,8 @@ export function createSession(db: DB, config: Config, reply: FastifyReply, userI
     secure: config.cookieSecure,
     maxAge: config.sessionDays * 86_400,
   });
+  const user = db.prepare('SELECT username FROM users WHERE id = ?').get(userId) as { username: string } | undefined;
+  reply.log.info(`Signed in: ${user?.username ?? `user ${userId}`} (${how}) from ${reply.request.ip}`);
 }
 
 export function clearSessionCookie(config: Config, reply: FastifyReply): void {
