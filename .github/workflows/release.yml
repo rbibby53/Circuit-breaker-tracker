@@ -1,7 +1,8 @@
 name: Release
 
-# Push a tag like v0.4.0 to create a GitHub release with generated notes. The Publish image
-# workflow builds and pushes the matching Docker image from the same tag.
+# Push a tag like v1.0.0 to create a GitHub release. Its notes are that version's section of
+# CHANGELOG.md, followed by GitHub's list of merged pull requests. The Publish image workflow
+# builds and pushes the matching Docker image from the same tag.
 on:
   push:
     tags: ['v*']
@@ -14,7 +15,23 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v7
+      - name: Take the notes from CHANGELOG.md
+        run: |
+          version="${GITHUB_REF_NAME#v}"
+          # Everything under "## <version>" up to the next "## " heading.
+          awk -v v="$version" '
+            /^## / { if (found) exit; if (index($0, "## " v) == 1) { found = 1; next } }
+            found { print }
+          ' CHANGELOG.md > notes.md
+          if [ ! -s notes.md ]; then
+            echo "CHANGELOG.md has no section for $version" >&2
+            exit 1
+          fi
+          {
+            echo
+            echo "**Docker:** \`ghcr.io/${{ github.repository_owner }}/circuit-breaker-tracker:$version\` (also \`latest\`)"
+          } >> notes.md
       - name: Create the release
         env:
           GH_TOKEN: ${{ github.token }}
-        run: gh release create "$GITHUB_REF_NAME" --generate-notes --verify-tag
+        run: gh release create "$GITHUB_REF_NAME" --title "$GITHUB_REF_NAME" --notes-file notes.md --generate-notes --verify-tag

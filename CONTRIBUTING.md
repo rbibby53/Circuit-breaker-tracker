@@ -43,13 +43,17 @@ pnpm build
 
 ## Releasing
 
-1. Set the new version in the root `package.json` and move the **Unreleased** notes in
-   `CHANGELOG.md` under it.
-2. Merge that to `main`, then tag it: `git tag v0.4.0 && git push origin v0.4.0`.
-3. The tag publishes `ghcr.io/rbibby53/circuit-breaker-tracker:0.4.0` (plus `0.4` and `latest`
-   from `main`) and creates the GitHub release. The app shows that version in its footer and
-   under **Settings → About**. Images built from `main` between releases show
-   `0.4.0-dev.<commit>`.
+Versions follow [semantic versioning](https://semver.org/): a fix is 1.0.1, a new feature is
+1.1.0, and anything that breaks existing setups or data is 2.0.0.
+
+1. Set the new version in every `package.json` (the root one is what the app shows) and move
+   the **Unreleased** notes in `CHANGELOG.md` under a `## 1.1.0 — <date>` heading.
+2. Merge that to `main`, then tag the merge commit: `git tag v1.1.0 && git push origin v1.1.0`.
+3. The tag:
+   - creates the GitHub release, with that version's changelog section as its notes;
+   - publishes `ghcr.io/rbibby53/circuit-breaker-tracker:1.1.0`, plus `1.1`, `1` and
+     `latest`.
+4. Every merge to `main` publishes `edge`, which shows `<version>-dev.<commit>` in the footer.
 
 ## Licence
 

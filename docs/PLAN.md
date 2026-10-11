@@ -277,7 +277,11 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
 
 ## Milestones
 
-1. **Foundation**
+All five milestones shipped in **1.0.0** (October 2026), along with the extras that came up
+along the way: public QR pages, breaker tags, surge protectors, the panel summary, printable
+breaker labels, Gravatar pictures, readable logs, automatic backups and signed-in devices.
+
+1. **Foundation (done)**
    - pnpm workspace, Docker image and compose file, database and migrations.
    - Auth: first-run admin, local login, sessions, Entra ID / OIDC sign-in, reset links.
    - Location tree (company → room), scoped grants with invite limits, invites.
@@ -285,7 +289,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    - View as user (read-only).
    - Sites screen and Users & access screen.
    - Audit log plumbing.
-2. **Panel editor (residential)**
+2. **Panel editor (residential) (done)**
    - Layout engine.
    - Add, edit, move and resize breakers: 1- and 2-pole, tandem, spare.
    - Flags. A "serves" picker that spans floors.
@@ -302,4 +306,13 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
    - CSV export.
    - TOTP two-step sign-in for local accounts, with recovery codes.
 
-Later: DIN-rail layout, quad breakers, load calculations, custom tags, photo attachments.
+## After 1.0
+
+Ideas, not promises:
+
+- **Test and inspection log:** GFCI/AFCI test-button checks, surge protector indicator checks
+  and thermal scans per breaker, with "last tested" dates and overdue reminders.
+- **Photos** on panels and breakers (the open panel, the door label, nameplates).
+- **Import from a spreadsheet** (the CSV export's columns) with a preview of what changes.
+- **DIN-rail layouts** for European and Australian boards, and quad breakers.
+- **Load calculations** beyond the current breaker-rating balance.
