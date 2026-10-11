@@ -14,7 +14,7 @@
 The app runs as user 1000 inside the container. Before the first start, make the appdata folder writable for it, from the Unraid terminal:&#xD;
 mkdir -p /mnt/user/appdata/circuit-breaker-tracker &amp;&amp; chown -R 1000:1000 /mnt/user/appdata/circuit-breaker-tracker&#xD;
 &#xD;
-Then open the web UI and create the first admin account on the setup screen.</Overview>
+Then open the web UI and create the first admin account. Everything else (public address, reverse proxy, Microsoft sign-in, link lifetimes, logging) is set by an admin under Settings in the app.</Overview>
   <Category>Tools: HomeAutomation: Productivity:</Category>
   <WebUI>http://[IP]:[PORT:2757]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/rbibby53/Circuit-breaker-tracker/main/unraid/circuit-breaker-tracker.xml</TemplateURL>
@@ -28,13 +28,6 @@ Then open the web UI and create the first admin account on the setup screen.</Ov
   <Requires/>
   <Config Name="Web UI port" Target="PORT" Default="2757" Mode="" Description="Port the web UI listens on. With host networking this must be free on the server. If you change it, open the UI at that port." Type="Variable" Display="always" Required="true" Mask="false">2757</Config>
   <Config Name="Data" Target="/data" Default="/mnt/user/appdata/circuit-breaker-tracker" Mode="rw" Description="Holds the database (breakers.db). Must be owned by 1000:1000 (see Overview)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/circuit-breaker-tracker</Config>
-  <Config Name="Public URL" Target="PUBLIC_URL" Default="" Mode="" Description="The address people use to reach the app, e.g. https://breakers.example.com or http://192.168.1.10:2757. Used in invite links; required for Microsoft sign-in." Type="Variable" Display="always" Required="false" Mask="false"></Config>
-  <Config Name="Behind a reverse proxy" Target="TRUST_PROXY" Default="false" Mode="" Description="Set to true when Nginx Proxy Manager, SWAG, Caddy or Traefik sits in front of the app." Type="Variable" Display="always" Required="true" Mask="false">false</Config>
-  <Config Name="Log level" Target="LOG_LEVEL" Default="info" Mode="" Description="debug, info, warn or error." Type="Variable" Display="advanced" Required="true" Mask="false">info</Config>
   <Config Name="First admin username" Target="ADMIN_USERNAME" Default="" Mode="" Description="Optional. Creates the first admin at startup instead of using the setup screen. Ignored once any user exists." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="First admin password" Target="ADMIN_PASSWORD" Default="" Mode="" Description="Optional, with the username above. At least 10 characters." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
-  <Config Name="Microsoft / OIDC issuer" Target="OIDC_ISSUER" Default="" Mode="" Description="Optional single sign-on, e.g. https://login.microsoftonline.com/TENANT-ID/v2.0. Needs Public URL. Redirect URI to register: PUBLIC_URL/api/auth/oidc/callback" Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
-  <Config Name="OIDC client ID" Target="OIDC_CLIENT_ID" Default="" Mode="" Description="Application (client) ID from the app registration." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
-  <Config Name="OIDC client secret" Target="OIDC_CLIENT_SECRET" Default="" Mode="" Description="Client secret value from the app registration." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
-  <Config Name="SSO button text" Target="OIDC_LABEL" Default="Sign in with Microsoft" Mode="" Description="Text on the single sign-on button." Type="Variable" Display="advanced" Required="true" Mask="false">Sign in with Microsoft</Config>
 </Container>

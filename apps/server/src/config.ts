@@ -1,58 +1,80 @@
 import path from 'node:path';
+import type { SettingsStore } from './settings';
 
 // Replaced at build time by esbuild (see build.mjs); undefined when running from source.
 declare const __APP_VERSION__: string | undefined;
 
-export interface Config {
+/** What the server needs before it can open the database. Everything else is a setting. */
+export interface StartupConfig {
   port: number;
   host: string;
   dataDir: string;
-  /** Public base URL without a trailing slash, e.g. https://breakers.example.com */
-  publicUrl: string | null;
-  trustProxy: boolean;
-  cookieSecure: boolean;
-  sessionDays: number;
   webDist: string | null;
   bootstrapAdmin: { username: string; password: string } | null;
-  oidc: { issuer: string; clientId: string; clientSecret: string; label: string } | null;
-  logLevel: string;
   version: string;
+  /** Kept for the settings store: environment variables pin settings. */
+  env: NodeJS.ProcessEnv;
 }
 
-function bool(v: string | undefined, fallback: boolean): boolean {
-  if (v === undefined || v === '') return fallback;
-  return ['1', 'true', 'yes', 'on'].includes(v.toLowerCase());
+/** Startup values plus live settings (changes in the admin page apply without a restart). */
+export interface Config extends StartupConfig {
+  settings: SettingsStore;
+  readonly publicUrl: string | null;
+  readonly cookieSecure: boolean;
+  readonly sessionDays: number;
+  readonly oidc: { issuer: string; clientId: string; clientSecret: string; label: string } | null;
 }
 
-export function loadConfig(env: NodeJS.ProcessEnv = process.env): Config {
-  const publicUrl = env.PUBLIC_URL ? env.PUBLIC_URL.replace(/\/+$/, '') : null;
-  const oidcIssuer = env.OIDC_ISSUER?.trim();
-  const oidcClientId = env.OIDC_CLIENT_ID?.trim();
-  const oidcClientSecret = env.OIDC_CLIENT_SECRET?.trim();
-  if (oidcIssuer && !publicUrl) {
-    throw new Error('PUBLIC_URL must be set when OIDC_ISSUER is set (it builds the redirect URL).');
-  }
+/** A value, treating blank as unset (Unraid and compose files often pass empty strings). */
+function text(v: string | undefined): string | undefined {
+  const t = v?.trim();
+  return t ? t : undefined;
+}
+
+/** A positive whole number, or the fallback when blank. Invalid values stop startup. */
+function int(v: string | undefined, fallback: number, name: string): number {
+  const t = text(v);
+  if (t === undefined) return fallback;
+  const n = Number(t);
+  if (!Number.isInteger(n) || n <= 0) throw new Error(`${name} must be a positive whole number (got "${t}").`);
+  return n;
+}
+
+export function loadConfig(env: NodeJS.ProcessEnv = process.env): StartupConfig {
+  const adminUser = text(env.ADMIN_USERNAME);
+  const adminPassword = text(env.ADMIN_PASSWORD);
   return {
-    port: Number(env.PORT ?? 2757),
-    host: env.HOST ?? '0.0.0.0',
-    dataDir: path.resolve(env.DATA_DIR ?? './data'),
-    publicUrl,
-    trustProxy: bool(env.TRUST_PROXY, false),
-    cookieSecure: bool(env.COOKIE_SECURE, publicUrl?.startsWith('https://') ?? false),
-    sessionDays: Number(env.SESSION_DAYS ?? 30),
-    webDist: env.WEB_DIST ? path.resolve(env.WEB_DIST) : null,
-    bootstrapAdmin:
-      env.ADMIN_USERNAME && env.ADMIN_PASSWORD ? { username: env.ADMIN_USERNAME, password: env.ADMIN_PASSWORD } : null,
-    oidc:
-      oidcIssuer && oidcClientId && oidcClientSecret
-        ? {
-            issuer: oidcIssuer,
-            clientId: oidcClientId,
-            clientSecret: oidcClientSecret,
-            label: env.OIDC_LABEL ?? 'Sign in with Microsoft',
-          }
-        : null,
-    logLevel: env.LOG_LEVEL ?? 'info',
-    version: env.APP_VERSION || (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'),
+    port: int(env.PORT, 2757, 'PORT'),
+    host: text(env.HOST) ?? '0.0.0.0',
+    dataDir: path.resolve(text(env.DATA_DIR) ?? './data'),
+    webDist: text(env.WEB_DIST) ? path.resolve(text(env.WEB_DIST)!) : null,
+    bootstrapAdmin: adminUser && adminPassword ? { username: adminUser, password: adminPassword } : null,
+    version: text(env.APP_VERSION) ?? (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'),
+    env,
+  };
+}
+
+export function withSettings(startup: StartupConfig, settings: SettingsStore): Config {
+  return {
+    ...startup,
+    settings,
+    get publicUrl() {
+      return settings.get('publicUrl') || null;
+    },
+    get cookieSecure() {
+      const mode = settings.get('cookieSecure');
+      return mode === 'always' || (mode === 'auto' && settings.get('publicUrl').startsWith('https://'));
+    },
+    get sessionDays() {
+      return settings.get('sessionDays');
+    },
+    /** Single sign-on is on when the provider is filled in and there is an address to come back to. */
+    get oidc() {
+      const issuer = settings.get('oidcIssuer');
+      const clientId = settings.get('oidcClientId');
+      const clientSecret = settings.get('oidcClientSecret');
+      if (!issuer || !clientId || !clientSecret || !settings.get('publicUrl')) return null;
+      return { issuer, clientId, clientSecret, label: settings.get('oidcLabel') || 'Sign in with Microsoft' };
+    },
   };
 }

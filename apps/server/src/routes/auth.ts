@@ -26,6 +26,13 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
   app.get('/api/auth/config', async (): Promise<AuthConfig> => ({
     needsSetup: countUsers(db) === 0,
     version: config.version,
+    appName: config.settings.get('appName'),
+    localLogin: config.settings.get('allowLocalLogin'),
+    panelDefaults: {
+      spaces: config.settings.get('defaultSpaces'),
+      mainAmps: config.settings.get('defaultMainAmps'),
+      voltage: config.settings.get('defaultVoltage'),
+    },
     oidc: { enabled: !!config.oidc, label: config.oidc?.label ?? '' },
   }));
 
@@ -59,6 +66,10 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     const ok = await verifyPassword(user?.password_hash, password);
     if (!user || !ok) throw forbidden('Wrong username or password.');
     if (user.disabled) throw forbidden('This account is disabled.');
+    // Admins can always use their password, so turning this off can never lock everyone out.
+    if (!config.settings.get('allowLocalLogin') && !user.is_admin) {
+      throw forbidden('Password sign-in is turned off here. Use the single sign-on button.');
+    }
     createSession(db, config, reply, user.id, req.headers['user-agent']);
     return { ok: true };
   });
@@ -110,6 +121,9 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
       // Already signed in: add the access to this account.
       applyInvite(db, invite, access, req.auth.realUser.id, req.auth);
       return { ok: true };
+    }
+    if (!config.settings.get('allowLocalLogin')) {
+      throw forbidden('Password accounts are turned off here. Accept the invite with single sign-on.');
     }
     const body = parse(acceptInviteSchema, req.body);
     const user = await createUser(db, body);

@@ -4,14 +4,19 @@ import { now, type DB } from './db';
 
 type OidcConfig = NonNullable<Config['oidc']>;
 
-let discovered: Promise<client.Configuration> | null = null;
+// Cached per provider settings, so changing them in the admin page takes effect at once.
+let discovered: { key: string; config: Promise<client.Configuration> } | null = null;
 
-function discover(oidc: OidcConfig): Promise<client.Configuration> {
-  discovered ??= client.discovery(new URL(oidc.issuer), oidc.clientId, oidc.clientSecret).catch((err) => {
-    discovered = null; // retry on the next attempt
-    throw err;
-  });
-  return discovered;
+export function discover(oidc: OidcConfig): Promise<client.Configuration> {
+  const key = JSON.stringify([oidc.issuer, oidc.clientId, oidc.clientSecret]);
+  if (discovered?.key !== key) {
+    const config = client.discovery(new URL(oidc.issuer), oidc.clientId, oidc.clientSecret).catch((err) => {
+      if (discovered?.key === key) discovered = null; // retry on the next attempt
+      throw err;
+    });
+    discovered = { key, config };
+  }
+  return discovered.config;
 }
 
 export const redirectUri = (config: Config) => `${config.publicUrl}/api/auth/oidc/callback`;

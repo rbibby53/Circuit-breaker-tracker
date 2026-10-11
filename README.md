@@ -1,5 +1,9 @@
 # Circuit Breaker Tracker
 
+[![CI](https://github.com/rbibby53/Circuit-breaker-tracker/actions/workflows/ci.yml/badge.svg)](https://github.com/rbibby53/Circuit-breaker-tracker/actions/workflows/ci.yml)
+[![Image](https://img.shields.io/badge/image-ghcr.io-2496ED?logo=docker&logoColor=white)](https://github.com/rbibby53/Circuit-breaker-tracker/pkgs/container/circuit-breaker-tracker)
+[![License: GPL-3.0](https://img.shields.io/badge/license-GPL--3.0-blue)](LICENSE)
+
 A self-hosted web app for recreating your electrical panels, labelling what every breaker
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
@@ -7,6 +11,8 @@ as a single Docker container with its data in one SQLite file.
 > **Status:** milestones 1 and 2 of 5 are done: accounts, single sign-on, scoped access and the
 > panel editor for residential load centers. Commercial 3-phase panels and PDF export come
 > next. See [docs/PLAN.md](docs/PLAN.md) for the whole plan.
+
+![The panel editor with a tandem breaker selected](docs/screenshots/editor.png)
 
 ## What works today
 
@@ -38,6 +44,17 @@ as a single Docker container with its data in one SQLite file.
 - **Breakers serving a room:** each room and floor page lists every breaker that serves it,
   from any panel, including whole-floor and whole-site tags.
 
+## Screenshots
+
+|                                                                        |                                                          |
+| ---------------------------------------------------------------------- | -------------------------------------------------------- |
+| ![Dark mode](docs/screenshots/dark-editor.png)                         | ![Search from the header](docs/screenshots/search.png)   |
+| Dark mode follows your system, or pick one under Account.              | Press <kbd>/</kbd> to search rooms, panels and breakers. |
+| ![Users and access](docs/screenshots/access.png)                       | ![Settings](docs/screenshots/settings.png)               |
+| Grant access on any location; managers only invite within their scope. | Admins configure the app in Settings instead of Docker.  |
+
+<p align="center"><img src="docs/screenshots/phone-editor.png" alt="The panel editor on a phone" width="300"></p>
+
 ## Run it
 
 ```yaml
@@ -48,9 +65,6 @@ services:
     restart: unless-stopped
     ports:
       - '2757:2757'
-    environment:
-      PUBLIC_URL: 'https://breakers.example.com'
-      TRUST_PROXY: 'true'
     volumes:
       - breakers-data:/data
 volumes:
@@ -71,7 +85,8 @@ docker run -d --name breakers --network host -e PORT=2757 -v breakers-data:/data
 
 With `--network host`, `-p` mappings are ignored and `PORT` decides where it listens.
 
-Open the app and create the first admin account on the setup screen. To build the image
+Open the app and create the first admin account on the setup screen, then go to **Settings**
+to set the public address, reverse proxy, Microsoft sign-in and the rest. To build the image
 yourself, use `docker build -t circuit-breaker-tracker .` or set `build: .` in the compose
 file.
 
@@ -90,26 +105,40 @@ on port 2757.
      https://raw.githubusercontent.com/rbibby53/Circuit-breaker-tracker/main/unraid/circuit-breaker-tracker.xml
    ```
 3. **Docker** tab → **Add Container** → pick **circuit-breaker-tracker** under Template → **Apply**.
-4. Open `http://<server-ip>:2757` and create the first admin.
+4. Open `http://<server-ip>:2757`, create the first admin, then finish setup under **Settings**.
 
 ### Configuration
 
-| Variable                                              | Default                         | Purpose                                                                                                         |
-| ----------------------------------------------------- | ------------------------------- | --------------------------------------------------------------------------------------------------------------- |
-| `PUBLIC_URL`                                          | (none)                          | The address people use, e.g. `https://breakers.example.com`. Used for invite and reset links. Required for SSO. |
-| `TRUST_PROXY`                                         | `false`                         | Set to `true` behind a reverse proxy so client IPs and HTTPS are detected.                                      |
-| `COOKIE_SECURE`                                       | `true` if `PUBLIC_URL` is https | Send the session cookie over HTTPS only.                                                                        |
-| `PORT`                                                | `2757`                          | Port to listen on.                                                                                              |
-| `DATA_DIR`                                            | `/data`                         | Where `breakers.db` lives. Mount a volume here.                                                                 |
-| `SESSION_DAYS`                                        | `30`                            | How long a sign-in lasts.                                                                                       |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD`                    | (none)                          | Create the first admin at startup instead of using the setup screen. Ignored once any user exists.              |
-| `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET` | (none)                          | Turn on single sign-on (see below).                                                                             |
-| `OIDC_LABEL`                                          | `Sign in with Microsoft`        | Text on the SSO button.                                                                                         |
-| `LOG_LEVEL`                                           | `info`                          | `debug`, `info`, `warn` or `error`.                                                                             |
+Docker only needs a port and a volume. Everything else is set by an admin on the **Settings**
+page and applies without a restart.
+
+| Docker variable                    | Default | Purpose                                                                                            |
+| ---------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
+| `PORT`                             | `2757`  | Port to listen on.                                                                                 |
+| `DATA_DIR`                         | `/data` | Where `breakers.db` lives. Mount a volume here.                                                    |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | (none)  | Create the first admin at startup instead of using the setup screen. Ignored once any user exists. |
+
+Any setting can also be pinned with an environment variable. It then wins over the Settings page
+and shows there as locked. This suits infrastructure-as-code setups:
+
+| Setting                    | Variable                                                       |
+| -------------------------- | -------------------------------------------------------------- |
+| App name                   | `APP_NAME`                                                     |
+| Public address             | `PUBLIC_URL`                                                   |
+| Allow password sign-in     | `ALLOW_LOCAL_LOGIN`                                            |
+| Stay signed in for (days)  | `SESSION_DAYS`                                                 |
+| Microsoft / OIDC           | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`          |
+| SSO button text            | `OIDC_LABEL`                                                   |
+| Invite / reset link expiry | `INVITE_DAYS`, `RESET_HOURS`                                   |
+| New panel defaults         | `DEFAULT_PANEL_SPACES`, `DEFAULT_MAIN_AMPS`, `DEFAULT_VOLTAGE` |
+| Behind a reverse proxy     | `TRUST_PROXY`                                                  |
+| HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                    |
+| Log level                  | `LOG_LEVEL`                                                    |
 
 ### Behind a reverse proxy
 
-Point the proxy at port 2757 and set `TRUST_PROXY=true`.
+Point the proxy at port 2757, then turn on **Settings → Network and security → Behind a reverse
+proxy** and set the public address to the proxy's https:// address.
 
 Caddy:
 
@@ -134,14 +163,14 @@ location / {
 
 1. In the Entra admin center, go to **App registrations** and choose **New registration**.
    - **Supported account types:** accounts in this organizational directory only.
-   - **Redirect URI:** platform _Web_, value `https://breakers.example.com/api/auth/oidc/callback`.
+   - **Redirect URI:** platform _Web_. The exact value is shown on the Settings page, e.g.
+     `https://breakers.example.com/api/auth/oidc/callback`.
 2. Under **Certificates & secrets**, create a client secret.
-3. Set the environment variables, then restart:
-   ```
-   OIDC_ISSUER=https://login.microsoftonline.com/<directory-tenant-id>/v2.0
-   OIDC_CLIENT_ID=<application-client-id>
-   OIDC_CLIENT_SECRET=<client-secret-value>
-   ```
+3. In the app, open **Settings → Microsoft / single sign-on** and fill in:
+   - **Issuer URL:** `https://login.microsoftonline.com/<directory-tenant-id>/v2.0`
+   - **Client ID:** the application (client) ID
+   - **Client secret:** the secret value
+4. Save, then press **Test connection**.
 
 Signing in with Microsoft does not give access to anything by itself:
 
@@ -150,17 +179,15 @@ Signing in with Microsoft does not give access to anything by itself:
 - Existing local users can link their Microsoft account from **Account**.
 - Accounts are matched by the provider's subject ID, never by email.
 
-Local passwords keep working alongside SSO.
+Local passwords keep working alongside SSO. To make everyone except admins use Microsoft,
+turn off **Settings → Sign-in → Allow password sign-in**. Admins always keep their password, so
+you cannot lock yourself out.
 
 ### Backups
 
-Everything is in `/data/breakers.db`. To take a consistent copy while the app is running:
-
-```sh
-docker compose exec breakers node -e "new (require('better-sqlite3'))('/data/breakers.db').backup('/data/backup.db').then(() => console.log('ok'))"
-```
-
-Then copy `backup.db` out of the volume.
+Everything is in `/data/breakers.db`. An admin can download a consistent copy at any time from
+**Settings → Backup**, even while people are using the app. To restore, stop the container and
+replace `breakers.db` in the data folder with the backup file.
 
 ## Develop
 
@@ -185,6 +212,11 @@ docs/PLAN.md    The plan and milestones
 
 The access rules live in `packages/core/src/access.ts` and are covered by
 `access.test.ts`. The server re-checks every request against them.
+
+## Contributing
+
+See [CONTRIBUTING.md](CONTRIBUTING.md). Report security problems privately as described in
+[SECURITY.md](SECURITY.md). Changes are listed in [CHANGELOG.md](CHANGELOG.md).
 
 ## License
 

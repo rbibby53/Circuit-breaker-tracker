@@ -1,0 +1,47 @@
+name: Bug report
+description: Something is broken or behaves unexpectedly.
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What happened?
+      description: What did you do, what did you expect, and what happened instead?
+    validations:
+      required: true
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      placeholder: |
+        1. Open a panel
+        2. Drag the breaker at space 5 to space 9
+        3. ...
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: Shown at the bottom of every page and under Settings → About.
+      placeholder: v0.3.0
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How do you run it?
+      options:
+        - Docker / docker compose
+        - Unraid template
+        - From source (pnpm dev)
+        - Other
+  - type: input
+    id: browser
+    attributes:
+      label: Browser and device
+      placeholder: Firefox 131 on Windows, Safari on iPhone…
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs
+      description: Container logs around the time of the problem. Remove anything private first.
+      render: text

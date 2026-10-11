@@ -297,7 +297,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
 4. **PDF export:** panel sheet, door card, room index, site book, QR code.
 5. **Quality of life**
    - Search.
-   - Admin backup and restore.
+   - Admin backup (done early, in the Settings page) and restore.
    - Duplicate a panel.
    - CSV export.
    - TOTP two-factor for local accounts.

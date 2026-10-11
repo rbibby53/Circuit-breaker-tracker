@@ -93,6 +93,10 @@ function Editor({
   // Undo/redo stacks live in a ref: they change together with `doc`, which drives re-renders.
   const stacks = useRef<{ past: EditPanel[]; future: EditPanel[] }>({ past: [], future: [] });
   const [selected, setSelected] = useState<string | null>(initialSelected);
+  // A search result can point at another breaker while this panel is already open.
+  useEffect(() => {
+    if (initialSelected) setSelected(initialSelected);
+  }, [initialSelected]);
   const [message, setMessage] = useState<string | null>(null);
   const [saveState, setSaveState] = useState<SaveState>('saved');
   const [saveError, setSaveError] = useState<string | null>(null);

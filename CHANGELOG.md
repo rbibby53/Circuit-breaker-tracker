@@ -1,0 +1,63 @@
+# Changelog
+
+Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning](https://semver.org/).
+
+## Unreleased
+
+### Added
+
+- **Settings page for admins.** App name, public address, password sign-in, session length,
+  Microsoft / OIDC sign-in (with a connection test and the redirect URI to register), invite and
+  reset link lifetimes, defaults for new panels, reverse proxy trust, secure cookies and log level
+  are all set in the app and apply without a restart.
+- **Download backup** from Settings: a consistent copy of the database, safe to take while the app
+  is in use.
+- Turning off password sign-in hides the password form from everyone except admins.
+- Issue and pull request templates, Dependabot, a release workflow, contributing and security
+  guides.
+
+### Changed
+
+- Docker only needs `PORT` and the `/data` volume. Environment variables still work and now pin
+  the matching setting, which shows as locked on the Settings page.
+- The Unraid template is down to the port, the data path and the optional first admin.
+- Opening a search result for a breaker on the panel you are already viewing selects it.
+- Breaker labels have more room on phones.
+
+### Fixed
+
+- Blank environment variables (as Unraid sends for empty fields) are treated as unset instead of
+  stopping the container. Invalid values stop it with a message naming the variable.
+
+## 0.3.0
+
+### Added
+
+- Dark mode (follows the system, or pick one under Account).
+- Search from the header (press <kbd>/</kbd>) across locations, panels and breakers.
+- Confirmation dialogs, a 404 page and the app version in the footer.
+- Unraid template, ESLint and Prettier, Docker image published to GHCR.
+- Security headers, an hourly purge of expired sessions and links.
+
+### Changed
+
+- Menus only show what your role can use.
+- Panel editor layout works on phones.
+- Default port is 2757.
+
+## 0.2.0
+
+- Panel editor for residential load centers: 1-pole, 2-pole and tandem breakers, drag to move,
+  autosave with undo and redo, edit conflicts detected.
+- Breakers can serve rooms on any floor, a floor, a building or a whole site.
+- Critical and backup power (UPS or generator) tags.
+- Sub-panels show their feed chain to anyone who can see them.
+- Room and floor pages list every breaker serving them.
+
+## 0.1.0
+
+- Locations: Company → Site → Building → Floor → Room.
+- Viewer, editor and manager roles granted on any location, with manager invite limits.
+- Local accounts and Microsoft Entra ID (OIDC) sign-in.
+- Invite and password reset links, view as user, activity log.
+- Single Docker container with SQLite.

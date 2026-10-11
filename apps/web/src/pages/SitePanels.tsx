@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { api } from '../api';
+import { useAuthConfig } from '../auth';
 import { ErrorNote, Field } from '../components/ui';
 import { usePanels } from '../queries';
 import type { TreeNode } from '../tree';
@@ -82,12 +83,13 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
   const navigate = useNavigate();
   const [open, setOpen] = useState(startOpen);
   const [layout, setLayout] = useState<PanelLayout>('residential');
+  const defaults = useAuthConfig().data?.panelDefaults;
   const [form, setForm] = useState({
     name: '',
-    spaces: 24,
+    spaces: defaults?.spaces ?? 24,
     mainType: 'breaker' as 'breaker' | 'lugs',
-    mainAmps: 200,
-    voltage: '120/240 V split-phase',
+    mainAmps: defaults?.mainAmps ?? 200,
+    voltage: defaults?.voltage ?? '120/240 V split-phase',
   });
   const create = useMutation({
     mutationFn: () =>

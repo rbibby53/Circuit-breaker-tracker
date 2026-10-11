@@ -1,5 +1,6 @@
 // Response shapes shared by the server and the web app.
 import type { LocationKind } from './locations';
+import type { SettingKey, SettingValue } from './settings';
 import type { Backup, MainType, PanelLayout, Protection, Slot } from './panel';
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
@@ -25,6 +26,10 @@ export interface MeResponse {
 export interface AuthConfig {
   needsSetup: boolean;
   version: string;
+  appName: string;
+  /** False when only admins may use passwords (everyone else signs in with SSO). */
+  localLogin: boolean;
+  panelDefaults: { spaces: number; mainAmps: number; voltage: string };
   oidc: { enabled: boolean; label: string };
 }
 
@@ -234,4 +239,28 @@ export interface SearchResponse {
     /** Why it matched when the label did not: the room or area it serves. */
     serves: string | null;
   }[];
+}
+
+export interface AdminSetting {
+  key: SettingKey;
+  /** Secrets come back as '' with `hasValue` telling whether one is saved. */
+  value: SettingValue;
+  hasValue: boolean;
+  /** Where the current value comes from. `env` values cannot be changed in the UI. */
+  source: 'env' | 'saved' | 'default';
+}
+
+export interface AdminSettingsResponse {
+  settings: AdminSetting[];
+  ssoEnabled: boolean;
+  /** What to register as the redirect URI with the identity provider. */
+  redirectUri: string | null;
+  about: {
+    version: string;
+    nodeVersion: string;
+    dataDir: string;
+    databaseBytes: number;
+    startedAt: string;
+    counts: { users: number; locations: number; panels: number; breakers: number };
+  };
 }
