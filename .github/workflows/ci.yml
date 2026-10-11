@@ -40,10 +40,22 @@ jobs:
           cache-to: type=gha,mode=max
       - name: Start the image and check it is healthy
         run: |
-          docker run -d --name cbt -p 2757:2757 circuit-breaker-tracker:ci
+          docker run -d --name cbt -p 2757:2757 \
+            -e ADMIN_USERNAME=ci -e ADMIN_PASSWORD=ci-password-only \
+            circuit-breaker-tracker:ci
           for i in $(seq 1 30); do
             if curl -sf http://localhost:2757/healthz; then exit 0; fi
             sleep 1
           done
           docker logs cbt
           exit 1
+      - name: Print a PDF from the image
+        run: |
+          set -euo pipefail
+          api=http://localhost:2757/api
+          curl -sf -c jar -H 'x-cbt-csrf: 1' -H 'content-type: application/json' \
+            -d '{"username":"ci","password":"ci-password-only"}' $api/auth/login > /dev/null
+          id=$(curl -sf -b jar -H 'x-cbt-csrf: 1' -H 'content-type: application/json' \
+            -d '{"parentId":null,"kind":"company","name":"CI"}' $api/locations | jq -r .id)
+          curl -sf -b jar -o out.pdf "$api/locations/$id/pdf"
+          head -c 5 out.pdf | grep -q '%PDF-' || { docker logs cbt; exit 1; }

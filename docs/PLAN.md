@@ -244,7 +244,7 @@ GET    /api/panels/:id                    (panel + breakers + serves)
 PUT    /api/panels/:id                    (whole-panel save, If-Match: version)
 GET    /api/panels/:id/history
 GET    /api/panels/:id/pdf?paper=letter|a4&style=sheet|door
-GET    /api/locations/:id/pdf             (every panel under a site, building or floor)
+GET    /api/locations/:id/pdf?style=book|index  (every panel under a location, or its room index)
 GET    /api/search?q=                     (breakers, locations, panels you can see)
 GET    /api/activity?location=        (audit log within your scope)
 GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
@@ -255,8 +255,8 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
 1. **Panel sheet:** a schedule laid out like the box (odd numbers left, even right).
    Multi-pole breakers are merged into one entry; tandems show A and B. It includes protection
    type, CRIT/UPS/GEN markers as text (grayscale-safe), notes, a key, the last-updated date,
-   and a QR code to the panel page. The QR code needs `PUBLIC_URL`.
-2. **Door card:** a narrow strip that fits inside the panel door.
+   and a QR code to the panel page. The QR code needs the public address (Settings → General).
+2. **Door card:** a 4-inch-wide card that fits inside the panel door.
 3. **Room index:** rooms grouped by floor, with the breakers that feed each one.
 4. **Book:** every panel under a site, building or floor in one PDF.
 
@@ -294,7 +294,7 @@ GET    /api/admin/backup  POST /api/admin/restore   (JSON, Admin only)
 3. **Commercial 3-phase**
    - Phase labels, 3-pole breakers, 277/480 V, 42/84 circuits.
    - Sub-panel feed links.
-4. **PDF export:** panel sheet, door card, room index, site book, QR code.
+4. **PDF export (done):** panel sheet, door card, room index, site book, QR code.
 5. **Quality of life**
    - Search.
    - Admin backup (done early, in the Settings page) and restore.

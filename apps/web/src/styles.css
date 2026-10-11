@@ -931,6 +931,9 @@ a:focus-visible {
   border-radius: 4px;
   overflow: hidden;
 }
+.segmented.two {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+}
 .segmented.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -1653,6 +1656,38 @@ a:focus-visible {
 }
 .dialog h2 {
   font-size: 22px;
+}
+.print-dialog {
+  width: min(480px, calc(100vw - 32px));
+}
+.print-options {
+  display: grid;
+  gap: 8px;
+  margin: 0;
+  padding: 0;
+  border: 0;
+}
+.print-option {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 14px;
+  border: 1px solid var(--line-strong);
+  border-radius: 6px;
+  cursor: pointer;
+}
+.print-option:has(input:checked) {
+  border-color: var(--ink);
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--ink);
+}
+.print-option input {
+  width: 18px;
+  height: 18px;
+  min-height: 0;
+  margin: 2px 0 0;
+  flex: 0 0 auto;
+  accent-color: var(--ink);
 }
 .dialog-actions {
   display: flex;

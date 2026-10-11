@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, ApiError, errorMessage } from '../api';
 import { useCurrentUser } from '../auth';
+import { PANEL_PRINT_STYLES, PrintButton } from '../components/PrintDialog';
 import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { Inspector } from '../panel/Inspector';
@@ -252,6 +253,11 @@ function Editor({
   const critical = doc.breakers.filter((b) => b.critical).length;
   const onBackup = doc.breakers.filter((b) => b.backup !== 'none').length;
 
+  // Save pending edits first so the PDF matches what is on screen.
+  const printFlush = async () => {
+    if (saveState === 'pending' || saveState === 'error') await flush();
+  };
+
   const deletePanel = async () => {
     try {
       await api.del(`/api/panels/${initial.id}`);
@@ -314,6 +320,17 @@ function Editor({
             <button type="button" className="btn" aria-expanded={showHistory} onClick={() => setShowHistory((v) => !v)}>
               History
             </button>
+            <PrintButton
+              endpoint={`/api/panels/${initial.id}/pdf`}
+              styles={PANEL_PRINT_STYLES}
+              subject={doc.name}
+              beforeOpen={readOnly ? undefined : printFlush}
+              warning={
+                !readOnly && saveState !== 'saved'
+                  ? 'Your latest changes are not saved yet, so they will not be in the PDF.'
+                  : null
+              }
+            />
             {!readOnly && (
               <button
                 type="button"

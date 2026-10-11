@@ -1,6 +1,6 @@
 // Response shapes shared by the server and the web app.
 import type { LocationKind } from './locations';
-import type { SettingKey, SettingValue } from './settings';
+import type { PaperSize, SettingKey, SettingValue } from './settings';
 import type { Backup, MainType, PanelLayout, Protection, Slot } from './panel';
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
@@ -30,6 +30,8 @@ export interface AuthConfig {
   /** False when only admins may use passwords (everyone else signs in with SSO). */
   localLogin: boolean;
   panelDefaults: { spaces: number; mainAmps: number; voltage: string };
+  /** Paper size the print dialog starts with. */
+  paperSize: PaperSize;
   oidc: { enabled: boolean; label: string };
 }
 

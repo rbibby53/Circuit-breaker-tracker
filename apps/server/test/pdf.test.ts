@@ -1,0 +1,181 @@
+import type { FastifyInstance } from 'fastify';
+import { beforeEach, describe, expect, it } from 'vitest';
+import type { DB } from '../src/db';
+import { AccessData, getUser, toActor } from '../src/repo';
+import { roomIndex } from '../src/roomIndex';
+import { Client, createLocation, invite, setupAdmin, testApp } from './helpers';
+
+let app: FastifyInstance;
+let db: DB;
+
+beforeEach(async () => {
+  ({ app, db } = await testApp());
+});
+
+const breaker = (clientKey: string, position: number, extra: Record<string, unknown> = {}) => ({
+  clientKey,
+  position,
+  slot: 'full',
+  poles: 1,
+  amps: 20,
+  protection: 'standard',
+  label: clientKey,
+  notes: '',
+  isSpare: false,
+  critical: false,
+  backup: 'none',
+  serves: [],
+  ...extra,
+});
+
+async function save(c: Client, id: number, breakers: unknown[], extra: Record<string, unknown> = {}) {
+  const current = (await c.get(`/api/panels/${id}`)).body;
+  const r = await c.req('PUT', `/api/panels/${id}`, { ...current, breakers, ...extra });
+  expect(r.status).toBe(200);
+}
+
+const pages = (pdf: Buffer) => (pdf.toString('latin1').match(/\/Type \/Page\b(?!s)/g) ?? []).length;
+
+async function home() {
+  const admin = await setupAdmin(app);
+  const personal = await createLocation(admin, null, 'company', 'Personal');
+  const site = await createLocation(admin, personal, 'site', 'Home');
+  const basement = await createLocation(admin, site, 'floor', 'Basement');
+  const utility = await createLocation(admin, basement, 'room', 'Utility room');
+  const ground = await createLocation(admin, site, 'floor', 'Ground');
+  const kitchen = await createLocation(admin, ground, 'room', 'Kitchen');
+  const garage = await createLocation(admin, ground, 'room', 'Garage');
+  const main = (await admin.post(`/api/locations/${utility}/panels`, { name: 'Main panel', spaces: 24 })).body.id;
+  const sub = (await admin.post(`/api/locations/${garage}/panels`, { name: 'Garage sub', spaces: 12 })).body.id;
+  await save(admin, main, [
+    breaker('Range', 1, { poles: 2, amps: 50, serves: [{ locationId: kitchen, note: '' }] }),
+    breaker('Fridge', 2, { critical: true, serves: [{ locationId: kitchen, note: 'fridge' }] }),
+    breaker('Smoke alarms', 4, { serves: [{ locationId: site, note: '' }] }),
+    breaker('Garage feeder', 6, { poles: 2, amps: 60 }),
+    breaker('Hall', 9, { slot: 'A', amps: 15 }),
+    breaker('Alarm', 9, { slot: 'B', amps: 15, backup: 'ups', notes: 'Panel in the closet.' }),
+  ]);
+  const feeder = (await admin.get(`/api/panels/${main}`)).body.breakers.find(
+    (b: { label: string }) => b.label === 'Garage feeder',
+  ).id;
+  await save(admin, sub, [breaker('Door opener', 1, { serves: [{ locationId: garage, note: '' }] })], {
+    fedFromBreakerId: feeder,
+  });
+  return { admin, personal, site, basement, utility, ground, kitchen, garage, main, sub };
+}
+
+describe('panel PDFs', () => {
+  it('prints a panel sheet inline as a PDF, without the page security policy', async () => {
+    const h = await home();
+    const r = await h.admin.raw(`/api/panels/${h.main}/pdf`);
+    expect(r.status).toBe(200);
+    expect(r.headers['content-type']).toBe('application/pdf');
+    expect(r.headers['content-disposition']).toContain('inline; filename="Main panel.pdf"');
+    expect(r.headers['content-security-policy']).toBeUndefined();
+    expect(r.body.subarray(0, 5).toString()).toBe('%PDF-');
+    expect(pages(r.body)).toBe(1);
+    expect(r.body.toString('latin1')).toContain('/MediaBox [0 0 612 792]');
+  });
+
+  it('prints a door card on A4 as a download', async () => {
+    const h = await home();
+    const r = await h.admin.raw(`/api/panels/${h.main}/pdf?style=door&paper=a4&download=1`);
+    expect(r.status).toBe(200);
+    expect(r.headers['content-disposition']).toContain('attachment; filename="Main panel door card.pdf"');
+    expect(r.body.toString('latin1')).toContain('/MediaBox [0 0 595.28 841.89]');
+  });
+
+  it('uses the paper size from Settings by default', async () => {
+    const h = await home();
+    await h.admin.patch('/api/admin/settings', { paperSize: 'a4' });
+    const r = await h.admin.raw(`/api/panels/${h.main}/pdf`);
+    expect(r.body.toString('latin1')).toContain('/MediaBox [0 0 595.28 841.89]');
+    expect((await new Client(app).get('/api/auth/config')).body.paperSize).toBe('a4');
+  });
+
+  it('continues long notes on another page', async () => {
+    const h = await home();
+    const long = Array.from({ length: 30 }, (_, i) => `Line ${i} of a long note.`).join('\n');
+    await save(
+      h.admin,
+      h.sub,
+      Array.from({ length: 12 }, (_, i) => breaker(`Circuit ${i + 1}`, i + 1, { notes: long })),
+    );
+    const r = await h.admin.raw(`/api/panels/${h.sub}/pdf`);
+    expect(pages(r.body)).toBeGreaterThan(1);
+  });
+
+  it('hides panels from people who cannot see them, and needs a sign-in', async () => {
+    const h = await home();
+    const viewer = await invite(app, h.admin, h.ground, 'viewer', 'viewer');
+    expect((await viewer.raw(`/api/panels/${h.main}/pdf`)).status).toBe(404);
+    expect((await viewer.raw(`/api/panels/${h.sub}/pdf`)).status).toBe(200);
+    expect((await new Client(app).raw(`/api/panels/${h.main}/pdf`)).status).toBe(401);
+  });
+
+  it('refuses unknown styles and paper sizes', async () => {
+    const h = await home();
+    expect((await h.admin.raw(`/api/panels/${h.main}/pdf?style=poster`)).status).toBe(400);
+    expect((await h.admin.raw(`/api/panels/${h.main}/pdf?paper=legal`)).status).toBe(400);
+  });
+});
+
+describe('location PDFs', () => {
+  it('prints a book: cover, every panel inside, then the room index', async () => {
+    const h = await home();
+    const r = await h.admin.raw(`/api/locations/${h.site}/pdf`);
+    expect(r.status).toBe(200);
+    expect(r.headers['content-disposition']).toContain('filename="Home panel directory.pdf"');
+    expect(pages(r.body)).toBe(4);
+  });
+
+  it('only includes the panels the reader can see', async () => {
+    const h = await home();
+    const viewer = await invite(app, h.admin, h.ground, 'viewer', 'viewer');
+    expect((await viewer.raw(`/api/locations/${h.site}/pdf`)).status).toBe(404);
+    const r = await viewer.raw(`/api/locations/${h.ground}/pdf`);
+    expect(r.status).toBe(200);
+    expect(pages(r.body)).toBe(3); // Cover, Garage sub, room index.
+  });
+
+  it('prints just the room index', async () => {
+    const h = await home();
+    const r = await h.admin.raw(`/api/locations/${h.site}/pdf?style=index`);
+    expect(r.status).toBe(200);
+    expect(pages(r.body)).toBe(1);
+  });
+});
+
+describe('room index', () => {
+  it('groups rooms by floor and lists whole-site breakers once', async () => {
+    const h = await home();
+    const access = new AccessData(db);
+    const index = roomIndex(db, toActor(getUser(db, 1)!), access, h.site);
+    expect(index.sections.map((s) => s.title)).toEqual(['Home', 'Basement', 'Ground']);
+    expect(index.sections[0]!.whole.map((b) => b.label)).toEqual(['Smoke alarms']);
+    const ground = index.sections.find((s) => s.title === 'Ground')!;
+    const kitchen = ground.rooms.find((r) => r.name === 'Kitchen')!;
+    expect(kitchen.breakers.map((b) => [b.circuit, b.label, b.amps, b.note, b.tags])).toEqual([
+      ['1 + 3', 'Range', '2P 50A', '', []],
+      ['2', 'Fridge', '20A', 'fridge', ['CRIT']],
+    ]);
+    expect(ground.rooms.find((r) => r.name === 'Garage')!.breakers[0]).toMatchObject({ panelName: 'Garage sub' });
+    expect(index.sections.find((s) => s.title === 'Basement')!.rooms[0]).toMatchObject({ breakers: [] });
+  });
+
+  it('shows whole-site breakers above a floor, and leaves out rooms the reader cannot see', async () => {
+    const h = await home();
+    await invite(app, h.admin, h.kitchen, 'viewer', 'cook');
+    const cook = db.prepare("SELECT * FROM users WHERE username = 'cook'").get() as Parameters<typeof toActor>[0];
+    const access = new AccessData(db);
+    const index = roomIndex(db, toActor(cook), access, h.kitchen);
+    expect(index.above).toEqual([
+      { title: 'Whole site: Home', breakers: [expect.objectContaining({ label: 'Smoke alarms' })] },
+    ]);
+    expect(index.sections.map((s) => s.rooms.map((r) => r.name))).toEqual([['Kitchen']]);
+
+    const fromGround = roomIndex(db, toActor(getUser(db, 1)!), access, h.ground);
+    expect(fromGround.sections.map((s) => s.title)).toEqual(['Ground']);
+    expect(fromGround.sections[0]!.rooms.map((r) => r.name)).toEqual(['Garage', 'Kitchen']);
+  });
+});

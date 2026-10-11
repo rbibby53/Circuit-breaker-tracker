@@ -6,6 +6,7 @@ import { api } from '../api';
 import { useCurrentUser } from '../auth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { LocationTree } from '../components/LocationTree';
+import { PrintButton, locationPrintStyles } from '../components/PrintDialog';
 import { ErrorNote, Field } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { useLocations, usePanels } from '../queries';
@@ -211,6 +212,13 @@ function LocationView({
           )}
         </div>
         <div className="toolbar">
+          {!crumbOnly && (
+            <PrintButton
+              endpoint={`/api/locations/${node.id}/pdf`}
+              styles={locationPrintStyles(node.name)}
+              subject={node.name}
+            />
+          )}
           {canRename && !editing && (
             <button className="btn" onClick={() => setEditing(true)}>
               Rename

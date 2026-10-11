@@ -8,9 +8,9 @@ A self-hosted web app for recreating your electrical panels, labelling what ever
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
 
-> **Status:** milestones 1 and 2 of 5 are done: accounts, single sign-on, scoped access and the
-> panel editor for residential load centers. Commercial 3-phase panels and PDF export come
-> next. See [docs/PLAN.md](docs/PLAN.md) for the whole plan.
+> **Status:** milestones 1, 2 and 4 of 5 are done: accounts, single sign-on, scoped access, the
+> panel editor for residential load centers, and printing. Commercial 3-phase panels are on
+> hold. See [docs/PLAN.md](docs/PLAN.md) for the whole plan.
 
 ![The panel editor with a tandem breaker selected](docs/screenshots/editor.png)
 
@@ -43,6 +43,16 @@ as a single Docker container with its data in one SQLite file.
   their access.
 - **Breakers serving a room:** each room and floor page lists every breaker that serves it,
   from any panel, including whole-floor and whole-site tags.
+- **Print to PDF** (the **Print** button on any panel or location):
+  - **Panel sheet:** a full page laid out like the panel, odd numbers left and even right.
+    It shows what each breaker serves, its markers and the panel's notes.
+  - **Door card:** a 4-inch-wide card to cut out and keep inside the panel door.
+  - **Room index:** every room grouped by floor, with the breakers that serve it.
+  - **Panel book:** a cover with contents, a sheet for every panel in a site, building or
+    floor, then the room index.
+  - Markers are printed as text (CRIT, UPS, GEN, GFCI, AFCI, DF), so they read fine in black
+    and white. Each sheet has a QR code that opens the panel in the app.
+  - US Letter or A4. People only ever print what they are allowed to see.
 
 ## Screenshots
 
@@ -54,6 +64,13 @@ as a single Docker container with its data in one SQLite file.
 | Grant access on any location; managers only invite within their scope. | Admins configure the app in Settings instead of Docker.  |
 
 <p align="center"><img src="docs/screenshots/phone-editor.png" alt="The panel editor on a phone" width="300"></p>
+
+|                                                                          |                                                            |
+| ------------------------------------------------------------------------ | ---------------------------------------------------------- |
+| ![A printed panel sheet](docs/screenshots/pdf-sheet.png)                 | ![A printed door card](docs/screenshots/pdf-door-card.png) |
+| The panel sheet: what every breaker serves, with markers, key and notes. | The door card, sized to slip inside the panel door.        |
+| ![The print dialog](docs/screenshots/print-dialog.png)                   |                                                            |
+| Print a whole site as a book, or just its room index, on Letter or A4.   |                                                            |
 
 ## Run it
 
@@ -131,6 +148,7 @@ and shows there as locked. This suits infrastructure-as-code setups:
 | SSO button text            | `OIDC_LABEL`                                                   |
 | Invite / reset link expiry | `INVITE_DAYS`, `RESET_HOURS`                                   |
 | New panel defaults         | `DEFAULT_PANEL_SPACES`, `DEFAULT_MAIN_AMPS`, `DEFAULT_VOLTAGE` |
+| Printing                   | `PAPER_SIZE` (`letter`, `a4`), `PRINT_QR`, `PRINT_NOTE`        |
 | Behind a reverse proxy     | `TRUST_PROXY`                                                  |
 | HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                    |
 | Log level                  | `LOG_LEVEL`                                                    |
