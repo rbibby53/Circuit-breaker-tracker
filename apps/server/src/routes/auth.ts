@@ -1,5 +1,6 @@
 import {
   acceptInviteSchema,
+  updateMeSchema,
   changePasswordSchema,
   loginSchema,
   resetPasswordSchema,
@@ -36,6 +37,7 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     },
     paperSize: config.settings.get('paperSize'),
     publicPanels: config.settings.get('publicPanels'),
+    gravatar: config.settings.get('gravatar'),
     oidc: { enabled: !!config.oidc, label: config.oidc?.label ?? '' },
   }));
 
@@ -89,8 +91,17 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
 
   app.patch('/api/me', async (req) => {
     const auth = requireAuth(req);
-    const body = parse(acceptInviteSchema.pick({ displayName: true }), req.body);
-    db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(body.displayName, auth.realUser.id);
+    const body = parse(updateMeSchema, req.body);
+    const me = auth.realUser;
+    if (body.displayName !== undefined) {
+      db.prepare('UPDATE users SET display_name = ? WHERE id = ?').run(body.displayName, me.id);
+    }
+    if (body.email !== undefined) {
+      const email = body.email || null;
+      const taken = email && db.prepare('SELECT id FROM users WHERE email = ? AND id != ?').get(email, me.id);
+      if (taken) throw conflict('Someone else already uses that email address.');
+      db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, me.id);
+    }
     return { ok: true };
   });
 

@@ -19,13 +19,14 @@ import { api } from '../api';
 import { useCurrentUser } from '../auth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useTitle } from '../lib/useTitle';
-import { initials } from '../components/Layout';
+import { Avatar } from '../components/Avatar';
 import { LocationTree } from '../components/LocationTree';
 import { ErrorNote, Field, LinkBox, formatDate } from '../components/ui';
 import { buildTree, flatten } from '../tree';
 import { useLocations } from '../queries';
 
-const rolesUpTo = (ceiling: EffectiveRole | null): Role[] => ROLES.filter((r) => roleRank(r) <= roleRank(ceiling));
+export const rolesUpTo = (ceiling: EffectiveRole | null): Role[] =>
+  ROLES.filter((r) => roleRank(r) <= roleRank(ceiling));
 
 /** Start viewing as someone, then show the app through their eyes. */
 export function useViewAs() {
@@ -157,7 +158,7 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
             {a.admins.map((u) => (
               <tr key={`admin-${u.id}`}>
                 <td>
-                  <Person name={u.displayName} sub={u.username} />
+                  <Person name={u.displayName} sub={u.username} avatarUrl={u.avatarUrl} />
                 </td>
                 <td>
                   <span className="role role-admin">Admin</span>
@@ -170,7 +171,7 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
             {a.applies.map((g) => (
               <tr key={g.id}>
                 <td>
-                  <Person name={g.user.displayName} sub={g.user.username} />
+                  <Person name={g.user.displayName} sub={g.user.username} avatarUrl={g.user.avatarUrl} />
                 </td>
                 <td>
                   {g.canManage && !readOnly ? (
@@ -286,12 +287,10 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
   );
 }
 
-function Person({ name, sub }: { name: string; sub: string }) {
+function Person({ name, sub, avatarUrl }: { name: string; sub: string; avatarUrl?: string | null }) {
   return (
     <div className="person">
-      <span className="avatar avatar-light" aria-hidden="true">
-        {initials(name)}
-      </span>
+      <Avatar name={name} url={avatarUrl} light />
       <span className="cell-stack">
         <span className="strong">{name}</span>
         <span className="muted small">{sub}</span>
@@ -300,7 +299,7 @@ function Person({ name, sub }: { name: string; sub: string }) {
   );
 }
 
-function RoleFields({
+export function RoleFields({
   choices,
   role,
   limit,
@@ -339,7 +338,7 @@ function RoleFields({
   );
 }
 
-function InviteForm({
+export function InviteForm({
   locationId,
   locationName,
   choices,

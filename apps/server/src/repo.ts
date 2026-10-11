@@ -1,3 +1,4 @@
+import { createHash } from 'node:crypto';
 import {
   KIND_LABELS,
   pathIds,
@@ -47,12 +48,20 @@ export interface GrantRow {
   created_at: string;
 }
 
+/** Gravatar's address for an email: a SHA-256 of the trimmed, lower-case address. */
+export function gravatarUrl(email: string | null): string | null {
+  if (!email) return null;
+  const hash = createHash('sha256').update(email.trim().toLowerCase()).digest('hex');
+  return `https://gravatar.com/avatar/${hash}?s=96&d=404`;
+}
+
 export const toSummary = (u: UserRow): UserSummary => ({
   id: u.id,
   username: u.username,
   displayName: u.display_name,
   email: u.email,
   isAdmin: !!u.is_admin,
+  avatarUrl: gravatarUrl(u.email),
 });
 
 export const toActor = (u: UserRow) => ({ id: u.id, isAdmin: !!u.is_admin });

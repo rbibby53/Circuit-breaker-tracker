@@ -6,6 +6,14 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Manage access from the People page.** Each person has a **Manage access** dialog listing
+  everywhere they have access, where you can change a role or invite limit, remove access, or
+  grant a new location. People can be found by name, username, email or location, and invites
+  can be sent from the People page too.
+- **Profile pictures from Gravatar.** Add an email under Your account → Profile and your
+  Gravatar picture shows in the header, People and Access lists. Initials are shown when there
+  is no picture or it cannot load. Admins can turn it off with the new Gravatar setting
+  (`GRAVATAR`).
 - **Breaker tags** for what a breaker powers, such as Lights, Outlets or Servers. You add them in
   the breaker details, with suggestions from the tags already in use. Header search finds
   breakers by tag, and a "Highlight" bar on each panel dims every breaker without the chosen tag.

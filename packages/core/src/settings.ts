@@ -37,6 +37,7 @@ export type PaperSize = (typeof PAPER_SIZES)[number];
 export interface Settings {
   appName: string;
   publicUrl: string;
+  gravatar: boolean;
   allowLocalLogin: boolean;
   sessionDays: number;
   oidcIssuer: string;
@@ -78,6 +79,16 @@ export const SETTING_DEFS: SettingDef[] = [
     type: 'url',
     env: 'PUBLIC_URL',
     default: '',
+  },
+  {
+    key: 'gravatar',
+    group: 'general',
+    label: 'Show Gravatar pictures',
+    description:
+      'People with a picture on gravatar.com for their email address show it instead of their initials. Browsers fetch the pictures from Gravatar, which learns a hash of each email shown.',
+    type: 'boolean',
+    env: 'GRAVATAR',
+    default: true,
   },
   {
     key: 'allowLocalLogin',

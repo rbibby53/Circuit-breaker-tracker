@@ -5,6 +5,7 @@ import { useAuthConfig, useCurrentUser } from '../auth';
 import { useLocations } from '../queries';
 import { Logo } from './Logo';
 import { Search } from './Search';
+import { Avatar } from './Avatar';
 
 export function Layout() {
   const me = useCurrentUser();
@@ -58,9 +59,7 @@ export function Layout() {
         <Search />
         <div className="topbar-user">
           <NavLink to="/account" className="userchip" aria-label={`Your account: ${me.realUser.displayName}`}>
-            <span className="avatar" aria-hidden="true">
-              {initials(me.realUser.displayName)}
-            </span>
+            <Avatar name={me.realUser.displayName} url={me.realUser.avatarUrl} />
             <span className="userchip-name">{me.realUser.displayName}</span>
             {me.realUser.isAdmin && <span className="chip chip-dark">Admin</span>}
           </NavLink>
