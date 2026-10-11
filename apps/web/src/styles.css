@@ -401,11 +401,44 @@ a:focus-visible {
 .content.narrow {
   max-width: 860px;
 }
+.sidebar-toggle {
+  display: none;
+}
 @media (max-width: 860px) {
   .sidebar {
     max-width: none;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+    padding: 0;
+  }
+  /* On phones the tree folds behind a button, so the page comes first. */
+  .sidebar-toggle {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    width: 100%;
+    min-height: 48px;
+    padding: 0 16px;
+    background: none;
+    border: 0;
+    color: var(--ink);
+    font: inherit;
+    text-align: left;
+    cursor: pointer;
+  }
+  .sidebar-current {
+    flex: 1;
+    min-width: 0;
+    font-weight: 700;
+    white-space: nowrap;
+    overflow: hidden;
+    text-overflow: ellipsis;
+  }
+  .sidebar:not(.is-open) .sidebar-body {
+    display: none;
+  }
+  .sidebar-body {
+    padding: 4px 14px 16px;
   }
   .content {
     padding: 20px 16px 48px;
@@ -771,7 +804,10 @@ a:focus-visible {
 /* ---------- Tables ---------- */
 
 .table-wrap {
+  /* Positioned, so absolutely placed children (screen-reader text) stay inside the scroller. */
+  position: relative;
   overflow-x: auto;
+  max-width: 100%;
 }
 .table {
   width: 100%;
@@ -882,13 +918,18 @@ a:focus-visible {
 }
 .activity li {
   display: grid;
-  grid-template-columns: 170px minmax(0, 1fr);
+  grid-template-columns: 80px minmax(0, 1fr);
   gap: 12px;
   padding: 12px 16px;
   border-bottom: 1px solid var(--line);
 }
 .activity li:last-child {
   border-bottom: 0;
+}
+.activity-day {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
 }
 .activity time {
   font-family: var(--mono);
@@ -1230,12 +1271,6 @@ a:focus-visible {
   height: 12px;
   border-radius: 2px;
   display: inline-block;
-}
-.panel-stats {
-  font-family: var(--mono);
-  font-size: 12px;
-  color: var(--muted);
-  text-align: center;
 }
 .inspector {
   flex: 1 1 320px;
@@ -1725,6 +1760,12 @@ a:focus-visible {
     flex: 1 1 100%;
     flex-wrap: nowrap;
     overflow-x: auto;
+    gap: 0;
+    scrollbar-width: none;
+  }
+  .topnav a {
+    padding: 8px 9px;
+    white-space: nowrap;
   }
   .search {
     order: 4;
@@ -1851,8 +1892,58 @@ a:focus-visible {
   .pg-handles {
     display: none;
   }
+  /* Two lines of label beat a label cut to "Counter o…". */
   .pg-label {
-    font-size: 13px;
+    font-size: 12.5px;
+    line-height: 1.2;
+    white-space: normal;
+    display: -webkit-box;
+    -webkit-line-clamp: 2;
+    -webkit-box-orient: vertical;
+    /* Break a word only when it cannot fit on a line by itself. */
+    overflow-wrap: break-word;
+  }
+  /* A tandem half has room for one line only. */
+  .pg-breaker.is-tandem .pg-label {
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  .pg-sub {
+    font-size: 11px;
+  }
+  /* Markers get their own line under the label, instead of squeezing it to "Refriger ator". */
+  .pg-label-row {
+    gap: 3px;
+    flex-wrap: wrap;
+  }
+  .pg-label-row .pg-label {
+    flex: 1 1 100%;
+  }
+  .pg-label-row:has(.badge) .pg-label {
+    display: block;
+    white-space: nowrap;
+    text-overflow: ellipsis;
+  }
+  /* Tandem halves keep label and markers on one line. */
+  .pg-breaker.is-tandem .pg-label-row {
+    flex-wrap: nowrap;
+  }
+  .pg-breaker.is-tandem .pg-label-row .pg-label {
+    flex: 1 1 auto;
+    min-width: 0;
+  }
+  .pg-text:has(.pg-label-row .badge) .pg-sub {
+    display: none;
+  }
+  .pg-breaker.is-right .pg-label-row {
+    justify-content: flex-start;
+  }
+  .pg-label-row .badge {
+    font-size: 8.5px;
+    line-height: 13px;
+    padding: 0 3px;
+    letter-spacing: 0;
   }
   .pg-text {
     padding: 0 6px;
@@ -2279,4 +2370,28 @@ code {
 
 .load-surge .badge {
   margin-right: 4px;
+}
+
+.settings-jump {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+.settings-jump a {
+  padding: 5px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  color: var(--ink);
+  font-size: 13px;
+  text-decoration: none;
+}
+.settings-jump a:hover {
+  border-color: var(--ink);
+}
+/* Jumped-to sections clear the top of the window. */
+[id^='settings-'],
+#backup-h,
+#about-h {
+  scroll-margin-top: 16px;
 }

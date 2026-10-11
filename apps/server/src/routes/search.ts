@@ -62,12 +62,9 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
           .all(...locationIds) as (BreakerRow & { served: number })[])
       : [];
 
+    const servesStmt = db.prepare('SELECT location_id FROM breaker_serves WHERE breaker_id = ?');
     const servesOf = (breakerId: number) =>
-      (
-        db.prepare('SELECT location_id FROM breaker_serves WHERE breaker_id = ?').all(breakerId) as {
-          location_id: number;
-        }[]
-      ).map((r) => r.location_id);
+      (servesStmt.all(breakerId) as { location_id: number }[]).map((r) => r.location_id);
     const breakers: SearchResponse['breakers'] = [];
     const seen = new Set<number>();
     const add = (b: BreakerRow, servedName: string | null) => {

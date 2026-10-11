@@ -56,9 +56,20 @@ export function SettingsPage() {
         </div>
       </div>
 
+      <nav className="settings-jump" aria-label="Settings sections">
+        {SETTING_GROUPS.map((g) => (
+          <a key={g.id} href={`#settings-${g.id}`}>
+            {g.title}
+          </a>
+        ))}
+        <a href="#backup-h">Backup and restore</a>
+        <a href="#about-h">About</a>
+      </nav>
+
       {SETTING_GROUPS.map((g) => (
         <SettingsGroup
           key={g.id}
+          id={g.id}
           title={g.title}
           defs={SETTING_DEFS.filter((d) => d.group === g.id)}
           current={byKey}
@@ -121,11 +132,13 @@ export function SettingsPage() {
 }
 
 function SettingsGroup({
+  id,
   title,
   defs,
   current,
   extra,
 }: {
+  id: string;
   title: string;
   defs: SettingDef[];
   current: Map<SettingKey, AdminSetting>;
@@ -156,7 +169,7 @@ function SettingsGroup({
   };
 
   return (
-    <form className="panel stack" onSubmit={submit} aria-label={title}>
+    <form className="panel stack" onSubmit={submit} aria-label={title} id={`settings-${id}`}>
       <h2 className="h-caps">{title}</h2>
       {defs.map((def) => (
         <SettingField

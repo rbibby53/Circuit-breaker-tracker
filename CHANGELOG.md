@@ -121,6 +121,24 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Changed
 
+- **Phones:**
+  - The location tree folds into a "Locations" button at the top of Sites and Access, so the
+    page comes first. It folds again after you pick a location.
+  - All top menu items fit on screen.
+  - Wide tables scroll inside their box instead of making the whole page wider.
+  - Panel labels wrap to two lines instead of being cut to "Counter o…". Markers such as
+    CRIT sit on their own line under the label.
+- **Activity:** grouped by day, with a filter box. Places link to the panel or location, and
+  **Show older changes** loads more instead of stopping at 200.
+- **Settings:** links at the top jump to each section.
+- **Panel page:**
+  - Critical and backup-power counts are in the summary line above the panel. The repeated
+    stats line under the panel is gone.
+  - Spares read "Nothing connected" instead of "Spare" twice.
+- **Add a panel:** the unavailable "Single column" option is no longer shown.
+- **Faster first load:** the first download is about 350 KB instead of 500 KB. Pages other
+  than Sites and sign-in load when opened, and the browser no longer downloads the server's
+  validation library.
 - The footer shows real version numbers: `1.2.3` for releases and `1.2.3-dev.<commit>` for
   images built from `main`, instead of `vlatest`.
 - Development uses pnpm 12.

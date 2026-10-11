@@ -125,6 +125,8 @@ export interface ActivityItem {
   action: string;
   entity: string;
   entityId: number | null;
+  /** Set when the location still exists and the reader can open it. */
+  locationId: number | null;
   locationPath: string | null;
   summary: string;
 }

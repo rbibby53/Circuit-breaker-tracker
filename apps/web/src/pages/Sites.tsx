@@ -6,6 +6,7 @@ import { api } from '../api';
 import { useCurrentUser } from '../auth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { LocationTree } from '../components/LocationTree';
+import { Sidebar } from '../components/Sidebar';
 import { PrintButton, locationPrintStyles } from '../components/PrintDialog';
 import { ErrorNote, Field } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
@@ -29,15 +30,21 @@ export function SitesPage() {
 
   return (
     <div className="with-sidebar">
-      <aside className="sidebar" aria-label="Locations">
-        <div className="sidebar-head">
-          <span className="eyebrow">Locations</span>
-          <button type="button" className="link-btn" onClick={() => select(null)}>
-            All
-          </button>
-        </div>
+      <Sidebar
+        label="Locations"
+        current={selected?.name ?? null}
+        selectedId={selectedId}
+        head={
+          <>
+            <span className="eyebrow">Locations</span>
+            <button type="button" className="link-btn" onClick={() => select(null)}>
+              All
+            </button>
+          </>
+        }
+      >
         <LocationTree roots={roots} selectedId={selectedId} onSelect={select} />
-      </aside>
+      </Sidebar>
       <main className="content">
         {selected ? (
           <LocationView node={selected} byId={byId} onSelect={select} readOnly={me.viewingAs} />

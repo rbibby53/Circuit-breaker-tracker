@@ -34,7 +34,7 @@ export function serveLabel(byId: Map<number, TreeNode>, locationId: number): str
 export function servesSummary(byId: Map<number, TreeNode>, serves: EditServe[], isSpare: boolean): string {
   const shown = serves.filter((s) => !s.hidden && byId.has(s.locationId));
   const hidden = serves.length - shown.length;
-  if (serves.length === 0) return isSpare ? 'Spare' : 'Not tagged';
+  if (serves.length === 0) return isSpare ? 'Nothing connected' : 'Not tagged';
   if (shown.length === 0) return `${hidden} place${hidden === 1 ? '' : 's'} outside your access`;
   const floors = new Set(shown.map((s) => floorOf(byId, s.locationId)?.name ?? ''));
   const names = shown.map((s) => serveLabel(byId, s.locationId));

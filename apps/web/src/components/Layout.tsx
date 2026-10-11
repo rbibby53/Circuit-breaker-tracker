@@ -1,3 +1,4 @@
+import { Suspense } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { NavLink, Outlet, useNavigate } from 'react-router-dom';
 import { api } from '../api';
@@ -88,7 +89,10 @@ export function Layout() {
         </div>
       )}
       <div className="app-body" id="main" tabIndex={-1}>
-        <Outlet />
+        {/* Keeps the header in place while a page's code loads. */}
+        <Suspense fallback={<div className="page-loading">Loading…</div>}>
+          <Outlet />
+        </Suspense>
       </div>
       <footer className="app-footer">
         <span>

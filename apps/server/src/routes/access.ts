@@ -539,12 +539,17 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
   app.get('/api/activity', async (req): Promise<ActivityItem[]> => {
     const auth = requireAuth(req);
     const actor = actorOf(auth);
-    const q = req.query as { locationId?: string; limit?: string };
+    const q = req.query as { locationId?: string; limit?: string; before?: string };
     const limit = Math.min(Math.max(Number(q.limit ?? 100) || 100, 1), 500);
     const access = new AccessData(db);
 
     const where: string[] = [];
     const params: unknown[] = [];
+    // Paging: entries older than the last one already shown.
+    if (q.before) {
+      where.push('id < ?');
+      params.push(idParam(q.before));
+    }
     if (q.locationId) {
       const id = idParam(q.locationId);
       const node = access.node(id);
@@ -568,6 +573,7 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       action: string;
       entity: string;
       entity_id: number | null;
+      location_id: number | null;
       location_label: string | null;
       summary: string;
     }[];
@@ -579,6 +585,11 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       action: r.action,
       entity: r.entity,
       entityId: r.entity_id,
+      // Only link to places that still exist and the reader can see.
+      locationId:
+        r.location_id && access.node(r.location_id) && canView(actor, access.node(r.location_id)!, access.grants)
+          ? r.location_id
+          : null,
       locationPath: r.location_label,
       summary: r.summary,
     }));
