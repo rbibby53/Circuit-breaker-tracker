@@ -5,16 +5,22 @@ import {
   SETTING_BY_KEY,
   parseSetting,
   type AdminSettingsResponse,
+  type BackupFile,
+  type BackupList,
+  type LogLines,
   type RestoreUpload,
   type SettingKey,
 } from '@cbt/core';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { audit } from '../audit';
+import type { Backups } from '../backups';
+import { disposition } from '../download';
+import { RECENT_LINES, type LogStream } from '../log';
 import type { Config } from '../config';
 import { requireAdmin, requireAuth } from '../context';
 import type { DB } from '../db';
-import { badRequest, parse } from '../errors';
+import { badRequest, notFound, parse } from '../errors';
 import { discover, redirectUri } from '../oidc';
 import { inspectBackup, restoreFrom } from '../restore';
 import { clearSessionCookie } from '../sessions';
@@ -28,7 +34,7 @@ const startedAt = new Date().toISOString();
 
 const count = (db: DB, table: string) => (db.prepare(`SELECT COUNT(*) AS n FROM ${table}`).get() as { n: number }).n;
 
-export function adminRoutes(app: FastifyInstance, db: DB, config: Config): void {
+export function adminRoutes(app: FastifyInstance, db: DB, config: Config, backups: Backups, logs: LogStream): void {
   const dbFile = path.join(config.dataDir, 'breakers.db');
   const fileSize = (f: string) => {
     try {
@@ -196,5 +202,89 @@ export function adminRoutes(app: FastifyInstance, db: DB, config: Config): void 
       .header('Content-Type', 'application/vnd.sqlite3')
       .header('Content-Disposition', `attachment; filename="circuit-breaker-tracker-${stamp}.db"`)
       .send(stream);
+  });
+
+  // ---- Automatic backups --------------------------------------------------------------
+
+  app.get('/api/admin/backups', async (req): Promise<BackupList> => {
+    requireAdmin(requireAuth(req));
+    return backups.summary();
+  });
+
+  app.post('/api/admin/backups', async (req): Promise<BackupFile> => {
+    const auth = requireAuth(req);
+    requireAdmin(auth);
+    const made = await backups.run('manual');
+    audit(db, auth, { action: 'backup.create', entity: 'settings', summary: `Saved a backup now (${made.name})` });
+    return made;
+  });
+
+  const backupFile = (name: string) => {
+    const file = backups.file(name);
+    if (!file) throw notFound('That backup is not there any more.');
+    return file;
+  };
+
+  app.get('/api/admin/backups/:name', async (req, reply) => {
+    const auth = requireAuth(req);
+    requireAdmin(auth);
+    const { name } = req.params as { name: string };
+    const file = backupFile(name);
+    audit(db, auth, { action: 'backup.download', entity: 'settings', summary: `Downloaded the backup ${name}` });
+    return reply
+      .header('Content-Type', 'application/vnd.sqlite3')
+      .header(
+        'Content-Disposition',
+        disposition(`circuit-breaker-tracker-${name.replace(/^breakers-/, '').replace(/\.db$/, '')}`, 'db', true),
+      )
+      .send(fs.createReadStream(file));
+  });
+
+  /** Stage a saved backup for restore, exactly like an upload: check it, then confirm. */
+  app.post('/api/admin/backups/:name/restore', async (req): Promise<RestoreUpload> => {
+    requireAdmin(requireAuth(req));
+    const file = backupFile((req.params as { name: string }).name);
+    removeStaleUploads();
+    const id = randomBytes(16).toString('hex');
+    const staged = pendingFile(id);
+    fs.copyFileSync(file, staged);
+    try {
+      return { id, summary: inspectBackup(staged) };
+    } catch (err) {
+      fs.rmSync(staged, { force: true });
+      throw err;
+    }
+  });
+
+  app.delete('/api/admin/backups/:name', async (req) => {
+    const auth = requireAuth(req);
+    requireAdmin(auth);
+    const { name } = req.params as { name: string };
+    if (!backups.remove(name)) throw notFound('That backup is not there any more.');
+    audit(db, auth, { action: 'backup.delete', entity: 'settings', summary: `Deleted the backup ${name}` });
+    return { ok: true };
+  });
+
+  // ---- Log viewer -------------------------------------------------------------------
+
+  const LEVEL_NUMBERS = { debug: 20, info: 30, warn: 40, error: 50 } as const;
+  const levelName = (n: number): LogLines['lines'][number]['level'] =>
+    n >= 50 ? 'error' : n >= 40 ? 'warn' : n >= 30 ? 'info' : 'debug';
+
+  app.get('/api/admin/logs', async (req): Promise<LogLines> => {
+    requireAdmin(requireAuth(req));
+    const { level } = parse(
+      z.object({ level: z.enum(['debug', 'info', 'warn', 'error']).default('debug') }),
+      req.query,
+    );
+    return {
+      level: config.settings.get('logLevel'),
+      capacity: RECENT_LINES,
+      lines: logs.recent(LEVEL_NUMBERS[level]).map((l) => ({
+        time: new Date(l.time).toISOString(),
+        level: levelName(l.level),
+        text: l.text,
+      })),
+    };
   });
 }

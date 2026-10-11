@@ -21,6 +21,7 @@ import { totpRoutes } from './routes/totp';
 import { loadAuth } from './sessions';
 import { SettingsStore } from './settings';
 import { startupLines } from './startup';
+import { Backups } from './backups';
 
 export const CSRF_HEADER = 'x-cbt-csrf';
 
@@ -48,7 +49,12 @@ const CSP = [
 export async function buildApp(
   startup: StartupConfig,
   db: DB,
-  opts: { logger?: boolean; logStream?: LogStream; startupReport?: boolean } = {},
+  opts: {
+    logger?: boolean;
+    logStream?: LogStream;
+    /** The real server: log the start-up summary and run scheduled jobs. Off in tests. */
+    startupReport?: boolean;
+  } = {},
 ): Promise<FastifyInstance> {
   // Throws on an invalid environment variable, which stops startup with a clear message.
   const settings = new SettingsStore(db, startup.env);
@@ -135,7 +141,13 @@ export async function buildApp(
     return reply.code(500).send({ error: 'server', message: 'Something went wrong.' });
   });
 
-  if (opts.startupReport) for (const line of startupLines(db, config)) app.log[line.level](line.msg);
+  const backups = new Backups(db, config.dataDir, settings);
+  if (opts.startupReport) {
+    for (const line of startupLines(db, config)) app.log[line.level](line.msg);
+    app.log.info(backups.describe());
+    backups.start();
+  }
+  app.addHook('onClose', async () => backups.stop());
 
   app.get('/healthz', async () => {
     db.prepare('SELECT 1').get();
@@ -149,7 +161,7 @@ export async function buildApp(
   pdfRoutes(app, db, config);
   exportRoutes(app, db);
   publicRoutes(app, db, config);
-  adminRoutes(app, db, config);
+  adminRoutes(app, db, config, backups, stream);
   searchRoutes(app, db);
   totpRoutes(app, db, config);
 

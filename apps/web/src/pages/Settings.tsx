@@ -3,13 +3,15 @@ import {
   SETTING_GROUPS,
   type AdminSetting,
   type AdminSettingsResponse,
+  type BackupList,
+  type LogLines,
   type RestoreUpload,
   type SettingDef,
   type SettingKey,
   type SettingValue,
 } from '@cbt/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useCurrentUser } from '../auth';
 import { useConfirm } from '../components/ConfirmDialog';
@@ -19,6 +21,8 @@ import { useTitle } from '../lib/useTitle';
 export function SettingsPage() {
   useTitle('Settings');
   const me = useCurrentUser();
+  // A backup staged for restore, from an upload or from the saved backups list.
+  const [pending, setPending] = useState<RestoreUpload | null>(null);
   const data = useQuery({
     queryKey: ['admin-settings'],
     queryFn: () => api.get<AdminSettingsResponse>('/api/admin/settings'),
@@ -58,7 +62,15 @@ export function SettingsPage() {
           title={g.title}
           defs={SETTING_DEFS.filter((d) => d.group === g.id)}
           current={byKey}
-          extra={g.id === 'sso' ? <SsoStatus data={s} /> : null}
+          extra={
+            g.id === 'sso' ? (
+              <SsoStatus data={s} />
+            ) : g.id === 'logging' ? (
+              <LogViewer />
+            ) : g.id === 'backups' ? (
+              <SavedBackups onRestore={setPending} />
+            ) : null
+          }
         />
       ))}
 
@@ -75,7 +87,7 @@ export function SettingsPage() {
             Download backup
           </a>
         </div>
-        <RestoreBackup />
+        <RestoreBackup pending={pending} setPending={setPending} />
       </section>
 
       <section className="panel stack" aria-labelledby="about-h">
@@ -323,10 +335,20 @@ function SsoStatus({ data }: { data: AdminSettingsResponse }) {
 }
 
 /** Upload a backup, see what is in it, then restore it after confirming. */
-function RestoreBackup() {
+function RestoreBackup({
+  pending,
+  setPending,
+}: {
+  pending: RestoreUpload | null;
+  setPending: (p: RestoreUpload | null) => void;
+}) {
   const confirm = useConfirm();
   const input = useRef<HTMLInputElement>(null);
-  const [pending, setPending] = useState<RestoreUpload | null>(null);
+  const box = useRef<HTMLDivElement>(null);
+  // Bring the confirmation into view when a saved backup is picked further up the page.
+  useEffect(() => {
+    if (pending) box.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+  }, [pending]);
 
   const upload = useMutation({
     mutationFn: (file: File) => api.upload<RestoreUpload>('/api/admin/restore', file),
@@ -346,7 +368,7 @@ function RestoreBackup() {
 
   const c = pending?.summary.counts;
   return (
-    <div className="subtle-box stack-sm">
+    <div className="subtle-box stack-sm" ref={box}>
       <span className="strong">Restore from a backup</span>
       {!pending ? (
         <>
@@ -404,6 +426,162 @@ function RestoreBackup() {
           </div>
         </>
       )}
+    </div>
+  );
+}
+
+const LOG_FILTERS = [
+  { value: 'debug', label: 'Everything' },
+  { value: 'info', label: 'Info and above' },
+  { value: 'warn', label: 'Warnings and errors' },
+  { value: 'error', label: 'Errors only' },
+] as const;
+
+/** The server's recent log lines, so nobody needs the Docker console to see what happened. */
+function LogViewer() {
+  const [filter, setFilter] = useState<(typeof LOG_FILTERS)[number]['value']>('info');
+  const [open, setOpen] = useState(false);
+  const box = useRef<HTMLPreElement>(null);
+  const logs = useQuery({
+    queryKey: ['logs', filter],
+    queryFn: () => api.get<LogLines>(`/api/admin/logs?level=${filter}`),
+    enabled: open,
+    refetchInterval: open ? 10_000 : false,
+  });
+  // Newest lines are at the bottom; keep them in view as they arrive.
+  useEffect(() => {
+    if (box.current) box.current.scrollTop = box.current.scrollHeight;
+  }, [logs.data]);
+  const lines = logs.data?.lines ?? [];
+  return (
+    <div className="subtle-box stack-sm">
+      <div className="row-between">
+        <span className="strong">Recent log</span>
+        <button type="button" className="btn btn-sm" aria-expanded={open} onClick={() => setOpen(!open)}>
+          {open ? 'Hide' : 'Show recent log'}
+        </button>
+      </div>
+      {open && (
+        <>
+          <div className="log-tools">
+            <label className="small">
+              Show
+              <select value={filter} onChange={(e) => setFilter(e.target.value as typeof filter)}>
+                {LOG_FILTERS.map((f) => (
+                  <option key={f.value} value={f.value}>
+                    {f.label}
+                  </option>
+                ))}
+              </select>
+            </label>
+            <button type="button" className="btn btn-sm" onClick={() => void logs.refetch()}>
+              Refresh
+            </button>
+          </div>
+          <pre ref={box} className="log-view" aria-label="Recent log lines" tabIndex={0}>
+            {lines.length
+              ? lines.map((l, i) => (
+                  <span key={i} className={`log-${l.level}`}>
+                    {l.text}
+                    {'\n'}
+                  </span>
+                ))
+              : logs.isLoading
+                ? 'Loading…'
+                : 'Nothing logged at this level since the server started.'}
+          </pre>
+          {logs.data && (
+            <span className="small muted">
+              The last {logs.data.capacity} lines since the server started, logged at the {logs.data.level} level. The
+              container log has everything.
+            </span>
+          )}
+          <ErrorNote error={logs.error} />
+        </>
+      )}
+    </div>
+  );
+}
+
+/** The copies in the backups folder, newest first, with "Back up now". */
+function SavedBackups({ onRestore }: { onRestore: (p: RestoreUpload) => void }) {
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const list = useQuery({ queryKey: ['backups'], queryFn: () => api.get<BackupList>('/api/admin/backups') });
+  const refresh = () => qc.invalidateQueries({ queryKey: ['backups'] });
+  const now = useMutation({ mutationFn: () => api.post('/api/admin/backups'), onSuccess: refresh });
+  const remove = useMutation({
+    mutationFn: (name: string) => api.del(`/api/admin/backups/${name}`),
+    onSuccess: refresh,
+  });
+  const stage = useMutation({
+    mutationFn: (name: string) => api.post<RestoreUpload>(`/api/admin/backups/${name}/restore`),
+    onSuccess: onRestore,
+  });
+  const b = list.data;
+  return (
+    <div className="subtle-box stack-sm">
+      <div className="row-between">
+        <span className="strong">Saved backups</span>
+        <button type="button" className="btn btn-sm btn-dark" onClick={() => now.mutate()} disabled={now.isPending}>
+          {now.isPending ? 'Saving…' : 'Back up now'}
+        </button>
+      </div>
+      {b && (
+        <span className="small muted">
+          In <code>{b.dir}</code>.{' '}
+          {b.nextAt ? `Next automatic backup ${new Date(b.nextAt).toLocaleString()}.` : 'Automatic backups are off.'}
+        </span>
+      )}
+      {b?.lastError && (
+        <p className="error small" role="alert">
+          The last automatic backup failed: {b.lastError}
+        </p>
+      )}
+      {b && b.files.length === 0 && <span className="small muted">No backups saved yet.</span>}
+      {b && b.files.length > 0 && (
+        <ul className="backup-list">
+          {b.files.map((f) => (
+            <li key={f.name}>
+              <span className="cell-stack">
+                <span>{new Date(f.createdAt).toLocaleString()}</span>
+                <span className="muted small">
+                  {f.name} · {formatBytes(f.bytes)}
+                </span>
+              </span>
+              <span className="row">
+                <a className="btn btn-sm" href={`/api/admin/backups/${f.name}`} download>
+                  Download
+                </a>
+                <button
+                  type="button"
+                  className="btn btn-sm"
+                  disabled={stage.isPending}
+                  onClick={() => stage.mutate(f.name)}
+                >
+                  Restore…
+                </button>
+                <button
+                  type="button"
+                  className="btn btn-sm btn-danger"
+                  onClick={async () => {
+                    const ok = await confirm({
+                      title: 'Delete this backup?',
+                      message: `${f.name} is removed from the backups folder.`,
+                      confirmLabel: 'Delete',
+                      danger: true,
+                    });
+                    if (ok) remove.mutate(f.name);
+                  }}
+                >
+                  Delete
+                </button>
+              </span>
+            </li>
+          ))}
+        </ul>
+      )}
+      <ErrorNote error={list.error ?? now.error ?? remove.error ?? stage.error} />
     </div>
   );
 }

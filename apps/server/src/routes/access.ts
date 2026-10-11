@@ -446,6 +446,28 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     return { ok: true };
   });
 
+  /** End every sign-in someone has, e.g. a lost phone. Same rule as sending them a reset link. */
+  app.post('/api/users/:id/sign-out', async (req) => {
+    const auth = requireAuth(req);
+    const actor = actorOf(auth);
+    const id = idParam((req.params as { id: string }).id);
+    const access = new AccessData(db);
+    const user = getUser(db, id);
+    if (!user) throw notFound();
+    const theirs = access.grants.filter((g) => g.userId === id);
+    if (!actor.isAdmin && !canSeeUser(actor, theirs, access.nodes, access.grants)) throw notFound();
+    assertCheck(canResetUser(actor, toActor(user), theirs, access.nodes, access.grants));
+    if (id === auth.realUser.id) throw badRequest('Use "Sign out everywhere else" under Your account.');
+    const n = db.prepare('DELETE FROM sessions WHERE user_id = ?').run(id).changes;
+    audit(db, auth, {
+      action: 'user.sign_out',
+      entity: 'user',
+      entityId: id,
+      summary: `Signed ${user.display_name} out everywhere (${n} session${n === 1 ? '' : 's'})`,
+    });
+    return { ok: true, signedOut: n };
+  });
+
   app.post('/api/users/:id/reset-link', async (req): Promise<CreatedLink> => {
     const auth = requireAuth(req);
     const actor = actorOf(auth);

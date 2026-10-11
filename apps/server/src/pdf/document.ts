@@ -53,6 +53,14 @@ export interface PrintContext {
   qrHint: string | null;
   timeZone: string;
   now: Date;
+  /** Who printed it, shown next to the date so an old printout can be traced back. */
+  printedBy: string | null;
+}
+
+/** "Printed Oct 11, 2026 by Ryan", or "printed …" for use mid-sentence. */
+export function printedLine(ctx: Pick<PrintContext, 'now' | 'timeZone' | 'printedBy'>, capital = true): string {
+  const text = `${capital ? 'Printed' : 'printed'} ${formatDate(ctx.now, ctx)}`;
+  return ctx.printedBy ? `${text} by ${ctx.printedBy}` : text;
 }
 
 /** Where a panel's QR code leads: its public page when shared, otherwise the panel in the app. */
@@ -110,7 +118,12 @@ export class Pdf {
       margin: this.margin,
       autoFirstPage: false,
       bufferPages: true,
-      info: { Title: title, Creator: ctx.appName, Producer: ctx.appName },
+      info: {
+        Title: title,
+        Creator: ctx.appName,
+        Producer: ctx.appName,
+        ...(ctx.printedBy ? { Author: ctx.printedBy } : {}),
+      },
     });
     for (const [name, data] of Object.entries(fonts())) this.doc.registerFont(name, data);
   }
@@ -269,7 +282,7 @@ export class Pdf {
   /** Write footers on every page and return the finished file. */
   async finish(): Promise<Buffer> {
     const total = this.pageCount;
-    const printed = `Printed ${formatDate(this.ctx.now, this.ctx)}`;
+    const printed = printedLine(this.ctx);
     const s: TextStyle = { font: 'body', size: 7, color: FAINT };
     const y = this.height - this.margin - 8;
     for (let i = 0; i < total; i++) {

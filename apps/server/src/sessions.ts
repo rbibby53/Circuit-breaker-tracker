@@ -22,11 +22,17 @@ declare module 'fastify' {
   }
 }
 
-interface SessionRow {
+export interface SessionRow {
+  rowid: number;
   id: string;
   user_id: number;
   acting_as_user_id: number | null;
+  created_at: string;
   expires_at: string;
+  user_agent: string | null;
+  last_seen_at: string | null;
+  ip: string | null;
+  method: string | null;
 }
 
 /** Start a session. `how` says how they signed in, for the log: "password", "Microsoft"… */
@@ -39,13 +45,11 @@ export function createSession(
   how: string,
 ): void {
   const { token, hash } = newToken();
-  db.prepare('INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent) VALUES (?, ?, ?, ?, ?)').run(
-    hash,
-    userId,
-    now(),
-    daysFromNow(config.sessionDays),
-    userAgent?.slice(0, 300) ?? null,
-  );
+  const at = now();
+  db.prepare(
+    `INSERT INTO sessions (id, user_id, created_at, expires_at, user_agent, last_seen_at, ip, method)
+     VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+  ).run(hash, userId, at, daysFromNow(config.sessionDays), userAgent?.slice(0, 300) ?? null, at, reply.request.ip, how);
   reply.setCookie(SESSION_COOKIE, token, {
     path: '/',
     httpOnly: true,
@@ -76,7 +80,7 @@ export function loadAuth(db: DB, req: FastifyRequest): AuthState | null {
   const token = req.cookies[SESSION_COOKIE];
   if (!token) return null;
   const id = hashToken(token);
-  const s = db.prepare('SELECT * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
+  const s = db.prepare('SELECT rowid, * FROM sessions WHERE id = ?').get(id) as SessionRow | undefined;
   if (!s) return null;
   if (isExpired(s.expires_at)) {
     destroySession(db, id);
@@ -87,6 +91,9 @@ export function loadAuth(db: DB, req: FastifyRequest): AuthState | null {
 
   if (!realUser.last_seen_at || Date.now() - Date.parse(realUser.last_seen_at) > SEEN_INTERVAL_MS) {
     db.prepare('UPDATE users SET last_seen_at = ? WHERE id = ?').run(now(), realUser.id);
+  }
+  if (!s.last_seen_at || Date.now() - Date.parse(s.last_seen_at) > SEEN_INTERVAL_MS) {
+    db.prepare('UPDATE sessions SET last_seen_at = ?, ip = ? WHERE id = ?').run(now(), req.ip, id);
   }
 
   let user = realUser;

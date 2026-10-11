@@ -36,6 +36,9 @@ as a single Docker container with its data in one SQLite file.
   under Your account, by an admin or manager under People, or from their Microsoft sign-in.
   Everyone else gets initials. Browsers fetch the pictures straight from
   gravatar.com using a hash of the email; admins can turn this off in Settings.
+- **Where you're signed in:** Your account lists each browser with its address and when it
+  was last used, and can sign out any of them or all the others. Managers and admins can sign
+  someone out everywhere from People.
 - **View as user:** admins can see the app exactly as someone else sees it, read-only.
 - **Activity log:** every change is recorded. Managers see the changes inside their scope.
 - **Panel editor** for residential load centers and commercial panelboards:
@@ -60,7 +63,8 @@ as a single Docker container with its data in one SQLite file.
   their access.
 - **Breakers serving a room:** each room and floor page lists every breaker that serves it,
   from any panel, including whole-floor and whole-site tags.
-- **Print to PDF** (the **Print** button on any panel or location):
+- **Print to PDF** (the **Print** button on any panel or location), with who printed it and
+  when on every page:
   - **Panel sheet:** a full page laid out like the panel, odd numbers left and even right.
     It shows what each breaker serves, its markers and the panel's notes.
   - **Door card:** a 4-inch-wide card to cut out and keep inside the panel door.
@@ -181,6 +185,7 @@ and shows there as locked. This suits infrastructure-as-code setups:
 | HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                              |
 | Log level                  | `LOG_LEVEL` (`error`, `warn`, `info`, `debug`)                           |
 | Log format                 | `LOG_FORMAT` (`text`, `json`)                                            |
+| Automatic backups          | `BACKUP_KEEP` (`0` = off, default 14), `BACKUP_HOUR` (0–23, default 3)   |
 
 ### Logs
 
@@ -203,7 +208,8 @@ container's time zone (`TZ`):
 - Link tokens and query strings are never written to the log.
 - Set **Log format** to JSON for a log collector such as Loki or Graylog.
 
-Both are under Settings → Logging and take effect without a restart.
+Both are under Settings → Logging and take effect without a restart. **Show recent log** there
+lists the last 500 lines, so you can check what happened without opening the container console.
 
 ### Behind a reverse proxy
 
@@ -255,10 +261,18 @@ you cannot lock yourself out.
 
 ### Backups
 
-Everything is in `/data/breakers.db`. An admin can download a consistent copy at any time from
-**Settings → Backup**, even while people are using the app.
+Everything is in `/data/breakers.db`.
 
-To restore, upload the backup file in the same place. The app shows what is in it before
+- **Automatic backups:** a copy is saved every day in `/data/backups`, at 03:00 in the
+  container's time zone. The newest 14 are kept. Change the time and the number kept under
+  **Settings → Automatic backups** (`BACKUP_HOUR`, `BACKUP_KEEP`; `0` turns them off). A
+  backup missed while the server was off runs as soon as it is back. Each one is logged.
+- **Saved backups** are listed under Settings, where you can download one, restore from it, or
+  save one now. Your usual Unraid appdata backup picks up the folder as well.
+- **Download a copy** from **Settings → Backup** at any time, even while people are using the
+  app.
+
+To restore, pick a saved backup or upload a backup file. The app shows what is in it before
 anything changes, saves the current data as `breakers-before-restore-<date>.db` in the data
 folder, then swaps the data in without a restart. Backups from older versions are upgraded
 on the way in. Everyone is signed out and signs in with an account from the backup.

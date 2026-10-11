@@ -27,6 +27,7 @@ export const SETTING_GROUPS = [
   { id: 'printing', title: 'Printing and QR codes' },
   { id: 'network', title: 'Network and security' },
   { id: 'logging', title: 'Logging' },
+  { id: 'backups', title: 'Automatic backups' },
 ] as const;
 export type SettingGroup = (typeof SETTING_GROUPS)[number]['id'];
 
@@ -57,6 +58,8 @@ export interface Settings {
   cookieSecure: 'auto' | 'always' | 'never';
   logLevel: (typeof LOG_LEVELS)[number];
   logFormat: 'text' | 'json';
+  backupKeep: number;
+  backupHour: number;
 }
 export type SettingKey = keyof Settings;
 
@@ -294,6 +297,30 @@ export const SETTING_DEFS: SettingDef[] = [
       { value: 'text', label: 'Readable text' },
       { value: 'json', label: 'JSON' },
     ],
+  },
+  {
+    key: 'backupKeep',
+    group: 'backups',
+    label: 'Daily backups to keep',
+    description:
+      'A copy of the database is saved once a day in the backups folder inside the data folder, and older copies are removed. 0 turns automatic backups off.',
+    type: 'int',
+    env: 'BACKUP_KEEP',
+    default: 14,
+    min: 0,
+    max: 365,
+  },
+  {
+    key: 'backupHour',
+    group: 'backups',
+    label: 'Time of day (hour, 0–23)',
+    description:
+      'When the daily backup runs, in the server’s time zone. If the server was off then, it runs as soon as it is back.',
+    type: 'int',
+    env: 'BACKUP_HOUR',
+    default: 3,
+    min: 0,
+    max: 23,
   },
 ];
 

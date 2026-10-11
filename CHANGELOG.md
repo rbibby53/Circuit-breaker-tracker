@@ -6,6 +6,19 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Automatic daily backups** to `/data/backups`, at a set hour (03:00 by default) and keeping
+  the newest 14. Both are settings (`BACKUP_HOUR`, `BACKUP_KEEP`), and `0` turns them off. A
+  backup missed while the server was off runs when it is back. Settings lists the saved
+  backups, where you can download one, restore from it (with the usual check first), delete
+  it, or **Back up now**.
+- **Where you're signed in**, on Your account: each browser, its address, how it signed in
+  and when it was last used, with **Sign out** for each one or **Sign out everywhere else**.
+  Admins, and managers who look after someone, can **Sign out everywhere** for them from
+  People → Manage.
+- **Recent log in Settings → Logging:** the last 500 log lines, filtered by level, so the
+  container console is not needed.
+- **PDFs say who printed them:** "Printed Oct 11, 2026 by Ryan" in every page footer and on the
+  book cover, and the name is also stored as the PDF's author.
 - **Readable container logs.** One line per event in the container's time zone instead of
   JSON, so the Unraid log viewer is useful:
   - a start-up summary: version, database size and counts, public address, sign-in methods, settings locked by environment variables, and warnings such as half-configured Microsoft sign-in;

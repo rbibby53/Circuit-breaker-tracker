@@ -90,6 +90,27 @@ describe('what the server logs', () => {
     expect(last.hostname).toBeUndefined();
   });
 
+  it('keeps recent lines for the log viewer, for admins only', async () => {
+    const { app } = await loggedApp();
+    const admin = await setupAdmin(app);
+    await new Client(app).post('/api/auth/login', { username: 'admin', password: 'wrong password!!' });
+    const all = (await admin.get('/api/admin/logs')).body;
+    expect(all).toMatchObject({ level: 'info', capacity: 500 });
+    expect(all.lines.some((l: { text: string }) => l.text.includes('Signed in: admin (first-run setup)'))).toBe(true);
+    const warnings = (await admin.get('/api/admin/logs?level=warn')).body.lines;
+    expect(warnings.map((l: { level: string }) => l.level)).toEqual(['warn']);
+    expect(warnings[0].text).toMatch(/Sign-in refused for "admin": wrong password/);
+    expect((await new Client(app).get('/api/admin/logs')).status).toBe(401);
+  });
+
+  it('keeps only the newest 500 lines', () => {
+    const stream = new LogStream('text', () => undefined);
+    for (let i = 0; i < 520; i++) stream.write(`{"level":30,"time":${i},"msg":"line ${i}"}\n`);
+    const kept = stream.recent();
+    expect(kept).toHaveLength(500);
+    expect(kept[0]!.text).toMatch(/line 20$/);
+  });
+
   it('says at start-up what is running and what is misconfigured', () => {
     const db = openDatabase(':memory:');
     const env = {

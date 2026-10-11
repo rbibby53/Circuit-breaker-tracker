@@ -6,18 +6,20 @@ import {
   resetPasswordSchema,
   setupSchema,
   type AuthConfig,
+  type SessionInfo,
 } from '@cbt/core';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../audit';
 import type { Config } from '../config';
 import { requireAuth } from '../context';
 import { now, type DB } from '../db';
-import { conflict, forbidden, gone, notFound, parse } from '../errors';
+import { conflict, forbidden, gone, idParam, notFound, parse } from '../errors';
 import { applyInvite, inviteInfo, usableInvite } from '../invites';
 import { finishOidc, startOidc, type OidcClaims, type OidcState } from '../oidc';
 import { hashPassword, verifyPassword } from '../passwords';
 import { countUsers, findUserByLogin, getUser, type UserRow } from '../repo';
-import { clearSessionCookie, createSession, destroySession, destroyUserSessions } from '../sessions';
+import { deviceName } from '../device';
+import { clearSessionCookie, createSession, destroySession, destroyUserSessions, type SessionRow } from '../sessions';
 import { hashToken, isExpired } from '../tokens';
 import { createUser, meResponse, uniqueUsername } from '../users';
 import { startTotpChallenge } from './totp';
@@ -119,6 +121,47 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
       db.prepare('UPDATE users SET email = ? WHERE id = ?').run(email, me.id);
     }
     return { ok: true };
+  });
+
+  // ---- Where you're signed in -------------------------------------------------------
+
+  app.get('/api/me/sessions', async (req): Promise<SessionInfo[]> => {
+    const auth = requireAuth(req);
+    const rows = db
+      .prepare('SELECT rowid, * FROM sessions WHERE user_id = ? AND expires_at > ? ORDER BY last_seen_at DESC')
+      .all(auth.realUser.id, now()) as SessionRow[];
+    return rows.map((r) => ({
+      id: r.rowid,
+      current: r.id === auth.sessionId,
+      device: deviceName(r.user_agent),
+      method: r.method,
+      ip: r.ip,
+      createdAt: r.created_at,
+      lastSeenAt: r.last_seen_at,
+      expiresAt: r.expires_at,
+    }));
+  });
+
+  app.delete('/api/me/sessions/:id', async (req, reply) => {
+    const auth = requireAuth(req);
+    const rowid = idParam((req.params as { id: string }).id);
+    const row = db
+      .prepare('SELECT rowid, * FROM sessions WHERE rowid = ? AND user_id = ?')
+      .get(rowid, auth.realUser.id) as SessionRow | undefined;
+    if (!row) throw notFound('That sign-in has already ended.');
+    destroySession(db, row.id);
+    if (row.id === auth.sessionId) clearSessionCookie(config, reply);
+    req.log.info(`Signed out: ${auth.realUser.username} ended their session on ${deviceName(row.user_agent)}`);
+    return { ok: true };
+  });
+
+  app.post('/api/me/sessions/sign-out-others', async (req) => {
+    const auth = requireAuth(req);
+    const n = db
+      .prepare('DELETE FROM sessions WHERE user_id = ? AND id != ?')
+      .run(auth.realUser.id, auth.sessionId).changes;
+    req.log.info(`Signed out: ${auth.realUser.username} ended ${n} other session${n === 1 ? '' : 's'}`);
+    return { ok: true, signedOut: n };
   });
 
   app.post('/api/me/password', { config: strictLimit }, async (req) => {

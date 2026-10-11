@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { beforeEach, describe, expect, it } from 'vitest';
 import type { DB } from '../src/db';
 import { AccessData, getUser, toActor } from '../src/repo';
+import { printedLine } from '../src/pdf/document';
 import { roomIndex } from '../src/roomIndex';
 import { Client, createLocation, invite, setupAdmin, testApp } from './helpers';
 
@@ -75,6 +76,18 @@ describe('panel PDFs', () => {
     expect(r.body.subarray(0, 5).toString()).toBe('%PDF-');
     expect(pages(r.body)).toBe(1);
     expect(r.body.toString('latin1')).toContain('/MediaBox [0 0 612 792]');
+  });
+
+  it('says who printed it, on the page and in the file properties', async () => {
+    const h = await home();
+    await h.admin.patch('/api/me', { displayName: 'Ryan Bibby' });
+    const r = await h.admin.raw(`/api/panels/${h.main}/pdf`);
+    const raw = r.body.toString('latin1');
+    const ref = raw.match(/\/Author (\d+) 0 R/)![1];
+    expect(raw).toContain(`\n${ref} 0 obj\n(Ryan Bibby)\nendobj`);
+    const now = new Date(Date.UTC(2026, 9, 11, 15));
+    expect(printedLine({ now, timeZone: 'UTC', printedBy: 'Ryan Bibby' })).toBe('Printed Oct 11, 2026 by Ryan Bibby');
+    expect(printedLine({ now, timeZone: 'UTC', printedBy: null }, false)).toBe('printed Oct 11, 2026');
   });
 
   it('prints a door card on A4 as a download', async () => {
