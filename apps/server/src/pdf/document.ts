@@ -104,8 +104,8 @@ export class Pdf {
   readonly height: number;
   readonly margin = 36;
   readonly footerHeight = 20;
-  /** Left-hand footer text for each page, by page index. */
-  private readonly footers: string[] = [];
+  /** Left-hand footer text for each page, by page index. null: no footer (label sheets). */
+  private readonly footers: (string | null)[] = [];
 
   constructor(
     paper: PaperSize,
@@ -145,8 +145,11 @@ export class Pdf {
     return this.right - this.left;
   }
 
-  /** Start a page whose footer reads `footer` on the left. Returns the top y. */
-  addPage(footer: string): number {
+  /**
+   * Start a page whose footer reads `footer` on the left. Returns the top y. null leaves the
+   * page without a footer, for sticker sheets that use the whole page.
+   */
+  addPage(footer: string | null): number {
     this.doc.addPage();
     this.footers.push(footer);
     return this.top;
@@ -286,6 +289,7 @@ export class Pdf {
     const s: TextStyle = { font: 'body', size: 7, color: FAINT };
     const y = this.height - this.margin - 8;
     for (let i = 0; i < total; i++) {
+      if (this.footers[i] === null) continue;
       this.doc.switchToPage(i);
       this.hline(this.left, this.right, y - 5, RULE, 0.4);
       const right = total > 1 ? `${printed} · Page ${i + 1} of ${total}` : printed;

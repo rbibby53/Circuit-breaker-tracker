@@ -6,6 +6,13 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Printable breaker labels**, in the panel's Print & export dialog:
+  - a **sticker sheet** with one label per circuit (number, label, rating and markers) on
+    Avery 5167 (US Letter, 80 per sheet) or Avery L7651 (A4, 65 per sheet). You can skip
+    labels already used on a sheet;
+  - **label strips** to cut out and stick beside each column of breakers, with a box per space
+    at 1" or ¾" spacing so each label lines up with its breaker. Multi-pole breakers span their
+    spaces, tandems are split in half, and long columns continue on another strip.
 - **Surge protectors in breaker spaces**, such as a Square D SurgeBreaker or Eaton CHSPT2ULTRA.
   - Switch any breaker to **Surge protector** in the breaker details. It keeps its spaces and
     poles.

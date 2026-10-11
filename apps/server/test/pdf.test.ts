@@ -98,6 +98,30 @@ describe('panel PDFs', () => {
     expect(r.body.toString('latin1')).toContain('/MediaBox [0 0 595.28 841.89]');
   });
 
+  it('prints breaker labels on a sticker sheet, skipping labels already used', async () => {
+    const h = await home();
+    const sheet = await h.admin.raw(`/api/panels/${h.main}/pdf?style=labels`);
+    expect(sheet.status).toBe(200);
+    expect(sheet.headers['content-disposition']).toContain('filename="Main panel labels.pdf"');
+    expect(pages(sheet.body)).toBe(1);
+    // Six breakers starting at label 79 of 80 run onto a second sheet.
+    expect(pages((await h.admin.raw(`/api/panels/${h.main}/pdf?style=labels&skip=78`)).body)).toBe(2);
+    // A4 sheets hold 65.
+    expect(pages((await h.admin.raw(`/api/panels/${h.main}/pdf?style=labels&paper=a4&skip=62`)).body)).toBe(2);
+    expect((await h.admin.raw(`/api/panels/${h.main}/pdf?style=labels&skip=-1`)).status).toBe(400);
+  });
+
+  it('prints label strips at the breaker spacing', async () => {
+    const h = await home();
+    for (const pitch of ['1', '0.75']) {
+      const r = await h.admin.raw(`/api/panels/${h.main}/pdf?style=strips&pitch=${pitch}`);
+      expect(r.status).toBe(200);
+      expect(r.headers['content-disposition']).toContain('filename="Main panel label strips.pdf"');
+      expect(pages(r.body)).toBeGreaterThanOrEqual(1);
+    }
+    expect((await h.admin.raw(`/api/panels/${h.main}/pdf?style=strips&pitch=2`)).status).toBe(400);
+  });
+
   it('uses the paper size from Settings by default', async () => {
     const h = await home();
     await h.admin.patch('/api/admin/settings', { paperSize: 'a4' });

@@ -72,10 +72,13 @@ as a single Docker container with its data in one SQLite file.
   - **Panel sheet:** a full page laid out like the panel, odd numbers left and even right.
     It shows what each breaker serves, its markers and the panel's notes.
   - **Door card:** a 4-inch-wide card to cut out and keep inside the panel door.
+  - **Breaker labels:** a sticker sheet with one label per circuit (Avery 5167 on Letter, Avery
+    L7651 on A4), or strips to stick beside each column of breakers at 1" or ¾" spacing. Print
+    these at 100%.
   - **Room index:** every room grouped by floor, with the breakers that serve it.
   - **Panel book:** a cover with contents, a sheet for every panel in a site, building or
     floor, then the room index.
-  - Markers are printed as text (CRIT, UPS, GEN, GFCI, AFCI, DF), so they read fine in black
+  - Markers are printed as text (CRIT, UPS, GEN, GFCI, AFCI, DF, SPD), so they read fine in black
     and white. Each sheet has a QR code that opens the panel in the app.
   - US Letter or A4. People only ever print what they are allowed to see.
 - **Public panel pages from the QR code:** a manager can let anyone who scans a panel's QR

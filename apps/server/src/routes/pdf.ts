@@ -10,6 +10,7 @@ import { disposition } from '../download';
 import { canViewPanel, getPanel, panelDetail } from '../panels';
 import { drawBook, drawRoomIndex } from '../pdf/book';
 import { Pdf, safeTimeZone, type PrintContext } from '../pdf/document';
+import { STRIP_PITCHES, drawLabelSheet, drawLabelStrips } from '../pdf/labels';
 import { drawDoorCard, drawPanelSheet } from '../pdf/panel';
 import { AccessData } from '../repo';
 import { panelsUnder, roomIndex } from '../roomIndex';
@@ -19,7 +20,14 @@ const common = {
   tz: z.string().max(64).optional(),
   download: z.enum(['0', '1']).optional(),
 };
-const panelQuery = z.object({ ...common, style: z.enum(['sheet', 'door']).default('sheet') });
+const panelQuery = z.object({
+  ...common,
+  style: z.enum(['sheet', 'door', 'labels', 'strips']).default('sheet'),
+  /** Label sheets: blank labels to leave at the start, for a partly used sheet. */
+  skip: z.coerce.number().int().min(0).max(200).default(0),
+  /** Label strips: the spacing between breakers, in inches. */
+  pitch: z.enum(STRIP_PITCHES).default('1'),
+});
 const locationQuery = z.object({ ...common, style: z.enum(['book', 'index']).default('book') });
 
 export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
@@ -58,10 +66,14 @@ export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
     const detail = panelDetail(db, actor, access, panel);
 
     const ctx = context(q.tz, auth);
-    const pdf = new Pdf(q.paper ?? config.settings.get('paperSize'), detail.name, ctx);
+    const paper = q.paper ?? config.settings.get('paperSize');
+    const pdf = new Pdf(paper, detail.name, ctx);
     if (q.style === 'door') drawDoorCard(pdf, detail);
+    else if (q.style === 'labels') drawLabelSheet(pdf, paper, detail, q.skip);
+    else if (q.style === 'strips') drawLabelStrips(pdf, detail, q.pitch);
     else drawPanelSheet(pdf, detail);
-    const name = q.style === 'door' ? `${detail.name} door card` : detail.name;
+    const suffix = { sheet: '', door: ' door card', labels: ' labels', strips: ' label strips' }[q.style];
+    const name = `${detail.name}${suffix}`;
     return send(reply, await pdf.finish(), name, q.download === '1');
   });
 
