@@ -29,6 +29,7 @@ export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
       appName: config.settings.get('appName'),
       note: config.settings.get('printNote'),
       qrBase: wantQr && base ? base : null,
+      publicPanels: config.settings.get('publicPanels'),
       qrHint:
         wantQr && !base
           ? 'An admin can set the public address under Settings to add a QR code that opens this panel in the app.'

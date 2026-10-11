@@ -47,10 +47,21 @@ export interface PrintContext {
   note: string;
   /** Base address for QR codes; null prints none. */
   qrBase: string | null;
+  /** Whether QR codes may point at a panel's public page (when it has one). */
+  publicPanels: boolean;
   /** Why there is no QR code when one was wanted, as advice for whoever prints. */
   qrHint: string | null;
   timeZone: string;
   now: Date;
+}
+
+/** Where a panel's QR code leads: its public page when shared, otherwise the panel in the app. */
+export function panelQrUrl(
+  ctx: Pick<PrintContext, 'qrBase' | 'publicPanels'>,
+  panel: { id: number; publicPath: string | null },
+): string | null {
+  if (!ctx.qrBase) return null;
+  return ctx.publicPanels && panel.publicPath ? `${ctx.qrBase}${panel.publicPath}` : `${ctx.qrBase}/panels/${panel.id}`;
 }
 
 export function formatDate(iso: string | Date, ctx: Pick<PrintContext, 'timeZone'>): string {

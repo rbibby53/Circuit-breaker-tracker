@@ -60,6 +60,10 @@ as a single Docker container with its data in one SQLite file.
   - Markers are printed as text (CRIT, UPS, GEN, GFCI, AFCI, DF), so they read fine in black
     and white. Each sheet has a QR code that opens the panel in the app.
   - US Letter or A4. People only ever print what they are allowed to see.
+- **Public panel pages from the QR code:** a manager can let anyone who scans a panel's QR
+  code see it without signing in. It is a read-only, phone-friendly list with a search box
+  and a **Sign in to edit** button. The link is unguessable and can be replaced or turned
+  off, and an admin can switch public pages off everywhere.
 - **CSV export:** every breaker of a panel, or of everything under a location, for Excel,
   Numbers or Google Sheets (from the same **Print & export** button).
 - **Duplicate a panel** into another room, e.g. for identical apartments. Room tags come
@@ -151,20 +155,20 @@ page and applies without a restart.
 Any setting can also be pinned with an environment variable. It then wins over the Settings page
 and shows there as locked. This suits infrastructure-as-code setups:
 
-| Setting                    | Variable                                                       |
-| -------------------------- | -------------------------------------------------------------- |
-| App name                   | `APP_NAME`                                                     |
-| Public address             | `PUBLIC_URL`                                                   |
-| Allow password sign-in     | `ALLOW_LOCAL_LOGIN`                                            |
-| Stay signed in for (days)  | `SESSION_DAYS`                                                 |
-| Microsoft / OIDC           | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`          |
-| SSO button text            | `OIDC_LABEL`                                                   |
-| Invite / reset link expiry | `INVITE_DAYS`, `RESET_HOURS`                                   |
-| New panel defaults         | `DEFAULT_PANEL_SPACES`, `DEFAULT_MAIN_AMPS`, `DEFAULT_VOLTAGE` |
-| Printing                   | `PAPER_SIZE` (`letter`, `a4`), `PRINT_QR`, `PRINT_NOTE`        |
-| Behind a reverse proxy     | `TRUST_PROXY`                                                  |
-| HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                    |
-| Log level                  | `LOG_LEVEL`                                                    |
+| Setting                    | Variable                                                                 |
+| -------------------------- | ------------------------------------------------------------------------ |
+| App name                   | `APP_NAME`                                                               |
+| Public address             | `PUBLIC_URL`                                                             |
+| Allow password sign-in     | `ALLOW_LOCAL_LOGIN`                                                      |
+| Stay signed in for (days)  | `SESSION_DAYS`                                                           |
+| Microsoft / OIDC           | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`                    |
+| SSO button text            | `OIDC_LABEL`                                                             |
+| Invite / reset link expiry | `INVITE_DAYS`, `RESET_HOURS`                                             |
+| New panel defaults         | `DEFAULT_PANEL_SPACES`, `DEFAULT_MAIN_AMPS`, `DEFAULT_VOLTAGE`           |
+| Printing and QR codes      | `PAPER_SIZE` (`letter`, `a4`), `PRINT_QR`, `PRINT_NOTE`, `PUBLIC_PANELS` |
+| Behind a reverse proxy     | `TRUST_PROXY`                                                            |
+| HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                              |
+| Log level                  | `LOG_LEVEL`                                                              |
 
 ### Behind a reverse proxy
 

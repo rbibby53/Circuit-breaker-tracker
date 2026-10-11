@@ -46,6 +46,8 @@ export interface AuthConfig {
   panelDefaults: { spaces: number; mainAmps: number; voltage: string };
   /** Paper size the print dialog starts with. */
   paperSize: PaperSize;
+  /** Whether panels may have public pages opened from their QR codes. */
+  publicPanels: boolean;
   oidc: { enabled: boolean; label: string };
 }
 
@@ -195,6 +197,39 @@ export interface PanelDetail extends Omit<PanelSummary, 'usedSpaces' | 'breakerC
   /** From the breaker feeding this panel up to the service. Empty when fed by the utility. */
   feedChain: FeedLink[];
   fedFromBreakerId: number | null;
+  /** Path of the public page ("/p/…") when the panel has one and public pages are allowed. */
+  publicPath: string | null;
+  /** Whether the viewer may turn the public page on or off (Manager or admin). */
+  canShare: boolean;
+}
+
+/** What anyone with a panel's public link sees: the directory, read-only, nothing else. */
+export interface PublicPanel {
+  id: number;
+  name: string;
+  locationPath: string;
+  layout: PanelLayout;
+  spaces: number;
+  mainAmps: number | null;
+  mainType: MainType;
+  voltage: string;
+  notes: string;
+  updatedAt: string;
+  fedFrom: { panelName: string; circuit: string } | null;
+  breakers: {
+    position: number;
+    slot: Slot;
+    poles: number;
+    amps: number;
+    protection: Protection;
+    label: string;
+    notes: string;
+    isSpare: boolean;
+    critical: boolean;
+    backup: Backup;
+    /** Names of the rooms and areas it serves. */
+    serves: string[];
+  }[];
 }
 
 export interface SavePanelResponse {

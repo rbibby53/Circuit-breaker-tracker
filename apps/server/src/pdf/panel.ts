@@ -10,7 +10,7 @@ import {
   type DirectoryTag,
   type PanelDetail,
 } from '@cbt/core';
-import { FAINT, FILL, INK, MUTED, Pdf, RULE, formatDate, type Font } from './document';
+import { FAINT, FILL, INK, MUTED, Pdf, RULE, formatDate, panelQrUrl, type Font } from './document';
 
 type Breaker = BreakerDto & { key: string };
 
@@ -290,7 +290,7 @@ function drawKey(pdf: Pdf, x: number, y: number, width: number, info: ScheduleIn
 export function drawPanelSheet(pdf: Pdf, panel: PanelDetail): void {
   let y = pdf.addPage(panel.name);
   const qrSize = 62;
-  const qrUrl = pdf.ctx.qrBase ? `${pdf.ctx.qrBase}/panels/${panel.id}` : null;
+  const qrUrl = panelQrUrl(pdf.ctx, panel);
   const textW = pdf.contentWidth - (qrUrl ? qrSize + 20 : 0);
   if (qrUrl) {
     pdf.qr(qrUrl, pdf.right - qrSize, y, qrSize);
@@ -378,7 +378,7 @@ export function drawDoorCard(pdf: Pdf, panel: PanelDetail): void {
   const inner = CARD_W - pad * 2;
   let y = top + pad;
 
-  const qrUrl = pdf.ctx.qrBase ? `${pdf.ctx.qrBase}/panels/${panel.id}` : null;
+  const qrUrl = panelQrUrl(pdf.ctx, panel);
   const qrSize = 40;
   const headW = inner - (qrUrl ? qrSize + 8 : 0);
   if (qrUrl) pdf.qr(qrUrl, x + pad + inner - qrSize, y, qrSize);

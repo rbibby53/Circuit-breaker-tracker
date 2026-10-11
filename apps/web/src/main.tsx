@@ -18,6 +18,7 @@ import { applyTheme } from './lib/theme';
 import { LoginPage } from './pages/Login';
 import { NotFoundPage } from './pages/NotFound';
 import { PanelEditorPage } from './pages/PanelEditor';
+import { PublicPanelPage } from './pages/PublicPanel';
 import { ResetPage } from './pages/Reset';
 import { SettingsPage } from './pages/Settings';
 import { SetupPage } from './pages/Setup';
@@ -47,6 +48,7 @@ createRoot(document.getElementById('root')!).render(
             <Route path="/login" element={<LoginPage />} />
             <Route path="/invite/:token" element={<InvitePage />} />
             <Route path="/reset/:token" element={<ResetPage />} />
+            <Route path="/p/:token" element={<PublicPanelPage />} />
             <Route
               element={
                 <RequireAuth>
