@@ -93,7 +93,7 @@ export function Layout() {
       </div>
       <footer className="app-footer">
         <span>
-          {appName} {config.data?.version ? `v${config.data.version}` : ''}
+          {appName} {formatVersion(config.data?.version)}
         </span>
         <a href="https://github.com/rbibby53/Circuit-breaker-tracker" target="_blank" rel="noreferrer">
           Source on GitHub
@@ -114,4 +114,10 @@ export function initials(name: string): string {
       .slice(0, 2)
       .toUpperCase() || '?'
   );
+}
+
+/** "v1.2.3" for releases and builds from main ("v1.2.3-dev.abc1234"); "dev" when run from source. */
+function formatVersion(version: string | undefined): string {
+  if (!version) return '';
+  return /^\d/.test(version) ? `v${version}` : version;
 }

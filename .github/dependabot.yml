@@ -4,6 +4,9 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    # pnpm refuses packages published less than a day ago; give new releases time to settle.
+    cooldown:
+      default-days: 3
     open-pull-requests-limit: 5
     groups:
       # One PR for routine minor/patch updates; majors arrive separately.

@@ -3,8 +3,9 @@
 # ---- Build the web app and the server bundle --------------------------------------------
 FROM node:25-bookworm-slim AS build
 WORKDIR /src
-RUN corepack enable
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml tsconfig.base.json ./
+# The pnpm version pinned in package.json ("packageManager").
+RUN npm install -g --no-audit --no-fund "$(node -p "require('./package.json').packageManager")"
 COPY packages/core/package.json packages/core/
 COPY apps/server/package.json apps/server/
 COPY apps/web/package.json apps/web/

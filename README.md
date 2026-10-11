@@ -191,7 +191,7 @@ replace `breakers.db` in the data folder with the backup file.
 
 ## Develop
 
-Requirements: Node 22 and pnpm 10 (`corepack enable`).
+Requirements: Node 22 and pnpm 12 (`npm install -g pnpm@12`; the exact version is pinned in `package.json`).
 
 ```sh
 pnpm install
