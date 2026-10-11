@@ -11,18 +11,11 @@ services:
     # network_mode: host
     environment:
       PORT: '2757'
-      # The address people use to reach the app. Needed for invite links, QR codes and SSO.
-      PUBLIC_URL: 'https://breakers.example.com'
-      # Set when running behind a reverse proxy (Caddy, Nginx, Traefik…).
-      TRUST_PROXY: 'true'
+      # Everything else is set in the app under Settings. Any of those can also be pinned
+      # here, e.g. PUBLIC_URL, TRUST_PROXY or OIDC_ISSUER (see README).
       # Optional: create the first admin automatically instead of using the setup screen.
-      # ADMIN_USERNAME: "admin"
-      # ADMIN_PASSWORD: "change-me-to-something-long"
-      # Optional: Microsoft Entra ID single sign-on. See README.
-      # OIDC_ISSUER: "https://login.microsoftonline.com/<tenant-id>/v2.0"
-      # OIDC_CLIENT_ID: "<application-client-id>"
-      # OIDC_CLIENT_SECRET: "<client-secret>"
-      # OIDC_LABEL: "Sign in with Microsoft"
+      # ADMIN_USERNAME: 'admin'
+      # ADMIN_PASSWORD: 'change-me-to-something-long'
     volumes:
       - breakers-data:/data
 
