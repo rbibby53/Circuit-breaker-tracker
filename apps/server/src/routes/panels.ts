@@ -34,6 +34,7 @@ import {
   getBreaker,
   getGenerator,
   getPanel,
+  getTransferSwitch,
   isDownstream,
   locationName,
   panelDetail,
@@ -59,6 +60,14 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     if (!atLeast(effectiveRole(actor, access.node(locationId)!, access.grants), 'editor')) {
       throw forbidden('You need Editor access here to change panels.');
     }
+  };
+
+  /** A transfer switch the actor can see, for putting a panel on it. */
+  const checkAts = (actor: ReturnType<typeof actorOf>, access: AccessData, atsId: number | null) => {
+    if (atsId === null) return;
+    const t = getTransferSwitch(db, atsId);
+    const node = t ? access.node(t.location_id) : undefined;
+    if (!t || !node || !canView(actor, node, access.grants)) throw badRequest('Transfer switch not found.');
   };
 
   /** A generator the actor can see, for linking to a panel. */
@@ -92,13 +101,16 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     const shapeIssue = validatePanelShape(body)[0];
     if (shapeIssue) throw badRequest(shapeIssue.message);
     checkGenerator(actor, access, body.generatorId);
+    checkAts(actor, access, body.atsId);
     const relay = isRelayPanel(body);
+    // On a transfer switch, the switch's generator is the panel's.
+    const createGenerator = body.atsId ? null : body.generatorId;
     const t = now();
     const r = db
       .prepare(
         `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes,
-           generator_id, transfer_switch, control_system, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           generator_id, transfer_switch, control_system, ats_id, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -112,9 +124,10 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         body.manufacturer,
         body.model,
         body.notes,
-        body.generatorId,
-        body.generatorId ? body.transferSwitch : '',
+        createGenerator,
+        createGenerator ? body.transferSwitch : '',
         relay ? body.controlSystem : '',
+        body.atsId,
         t,
         t,
       );
@@ -162,7 +175,10 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     if (isRelayPanel(body) !== relay) {
       throw badRequest('A relay panel cannot become a breaker panel, or the other way round. Add a new panel instead.');
     }
-    const generatorId = body.generatorId === undefined ? panel.generator_id : body.generatorId;
+    const atsId = body.atsId === undefined ? panel.ats_id : body.atsId;
+    if (atsId !== panel.ats_id) checkAts(actor, access, atsId);
+    // A panel is on a transfer switch (whose generator backs it) or on a generator directly.
+    const generatorId = atsId ? null : body.generatorId === undefined ? panel.generator_id : body.generatorId;
     const transferSwitch = body.transferSwitch ?? panel.transfer_switch;
     const controlSystem = body.controlSystem ?? panel.control_system;
     if (generatorId !== panel.generator_id) checkGenerator(actor, access, generatorId);
@@ -297,7 +313,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
 
       db.prepare(
         `UPDATE panels SET name = ?, layout = ?, spaces = ?, main_amps = ?, main_type = ?, voltage = ?, manufacturer = ?,
-           model = ?, notes = ?, fed_from_breaker_id = ?, generator_id = ?, transfer_switch = ?, control_system = ?
+           model = ?, notes = ?, fed_from_breaker_id = ?, generator_id = ?, transfer_switch = ?, control_system = ?,
+           ats_id = ?
          WHERE id = ?`,
       ).run(
         body.name,
@@ -313,6 +330,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         generatorId,
         generatorId ? transferSwitch : '',
         relay ? controlSystem : '',
+        atsId,
         panel.id,
       );
 
@@ -413,13 +431,15 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       sourceGenerator && destSite && siteOf(access, sourceGenerator.location_id) === destSite
         ? sourceGenerator.id
         : null;
+    const sourceAts = source.ats_id ? getTransferSwitch(db, source.ats_id) : undefined;
+    const ats = sourceAts && destSite && siteOf(access, sourceAts.location_id) === destSite ? sourceAts.id : null;
 
     const id = db.transaction(() => {
       const r = db
         .prepare(
           `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes,
-             generator_id, transfer_switch, control_system, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             generator_id, transfer_switch, control_system, ats_id, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           dest.id,
@@ -435,6 +455,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
           generator,
           generator ? source.transfer_switch : '',
           source.control_system,
+          ats,
           t,
           t,
         );

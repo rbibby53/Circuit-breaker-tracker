@@ -2,7 +2,7 @@ import { z } from 'zod';
 import { LOCATION_KINDS } from './locations';
 import { BACKUPS, DEVICES, MAIN_TYPES, MAX_SPACES, MIN_SPACES, PANEL_LAYOUTS, PROTECTIONS, SLOTS } from './panel';
 import { ROLES } from './roles';
-import { FUELS } from './generator';
+import { ATS_KINDS, FUELS } from './generator';
 
 export const usernameSchema = z
   .string()
@@ -128,8 +128,10 @@ export const createPanelSchema = z.object({
   notes: optionalText(2000),
   /** The standby generator backing this panel, through a transfer switch. */
   generatorId: z.number().int().positive().nullable().default(null),
-  /** Which transfer switch, e.g. "ATS-1". */
+  /** Which transfer switch, e.g. "ATS-1" (1.1; transfer switches are now their own items). */
   transferSwitch: optionalText(40),
+  /** The transfer switch the panel is on. Its generator backs the panel. */
+  atsId: z.number().int().positive().nullable().default(null),
   /** Relay panels: the lighting control system, e.g. nLight. */
   controlSystem: optionalText(60),
 });
@@ -177,6 +179,7 @@ export const savePanelSchema = createPanelSchema.extend({
   /** Omit any of these to leave them as they are. */
   generatorId: z.number().int().positive().nullable().optional(),
   transferSwitch: z.string().trim().max(40).optional(),
+  atsId: z.number().int().positive().nullable().optional(),
   controlSystem: z.string().trim().max(60).optional(),
   breakers: z.array(breakerInputSchema).max(MAX_SPACES * 2),
 });
@@ -210,3 +213,16 @@ export const generatorInputSchema = z.object({
 });
 
 export type GeneratorInput = z.infer<typeof generatorInputSchema>;
+
+export const transferSwitchInputSchema = z.object({
+  name: z.string().trim().min(1, 'Give the transfer switch a name.').max(80),
+  kind: z.enum(ATS_KINDS).default('automatic'),
+  amps: z.number().int().min(1).max(10000).nullable().default(null),
+  /** The generator on its emergency side. */
+  generatorId: z.number().int().positive().nullable().default(null),
+  /** Where it is. */
+  locationId: z.number().int().positive(),
+  notes: optionalText(2000),
+});
+
+export type TransferSwitchInput = z.infer<typeof transferSwitchInputSchema>;

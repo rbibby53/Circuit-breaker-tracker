@@ -12,7 +12,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
-import { useGenerators } from '../queries';
+import { useGenerators, useTransferSwitches } from '../queries';
 import { DuplicatePanel } from './DuplicatePanel';
 import { SharePanel } from './SharePanel';
 import type { EditPanel } from './state';
@@ -35,6 +35,7 @@ export function PanelSettings({
   });
   const known = new Set((candidates.data ?? []).map((c) => c.breakerId));
   const generators = useGenerators();
+  const switches = useTransferSwitches();
   const relay = doc.layout === 'relay';
   // A relay panel stays one, and a breaker panel cannot become one.
   const layouts = AVAILABLE_LAYOUTS.filter((l) => (l === 'relay') === relay);
@@ -173,34 +174,50 @@ export function PanelSettings({
             ))}
           </select>
         </label>
-        <label className="field">
-          <span className="field-label">Standby generator</span>
+        <label className="field span-2">
+          <span className="field-label">Backup power</span>
           <select
-            value={doc.generatorId ?? ''}
-            onChange={(e) => onChange({ generatorId: e.target.value ? Number(e.target.value) : null })}
+            value={doc.atsId ? `ats:${doc.atsId}` : doc.generatorId ? `gen:${doc.generatorId}` : ''}
+            onChange={(e) => {
+              const [kind, id] = e.target.value.split(':');
+              onChange({
+                atsId: kind === 'ats' ? Number(id) : null,
+                generatorId: kind === 'gen' ? Number(id) : null,
+              });
+            }}
           >
             <option value="">
               {inherited ? `None of its own (on ${inherited.name} through ${inherited.via!.panelName})` : 'None'}
             </option>
-            {doc.generatorId !== null && !(generators.data ?? []).some((g) => g.id === doc.generatorId) && (
-              <option value={doc.generatorId}>{server.generator?.name ?? 'Current generator'}</option>
+            {doc.atsId !== null && !(switches.data ?? []).some((t) => t.id === doc.atsId) && (
+              <option value={`ats:${doc.atsId}`}>{server.generator?.ats?.name ?? 'Current transfer switch'}</option>
             )}
-            {(generators.data ?? []).map((g) => (
-              <option key={g.id} value={g.id}>
-                {g.name} ({g.locationPath})
-              </option>
-            ))}
+            {doc.generatorId !== null && !(generators.data ?? []).some((g) => g.id === doc.generatorId) && (
+              <option value={`gen:${doc.generatorId}`}>{server.generator?.name ?? 'Current generator'}</option>
+            )}
+            {(switches.data ?? []).length > 0 && (
+              <optgroup label="On a transfer switch">
+                {(switches.data ?? []).map((t) => (
+                  <option key={t.id} value={`ats:${t.id}`}>
+                    {t.name}
+                    {t.generatorName ? ` → ${t.generatorName}` : ' (no generator)'} · {t.locationPath}
+                  </option>
+                ))}
+              </optgroup>
+            )}
+            {(generators.data ?? []).length > 0 && (
+              <optgroup label="Straight from a generator">
+                {(generators.data ?? []).map((g) => (
+                  <option key={g.id} value={`gen:${g.id}`}>
+                    {g.name} ({g.locationPath})
+                  </option>
+                ))}
+              </optgroup>
+            )}
           </select>
-        </label>
-        <label className="field">
-          <span className="field-label">Transfer switch</span>
-          <input
-            value={doc.transferSwitch}
-            disabled={doc.generatorId === null}
-            maxLength={40}
-            placeholder="e.g. ATS-1"
-            onChange={(e) => onChange({ transferSwitch: e.target.value }, 'transferSwitch')}
-          />
+          <span className="muted small">
+            Add transfer switches on the generator&apos;s page. The normal side stays the &quot;Fed from&quot; breaker.
+          </span>
         </label>
         <label className="field span-2">
           <span className="field-label">Notes</span>

@@ -41,6 +41,7 @@ export interface PanelRow {
   generator_id: number | null;
   transfer_switch: string;
   control_system: string;
+  ats_id: number | null;
   version: number;
   created_at: string;
   updated_at: string;
@@ -81,6 +82,21 @@ export interface GeneratorRow {
 
 export const getGenerator = (db: DB, id: number) =>
   db.prepare('SELECT * FROM generators WHERE id = ?').get(id) as GeneratorRow | undefined;
+
+export interface TransferSwitchRow {
+  id: number;
+  location_id: number;
+  name: string;
+  kind: 'automatic' | 'manual';
+  amps: number | null;
+  generator_id: number | null;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getTransferSwitch = (db: DB, id: number) =>
+  db.prepare('SELECT * FROM transfer_switches WHERE id = ?').get(id) as TransferSwitchRow | undefined;
 
 export interface ServesRow {
   breaker_id: number;
@@ -185,16 +201,21 @@ export function feedChain(db: DB, actor: Actor, access: AccessData, panel: Panel
 export function generatorFor(
   db: DB,
   panel: PanelRow,
-): { generator: GeneratorRow; transferSwitch: string; via: PanelRow | null } | null {
+): { generator: GeneratorRow; transferSwitch: string; ats: TransferSwitchRow | null; via: PanelRow | null } | null {
   let current: PanelRow | undefined = panel;
   const seen = new Set<number>();
   while (current && !seen.has(current.id) && seen.size < MAX_CHAIN) {
     seen.add(current.id);
+    const via = current.id === panel.id ? null : current;
+    // On a transfer switch: its generator. Otherwise a generator linked to the panel directly.
+    const ats = current.ats_id ? getTransferSwitch(db, current.ats_id) : undefined;
+    if (ats?.generator_id) {
+      const generator = getGenerator(db, ats.generator_id);
+      if (generator) return { generator, transferSwitch: ats.name, ats, via };
+    }
     if (current.generator_id) {
       const generator = getGenerator(db, current.generator_id);
-      if (generator) {
-        return { generator, transferSwitch: current.transfer_switch, via: current.id === panel.id ? null : current };
-      }
+      if (generator) return { generator, transferSwitch: current.transfer_switch, ats: null, via };
     }
     const feeder: BreakerRow | undefined = current.fed_from_breaker_id
       ? getBreaker(db, current.fed_from_breaker_id)
@@ -351,6 +372,7 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
         kw: backing.generator.kw,
         fuel: backing.generator.fuel,
         transferSwitch: backing.transferSwitch,
+        ats: backing.ats ? { id: backing.ats.id, name: backing.ats.name, kind: backing.ats.kind } : null,
         via: backing.via ? { panelId: backing.via.id, panelName: backing.via.name } : null,
         canView: canSeeLocation(backing.generator.location_id),
       }
@@ -381,6 +403,7 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     generatorId: panel.generator_id,
     transferSwitch: panel.transfer_switch,
     controlSystem: panel.control_system,
+    atsId: panel.ats_id,
     generator,
   };
 }
@@ -400,6 +423,7 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
     generatorId: panel.generator_id ?? null,
     transferSwitch: panel.transfer_switch ?? '',
     controlSystem: panel.control_system ?? '',
+    atsId: panel.ats_id ?? null,
     breakers: breakers
       .map((b) => ({
         id: b.id,
@@ -444,6 +468,7 @@ const PANEL_FIELDS: [keyof Snapshot, string][] = [
   ['generatorId', 'generator'],
   ['transferSwitch', 'transfer switch'],
   ['controlSystem', 'control system'],
+  ['atsId', 'transfer switch'],
 ];
 
 const BREAKER_FIELDS = [
@@ -476,7 +501,7 @@ export function describeChanges(
   for (const [k, label] of PANEL_FIELDS) {
     if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) {
       lines.push(
-        k === 'notes' || k === 'fedFromBreakerId' || k === 'generatorId'
+        k === 'notes' || k === 'fedFromBreakerId' || k === 'generatorId' || k === 'atsId'
           ? `Panel ${label} changed`
           : `Panel ${label}: ${shown(before[k])} → ${shown(after[k])}`,
       );

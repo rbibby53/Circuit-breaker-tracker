@@ -18,6 +18,7 @@ import { publicRoutes } from './routes/public';
 import { adminRoutes } from './routes/admin';
 import { ssoGroupRoutes } from './routes/ssoGroups';
 import { generatorRoutes } from './routes/generators';
+import { topologyRoutes } from './routes/topology';
 import { searchRoutes } from './routes/search';
 import { totpRoutes } from './routes/totp';
 import { loadAuth } from './sessions';
@@ -161,6 +162,7 @@ export async function buildApp(
   accessRoutes(app, db, config);
   panelRoutes(app, db);
   generatorRoutes(app, db);
+  topologyRoutes(app, db);
   pdfRoutes(app, db, config);
   exportRoutes(app, db);
   publicRoutes(app, db, config);

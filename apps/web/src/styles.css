@@ -2415,3 +2415,8 @@ code {
   font-weight: 700;
   font-size: 1.1rem;
 }
+
+.badge-ats {
+  background: var(--ats, #7a4fd0);
+  color: #fff;
+}

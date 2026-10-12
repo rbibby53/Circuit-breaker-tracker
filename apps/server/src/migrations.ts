@@ -300,4 +300,39 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE breakers ADD COLUMN control TEXT NOT NULL DEFAULT '';
   CREATE INDEX breakers_source ON breakers (source_breaker_id);
   `,
+  `
+  -- Transfer switches (ATS) between a panel's normal feed and a generator. A panel on one is
+  -- still fed from its "fed from" breaker on the normal side; the switch brings in the generator.
+  CREATE TABLE transfer_switches (
+    id           INTEGER PRIMARY KEY,
+    location_id  INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    name         TEXT NOT NULL,
+    kind         TEXT NOT NULL DEFAULT 'automatic' CHECK (kind IN ('automatic', 'manual')),
+    amps         INTEGER,
+    generator_id INTEGER REFERENCES generators (id) ON DELETE SET NULL,
+    notes        TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+  );
+  CREATE INDEX transfer_switches_location ON transfer_switches (location_id);
+  CREATE INDEX transfer_switches_generator ON transfer_switches (generator_id);
+  ALTER TABLE panels ADD COLUMN ats_id INTEGER REFERENCES transfer_switches (id) ON DELETE SET NULL;
+  CREATE INDEX panels_ats ON panels (ats_id);
+
+  -- 1.1 kept a transfer switch as a name on the panel. Make each named one a real transfer
+  -- switch (in the room of the first panel using it) and move those panels onto it.
+  INSERT INTO transfer_switches (location_id, name, generator_id, created_at, updated_at)
+    SELECT (SELECT p2.location_id FROM panels p2
+             WHERE p2.generator_id = p.generator_id AND p2.transfer_switch = p.transfer_switch ORDER BY p2.id LIMIT 1),
+           p.transfer_switch, p.generator_id, MIN(p.created_at), MIN(p.created_at)
+      FROM panels p
+     WHERE p.generator_id IS NOT NULL AND p.transfer_switch != ''
+     GROUP BY p.generator_id, p.transfer_switch;
+  UPDATE panels
+     SET ats_id = (SELECT t.id FROM transfer_switches t
+                    WHERE t.generator_id = panels.generator_id AND t.name = panels.transfer_switch),
+         generator_id = NULL,
+         transfer_switch = ''
+   WHERE generator_id IS NOT NULL AND transfer_switch != '';
+  `,
 ];

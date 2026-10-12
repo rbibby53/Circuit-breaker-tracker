@@ -4,7 +4,7 @@ import type { PaperSize, SettingKey, SettingValue } from './settings';
 import type { Backup, Device, MainType, PanelLayout, Protection, Slot } from './panel';
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
-import type { Fuel } from './generator';
+import type { AtsKind, Fuel } from './generator';
 
 export interface UserSummary {
   id: number;
@@ -239,7 +239,9 @@ export interface PanelGenerator {
   name: string;
   kw: number | null;
   fuel: Fuel;
+  /** The transfer switch's name, or '' when the panel is linked to the generator directly. */
   transferSwitch: string;
+  ats: { id: number; name: string; kind: AtsKind } | null;
   via: { panelId: number; panelName: string } | null;
   canView: boolean;
 }
@@ -278,6 +280,8 @@ export interface PanelDetail extends Omit<
   canShare: boolean;
   generatorId: number | null;
   transferSwitch: string;
+  /** The transfer switch the panel is on, if any. */
+  atsId: number | null;
   generator: PanelGenerator | null;
 }
 
@@ -314,6 +318,22 @@ export interface GeneratorDetail extends GeneratorSummary {
   /** Panels on it that the viewer can see. */
   panels: GeneratorPanel[];
   hiddenPanels: number;
+  transferSwitches: TransferSwitchDto[];
+}
+
+export interface TransferSwitchDto {
+  id: number;
+  name: string;
+  kind: AtsKind;
+  amps: number | null;
+  generatorId: number | null;
+  generatorName: string | null;
+  locationId: number;
+  locationPath: string;
+  notes: string;
+  /** Panels on it that the viewer can see. */
+  panels: { id: number; name: string; locationPath: string }[];
+  canEdit: boolean;
 }
 
 /** What anyone with a panel's public link sees: the directory, read-only, nothing else. */
@@ -519,4 +539,43 @@ export interface LogLines {
   /** How many lines are kept in memory, at most. */
   capacity: number;
   lines: { time: string; level: 'debug' | 'info' | 'warn' | 'error'; text: string }[];
+}
+
+// ---- Power flow (topology) ------------------------------------------------------------------
+
+export type TopologyKind = 'utility' | 'panel' | 'relay' | 'ats' | 'generator' | 'hidden';
+
+export interface TopologyNode {
+  /** "p12" (panel), "a3" (transfer switch), "g2" (generator), "u" (utility), "h45" (out of access). */
+  id: string;
+  kind: TopologyKind;
+  name: string;
+  /** One line under the name: voltage and main, relay count, kW and fuel… */
+  detail: string;
+  /** Where clicking goes, or null. */
+  href: string | null;
+  locationPath: string;
+  /** Backed up by a generator (directly, through a transfer switch, or upstream). */
+  onGenerator: boolean;
+  critical: number;
+  /** Inside the location the view is for. Upstream and backing items outside it are shown too. */
+  inScope: boolean;
+}
+
+export interface TopologyEdge {
+  from: string;
+  to: string;
+  /**
+   * feed: a breaker feeding a panel. normal / emergency: the two sides of a transfer switch.
+   * load: a transfer switch to the panel on it. backup: a generator straight to a panel.
+   * relay: relays in a relay panel switching circuits from a breaker panel.
+   */
+  kind: 'feed' | 'normal' | 'emergency' | 'load' | 'backup' | 'relay';
+  label: string;
+}
+
+export interface Topology {
+  location: { id: number; name: string; path: string };
+  nodes: TopologyNode[];
+  edges: TopologyEdge[];
 }

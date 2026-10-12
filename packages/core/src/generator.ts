@@ -17,3 +17,11 @@ export function generatorRating(g: { kw: number | null; fuel: Fuel }): string {
   const fuel = FUEL_LABELS[g.fuel];
   return g.kw ? `${g.kw} kW ${fuel.toLowerCase()}` : fuel;
 }
+
+/** Transfer switches between a panel's normal feed and a generator. */
+export const ATS_KINDS = ['automatic', 'manual'] as const;
+export type AtsKind = (typeof ATS_KINDS)[number];
+export const ATS_KIND_LABELS: Record<AtsKind, string> = {
+  automatic: 'Automatic (ATS)',
+  manual: 'Manual (MTS)',
+};

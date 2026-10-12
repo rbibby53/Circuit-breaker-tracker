@@ -1,4 +1,4 @@
-import type { GeneratorSummary, LocationDto, PanelSummary } from '@cbt/core';
+import type { GeneratorSummary, LocationDto, PanelSummary, TransferSwitchDto } from '@cbt/core';
 import { useQuery } from '@tanstack/react-query';
 import { api } from './api';
 
@@ -10,3 +10,6 @@ export const usePanels = () =>
 
 export const useGenerators = () =>
   useQuery({ queryKey: ['generators'], queryFn: () => api.get<GeneratorSummary[]>('/api/generators') });
+
+export const useTransferSwitches = () =>
+  useQuery({ queryKey: ['transfer-switches'], queryFn: () => api.get<TransferSwitchDto[]>('/api/transfer-switches') });

@@ -311,3 +311,116 @@ describe('relay panels', () => {
     expect((await save(editor, rp, [{ ...row('r1', 1), id, sourceBreakerId: farmBreaker }])).status).toBe(400);
   });
 });
+
+describe('transfer switches', () => {
+  it('put panels on a generator through a switch, and list on the generator', async () => {
+    const c = await campus();
+    const ats = await c.admin.post('/api/transfer-switches', {
+      name: 'ATS-1',
+      kind: 'automatic',
+      amps: 400,
+      generatorId: c.gen,
+      locationId: c.elec,
+    });
+    expect(ats.status).toBe(200);
+    expect((await c.admin.post('/api/transfer-switches', { name: 'X', locationId: c.ksu })).status).toBe(400);
+
+    // On a switch, any generator sent for the panel is ignored: the switch's generator backs it.
+    expect((await save(c.admin, c.em1, null, { atsId: ats.body.id, generatorId: c.gen })).status).toBe(200);
+    const em1 = (await c.admin.get(`/api/panels/${c.em1}`)).body;
+    expect(em1).toMatchObject({ atsId: ats.body.id, generatorId: null });
+    expect(em1.generator).toMatchObject({
+      id: c.gen,
+      transferSwitch: 'ATS-1',
+      ats: { id: ats.body.id, kind: 'automatic' },
+    });
+    expect((await c.admin.get(`/api/panels/${c.em2}`)).body.generator).toMatchObject({ via: { panelName: 'EM-1' } });
+
+    const g = (await c.admin.get(`/api/generators/${c.gen}`)).body;
+    expect(g.transferSwitches).toEqual([
+      expect.objectContaining({
+        name: 'ATS-1',
+        amps: 400,
+        generatorName: 'GEN-1',
+        panels: [expect.objectContaining({ id: c.em1 })],
+      }),
+    ]);
+    expect(g.panelCount).toBe(2);
+
+    // Viewers cannot change switches; deleting one takes its panels off it.
+    const viewer = await invite(app, c.admin, c.hall, 'viewer', 'viewer');
+    expect(
+      (await viewer.req('PATCH', `/api/transfer-switches/${ats.body.id}`, { name: 'Mine', locationId: c.elec })).status,
+    ).toBe(403);
+    expect((await c.admin.del(`/api/transfer-switches/${ats.body.id}`)).status).toBe(200);
+    expect((await c.admin.get(`/api/panels/${c.em1}`)).body).toMatchObject({ atsId: null, generator: null });
+  });
+});
+
+describe('power flow', () => {
+  it('shows the utility, feeds, generators through switches and relay panels', async () => {
+    const c = await campus();
+    const ats = (
+      await c.admin.post('/api/transfer-switches', { name: 'ATS-1', amps: 400, generatorId: c.gen, locationId: c.elec })
+    ).body.id as number;
+    expect((await save(c.admin, c.em1, null, { atsId: ats })).status).toBe(200);
+    const rp = (
+      await c.admin.post(`/api/locations/${c.elec}/panels`, {
+        name: 'RP-1',
+        layout: 'relay',
+        spaces: 16,
+        controlSystem: 'nLight',
+      })
+    ).body.id as number;
+    await save(c.admin, rp, [
+      row('r1', 1, { sourceBreakerId: c.corridorBreaker }),
+      row('r2', 2, { sourceBreakerId: c.labBreaker }),
+    ]);
+
+    const t = (await c.admin.get(`/api/locations/${c.hall}/topology`)).body;
+    expect(t.location).toMatchObject({ id: c.hall, name: 'Science Hall' });
+    const node = (id: string) => t.nodes.find((n: any) => n.id === id);
+    expect(node(`p${c.lp}`)).toMatchObject({ kind: 'panel', name: 'LP-1', onGenerator: false, inScope: true });
+    expect(node(`p${c.em2}`)).toMatchObject({ kind: 'panel', onGenerator: true });
+    expect(node(`p${rp}`)).toMatchObject({ kind: 'relay', detail: 'nLight relays · 2/16' });
+    expect(node(`a${ats}`)).toMatchObject({ kind: 'ats', name: 'ATS-1', detail: 'Automatic (ATS) · 400 A' });
+    expect(node(`g${c.gen}`)).toMatchObject({ kind: 'generator', name: 'GEN-1', href: `/generators/${c.gen}` });
+
+    const edges = t.edges.map((e: any) => `${e.from}>${e.to}:${e.kind}`).sort();
+    expect(edges).toEqual(
+      [
+        `u>p${c.lp}:feed`,
+        `u>a${ats}:normal`,
+        `g${c.gen}>a${ats}:emergency`,
+        `a${ats}>p${c.em1}:load`,
+        `p${c.em1}>p${c.em2}:feed`,
+        `p${c.lp}>p${rp}:relay`,
+      ].sort(),
+    );
+    expect(t.edges.find((e: any) => e.kind === 'relay').label).toBe('2 relays');
+    expect(t.edges.find((e: any) => e.to === `p${c.em2}`).label).toBe('1 + 3 + 5 · 100 A');
+
+    // Another site has nothing here; a location you cannot see is not found.
+    expect((await c.admin.get(`/api/locations/${c.other}/topology`)).body).toMatchObject({ nodes: [], edges: [] });
+    const viewer = await invite(app, c.admin, c.corridor, 'viewer', 'viewer');
+    expect((await viewer.get(`/api/locations/${c.hall}/topology`)).status).toBe(404);
+  });
+
+  it('shows panels upstream of a room, hiding the ones you cannot see', async () => {
+    const c = await campus();
+    const room = await createLocation(c.admin, c.floor, 'room', 'Lab 110');
+    const sub = (
+      await c.admin.post(`/api/locations/${room}/panels`, { name: 'LAB-1', layout: 'commercial', spaces: 24 })
+    ).body.id as number;
+    const feeder = (await save(c.admin, c.em2, [row('lab', 1, { poles: 2, amps: 60, label: 'LAB-1' })])).body.idMap
+      .lab as number;
+    await save(c.admin, sub, [], { fedFromBreakerId: feeder });
+
+    const viewer = await invite(app, c.admin, room, 'viewer', 'viewer');
+    const t = (await viewer.get(`/api/locations/${room}/topology`)).body;
+    expect(t.nodes.map((n: any) => `${n.id}:${n.kind}`).sort()).toEqual(
+      [`p${sub}:panel`, `h${c.em2}:hidden`, `h${c.em1}:hidden`, 'u:utility'].sort(),
+    );
+    expect(t.nodes.find((n: any) => n.id === `h${c.em2}`)).toMatchObject({ href: null, inScope: false });
+  });
+});
