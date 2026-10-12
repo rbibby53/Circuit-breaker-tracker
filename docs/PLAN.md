@@ -312,10 +312,15 @@ breaker labels, Gravatar pictures, readable logs, automatic backups and signed-i
 nLight (each relay linked to the breaker it switches), and Authentik sign-in with access from
 single sign-on groups.
 
+1.2 added transfer switches as their own items, a power flow map for each site and building,
+and the power path on each panel.
+
 Ideas, not promises:
 
 - **Generator exercise and transfer test log**, with run hours and the last test date.
 - **Relay panel import** from an nLight (SensorView) export, and relay schedules.
+- **Power flow extras:** print the map as a one-line diagram, show what loses power when a
+  breaker or panel is shut off, and transformers as their own items.
 
 - **Test and inspection log:** GFCI/AFCI test-button checks, surge protector indicator checks
   and thermal scans per breaker, with "last tested" dates and overdue reminders.

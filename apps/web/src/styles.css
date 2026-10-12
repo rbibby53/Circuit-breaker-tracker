@@ -20,6 +20,10 @@
   --danger-fg: #7a1a12;
   --ok: #14532d;
   --role-editor: #e3ecfb;
+  --gen: #c2410c;
+  --ats: #7a4fd0;
+  --relay: #0f766e;
+  --flow: #2f6fdb;
   --radius: 6px;
   --font: 'Archivo Variable', 'Archivo', 'Helvetica Neue', Arial, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
@@ -46,6 +50,10 @@
     --danger-fg: #ffc9c2;
     --ok: #7fd79b;
     --role-editor: #1e3352;
+    --gen: #fb923c;
+    --ats: #b69cf5;
+    --relay: #2dd4bf;
+    --flow: #7fb0ff;
     color-scheme: dark;
   }
 }
@@ -69,6 +77,10 @@
   --danger-fg: #ffc9c2;
   --ok: #7fd79b;
   --role-editor: #1e3352;
+  --gen: #fb923c;
+  --ats: #b69cf5;
+  --relay: #2dd4bf;
+  --flow: #7fb0ff;
   color-scheme: dark;
 }
 
@@ -1038,9 +1050,6 @@ a:focus-visible {
   border: 1px solid var(--line-strong);
   border-radius: 4px;
   overflow: hidden;
-}
-.segmented.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
 }
 .segmented.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
@@ -2410,8 +2419,389 @@ code {
   height: 44px;
   flex: none;
   border-radius: 50%;
-  background: var(--gen, #2e7d4f);
-  color: #fff;
+  background: var(--gen);
+  color: var(--surface);
   font-weight: 700;
   font-size: 1.1rem;
+}
+
+.badge-ats {
+  background: var(--ats);
+  color: var(--surface);
+}
+
+/* Power flow map */
+.pf-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: space-between;
+  gap: 8px 16px;
+}
+.pf-stats {
+  margin: 0;
+}
+.pf-bar .check {
+  align-items: center;
+}
+.pf-mode {
+  min-width: 140px;
+}
+.pf-mode button {
+  min-height: 36px;
+}
+.pf-picker select {
+  min-width: 220px;
+}
+.pf-frame {
+  position: relative;
+  height: clamp(420px, 70vh, 900px);
+  background: var(--surface);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  overflow: hidden;
+  touch-action: none;
+  cursor: grab;
+  user-select: none;
+}
+.pf-frame:active {
+  cursor: grabbing;
+}
+.pf-svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+.pf-dot {
+  fill: var(--line);
+}
+.pf-zoom {
+  position: absolute;
+  right: 12px;
+  bottom: 12px;
+  display: flex;
+  gap: 6px;
+}
+.pf-zoom .btn {
+  min-width: 40px;
+  background: var(--surface);
+}
+
+.pf-edge .pf-line {
+  fill: none;
+  stroke: var(--line-strong);
+  stroke-width: 2;
+  transition:
+    opacity 0.15s,
+    stroke 0.15s;
+}
+.pf-edge.pf-feed .pf-line,
+.pf-edge.pf-normal .pf-line,
+.pf-edge.pf-load .pf-line {
+  stroke: var(--muted);
+}
+.pf-edge.pf-emergency .pf-line,
+.pf-edge.pf-backup .pf-line {
+  stroke: var(--gen);
+  stroke-dasharray: 7 5;
+}
+.pf-edge.pf-relay .pf-line {
+  stroke: var(--relay);
+  stroke-dasharray: 2 5;
+  stroke-linecap: round;
+}
+.pf-edge .pf-flow {
+  fill: none;
+  stroke: var(--flow);
+  stroke-width: 2.5;
+  stroke-linecap: round;
+  stroke-dasharray: 3 21;
+  opacity: 0;
+}
+.pf-edge.pf-emergency .pf-flow,
+.pf-edge.pf-backup .pf-flow {
+  stroke: var(--gen);
+}
+.pf-edge.pf-relay .pf-flow {
+  display: none;
+}
+.pf-frame.is-animated .pf-flow {
+  opacity: 0.9;
+  animation: pf-flow 1.2s linear infinite;
+}
+/* Generators stand by: their lines only move when you are looking at their path. */
+.pf-frame.is-animated:not(.is-lit) .pf-emergency .pf-flow,
+.pf-frame.is-animated:not(.is-lit) .pf-backup .pf-flow {
+  opacity: 0;
+}
+@keyframes pf-flow {
+  to {
+    stroke-dashoffset: -24;
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .pf-frame.is-animated .pf-flow {
+    animation: none;
+  }
+}
+.pf-frame.is-lit .pf-edge:not(.is-dim) .pf-line {
+  stroke-width: 3;
+}
+.pf-edge.is-dim,
+.pf-node.is-dim {
+  opacity: 0.18;
+}
+.pf-label {
+  font-size: 11px;
+  font-family: var(--mono);
+  fill: var(--ink-2);
+  paint-order: stroke;
+  stroke: var(--surface);
+  stroke-width: 4px;
+  stroke-linejoin: round;
+}
+.pf-label.pf-emergency,
+.pf-label.pf-backup {
+  fill: var(--gen);
+}
+.pf-label.pf-relay {
+  fill: var(--relay);
+}
+
+.pf-node {
+  transition: opacity 0.15s;
+  outline: none;
+}
+.pf-node.is-link {
+  cursor: pointer;
+}
+.pf-card {
+  fill: var(--surface);
+  stroke: var(--line-strong);
+  stroke-width: 1.2;
+  filter: drop-shadow(0 1px 2px rgb(0 0 0 / 0.08));
+}
+.pf-node:hover .pf-card,
+.pf-node.is-focus .pf-card {
+  stroke: var(--ink-2);
+}
+.pf-node:focus-visible .pf-card {
+  stroke: var(--ink);
+  stroke-width: 2.5;
+}
+.pf-node.is-context .pf-card {
+  fill: var(--surface-2);
+  stroke-dasharray: 4 3;
+}
+.pf-stripe {
+  fill: var(--ink-2);
+}
+.pf-icon {
+  color: var(--ink-2);
+}
+.pf-name {
+  font-size: 14px;
+  font-weight: 700;
+  fill: var(--ink);
+}
+.pf-detail {
+  font-size: 12px;
+  fill: var(--ink-2);
+}
+.pf-where {
+  font-size: 11px;
+  fill: var(--muted);
+}
+.pf-utility .pf-stripe {
+  fill: var(--ink);
+}
+.pf-utility .pf-card {
+  fill: var(--surface-2);
+}
+.pf-panel .pf-stripe {
+  fill: var(--accent);
+}
+.pf-generator .pf-stripe,
+.pf-generator .pf-icon {
+  fill: var(--gen);
+  color: var(--gen);
+}
+.pf-ats .pf-stripe,
+.pf-ats .pf-icon {
+  fill: var(--ats);
+  color: var(--ats);
+}
+.pf-relay .pf-stripe,
+.pf-relay .pf-icon {
+  fill: var(--relay);
+  color: var(--relay);
+}
+.pf-hidden .pf-stripe {
+  fill: var(--line-strong);
+}
+.pf-hidden .pf-icon,
+.pf-hidden .pf-name {
+  color: var(--muted);
+  fill: var(--muted);
+}
+.pf-generator .pf-icon {
+  fill: none;
+}
+.pf-ats .pf-icon,
+.pf-relay .pf-icon {
+  fill: none;
+}
+.pf-bolt circle {
+  fill: var(--gen);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+.pf-bolt path {
+  fill: #fff;
+}
+.pf-critical circle {
+  fill: var(--danger);
+  stroke: var(--surface);
+  stroke-width: 2;
+}
+.pf-critical text {
+  font-size: 11px;
+  font-weight: 700;
+  fill: #fff;
+}
+.pf-legend svg {
+  overflow: visible;
+}
+
+.pf-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+}
+.pf-list li {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  padding: 12px 16px;
+  border-bottom: 1px solid var(--line);
+}
+.pf-list li:last-child {
+  border-bottom: 0;
+}
+.pf-list-icon {
+  color: var(--ink-2);
+  margin-top: 1px;
+}
+.pf-list .pf-generator .pf-list-icon,
+.pf-list li.pf-generator .pf-list-icon {
+  color: var(--gen);
+}
+.pf-list li.pf-ats .pf-list-icon {
+  color: var(--ats);
+}
+.pf-list li.pf-relay .pf-list-icon {
+  color: var(--relay);
+}
+.pf-list .badge {
+  margin-left: 8px;
+}
+.pf-list-from {
+  font-size: 13px;
+  margin-top: 2px;
+}
+
+/* Panel page: where power comes from, as a strip of chips. */
+.power-strip {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px 12px;
+  margin-top: 10px;
+}
+.ps-chain {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px 26px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.ps-chip {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  margin: 0;
+  padding: 3px 10px;
+  border: 1px solid var(--line-strong);
+  border-radius: 999px;
+  background: var(--surface);
+  font-size: 13px;
+  color: var(--ink-2);
+}
+/* The line from each chip to the next, in the gap between them. */
+.ps-chain .ps-chip + .ps-chip::before {
+  content: '';
+  position: absolute;
+  left: -23px;
+  top: 50%;
+  width: 20px;
+  border-top: 2px solid var(--muted);
+}
+.ps-chain .ps-chip + .ps-chip::after {
+  content: '';
+  position: absolute;
+  left: -7px;
+  top: calc(50% - 3px);
+  border: 4px solid transparent;
+  border-left: 5px solid var(--muted);
+  border-right: 0;
+}
+.ps-chip svg {
+  flex: none;
+  color: var(--muted);
+}
+.ps-chip a {
+  font-weight: 600;
+}
+.ps-ckt {
+  font-family: var(--mono);
+  font-size: 12px;
+  color: var(--muted);
+}
+.ps-here {
+  border-color: var(--ink) !important;
+  color: var(--ink);
+  font-weight: 700;
+}
+.ps-here svg {
+  color: var(--accent);
+}
+.ps-utility svg {
+  color: var(--ink-2);
+}
+.ps-warn {
+  border-style: dashed;
+}
+.ps-gen {
+  border-color: var(--gen);
+}
+.ps-gen svg {
+  color: var(--gen);
+}
+.ps-flow {
+  font-size: 13px;
+  font-weight: 600;
+}
+
+/* A hint under a field, outside its label so it is not part of the field's name. */
+.field-note {
+  margin: -8px 0 0;
 }

@@ -77,4 +77,38 @@ describe('upgrading to generators and relay panels', () => {
       "INSERT INTO panels (location_id, name, layout, spaces, created_at, updated_at) VALUES (1, 'RP-1', 'relay', 16, ?, ?)",
     ).run(at, at);
   });
+
+  it('turns 1.1 transfer switch names into transfer switches', () => {
+    const db = databaseAt(10);
+    const at = '2026-10-12T00:00:00.000Z';
+    db.prepare(
+      "INSERT INTO locations (id, parent_id, kind, name, path, created_at, updated_at) VALUES (1, NULL, 'company', 'KSU', '/1/', ?, ?)",
+    ).run(at, at);
+    db.prepare(
+      "INSERT INTO generators (id, location_id, name, created_at, updated_at) VALUES (7, 1, 'GEN-1', ?, ?)",
+    ).run(at, at);
+    const panel = (id: number, generator: number | null, ats: string) =>
+      db
+        .prepare(
+          `INSERT INTO panels (id, location_id, name, layout, spaces, generator_id, transfer_switch, created_at, updated_at)
+           VALUES (?, 1, ?, 'commercial', 42, ?, ?, ?, ?)`,
+        )
+        .run(id, `P${id}`, generator, ats, at, at);
+    panel(1, 7, 'ATS-1');
+    panel(2, 7, 'ATS-1');
+    panel(3, 7, '');
+    panel(4, null, '');
+
+    migrate(db);
+
+    expect(db.prepare('SELECT name, generator_id, location_id FROM transfer_switches').all()).toEqual([
+      { name: 'ATS-1', generator_id: 7, location_id: 1 },
+    ]);
+    expect(db.prepare('SELECT id, generator_id, ats_id, transfer_switch FROM panels ORDER BY id').all()).toEqual([
+      { id: 1, generator_id: null, ats_id: 1, transfer_switch: '' },
+      { id: 2, generator_id: null, ats_id: 1, transfer_switch: '' },
+      { id: 3, generator_id: 7, ats_id: null, transfer_switch: '' },
+      { id: 4, generator_id: null, ats_id: null, transfer_switch: '' },
+    ]);
+  });
 });

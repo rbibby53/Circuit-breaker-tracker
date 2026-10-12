@@ -1,17 +1,23 @@
 import {
+  ATS_KINDS,
+  ATS_KIND_LABELS,
   FUELS,
   FUEL_LABELS,
   atLeast,
   generatorRating,
+  type AtsKind,
   type Fuel,
   type GeneratorDetail,
   type GeneratorInput,
+  type TransferSwitchDto,
+  type TransferSwitchInput,
 } from '@cbt/core';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
+import { NodeIcon } from '../components/PowerIcon';
 import { ErrorNote, Field } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { useGenerators, useLocations } from '../queries';
@@ -30,7 +36,7 @@ export function GeneratorsHere({ node, byId }: { node: TreeNode; byId: Map<numbe
         {here.map((g) => (
           <Link key={g.id} to={`/generators/${g.id}`} className="card panel-card">
             <span className="gen-icon" aria-hidden="true">
-              G
+              <NodeIcon kind="generator" />
             </span>
             <span className="stack-sm">
               <span className="card-title">{g.name}</span>
@@ -218,44 +224,49 @@ export function GeneratorPage() {
               .join(' · ')}
           </p>
         </div>
-        {canEdit && !form && (
-          <div className="toolbar">
-            <button
-              type="button"
-              className="btn"
-              onClick={() =>
-                setForm({
-                  name: g.name,
-                  kw: g.kw,
-                  fuel: g.fuel,
-                  voltage: g.voltage,
-                  manufacturer: g.manufacturer,
-                  model: g.model,
-                  notes: g.notes,
-                })
-              }
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={async () => {
-                const ok = await confirm({
-                  title: `Delete ${g.name}?`,
-                  message: direct.length
-                    ? `${direct.length === 1 ? '1 panel is' : `${direct.length} panels are`} linked to it and will be unlinked. Their breakers stay as they are.`
-                    : 'This cannot be undone.',
-                  confirmLabel: 'Delete generator',
-                  danger: true,
-                });
-                if (ok) remove.mutate();
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        )}
+        <div className="toolbar">
+          <Link className="btn" to={`/power?loc=${g.locationId}&focus=g${g.id}`}>
+            Power flow
+          </Link>
+          {canEdit && !form && (
+            <>
+              <button
+                type="button"
+                className="btn"
+                onClick={() =>
+                  setForm({
+                    name: g.name,
+                    kw: g.kw,
+                    fuel: g.fuel,
+                    voltage: g.voltage,
+                    manufacturer: g.manufacturer,
+                    model: g.model,
+                    notes: g.notes,
+                  })
+                }
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${g.name}?`,
+                    message: direct.length
+                      ? `${direct.length === 1 ? '1 panel is' : `${direct.length} panels are`} linked to it and will be unlinked. Their breakers stay as they are.`
+                      : 'This cannot be undone.',
+                    confirmLabel: 'Delete generator',
+                    danger: true,
+                  });
+                  if (ok) remove.mutate();
+                }}
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
       </div>
       <ErrorNote error={remove.error} />
 
@@ -302,6 +313,8 @@ export function GeneratorPage() {
       )}
       {!form && g.notes && <p className="notes">{g.notes}</p>}
 
+      <TransferSwitches generator={g} canEdit={canEdit} onChange={refresh} />
+
       <section className="panel stack" aria-labelledby="gen-panels-h">
         <h2 id="gen-panels-h" className="h-caps">
           Panels on this generator
@@ -334,5 +347,205 @@ export function GeneratorPage() {
         )}
       </section>
     </main>
+  );
+}
+
+/** Places a transfer switch can go: anywhere the person can edit, below company level. */
+function useSwitchPlaces() {
+  const locations = useLocations();
+  const { byId } = buildTree(locations.data ?? []);
+  return [...byId.values()]
+    .filter((n) => n.access === 'full' && n.kind !== 'company' && atLeast(n.role, 'editor'))
+    .filter((n) => !(n.kind === 'building' && n.isDefaultBuilding))
+    .map((n) => ({
+      id: n.id,
+      label: ancestry(byId, n.id)
+        .map((a) => a.name)
+        .join(' › '),
+    }))
+    .sort((a, b) => a.label.localeCompare(b.label));
+}
+
+/** The transfer switches on a generator's emergency side, and the panels on each. */
+function TransferSwitches({
+  generator,
+  canEdit,
+  onChange,
+}: {
+  generator: GeneratorDetail;
+  canEdit: boolean;
+  onChange: () => Promise<unknown>;
+}) {
+  const qc = useQueryClient();
+  const confirm = useConfirm();
+  const [editing, setEditing] = useState<number | 'new' | null>(null);
+  const done = async () => {
+    setEditing(null);
+    await Promise.all([onChange(), qc.invalidateQueries({ queryKey: ['transfer-switches'] })]);
+  };
+  const remove = useMutation({
+    mutationFn: (id: number) => api.del(`/api/transfer-switches/${id}`),
+    onSuccess: done,
+  });
+  return (
+    <section className="panel stack" aria-labelledby="gen-ats-h">
+      <div className="row-between">
+        <h2 id="gen-ats-h" className="h-caps">
+          Transfer switches
+        </h2>
+        {canEdit && editing === null && (
+          <button type="button" className="btn btn-sm" onClick={() => setEditing('new')}>
+            + Add a transfer switch
+          </button>
+        )}
+      </div>
+      {editing === 'new' && <SwitchForm generator={generator} onDone={done} onCancel={() => setEditing(null)} />}
+      {generator.transferSwitches.length === 0 && editing !== 'new' && (
+        <p className="muted">
+          None yet. Add the automatic or manual transfer switches this generator feeds, then put panels on them from
+          each panel&apos;s settings.
+        </p>
+      )}
+      <ul className="access-list">
+        {generator.transferSwitches.map((t) =>
+          editing === t.id ? (
+            <li key={t.id}>
+              <SwitchForm generator={generator} existing={t} onDone={done} onCancel={() => setEditing(null)} />
+            </li>
+          ) : (
+            <li key={t.id}>
+              <span className="cell-stack">
+                <span className="strong">
+                  <span className="badge badge-ats">ATS</span> {t.name}
+                </span>
+                <span className="muted small">
+                  {[ATS_KIND_LABELS[t.kind], t.amps ? `${t.amps} A` : null, t.locationPath].filter(Boolean).join(' · ')}
+                </span>
+                <span className="small">
+                  {t.panels.length
+                    ? t.panels.map((p, i) => (
+                        <span key={p.id}>
+                          {i > 0 && ', '}
+                          <Link to={`/panels/${p.id}`}>{p.name}</Link>
+                        </span>
+                      ))
+                    : 'No panels on it yet'}
+                </span>
+              </span>
+              {t.canEdit && (
+                <span className="row">
+                  <button type="button" className="btn btn-sm" onClick={() => setEditing(t.id)}>
+                    Edit
+                  </button>
+                  <button
+                    type="button"
+                    className="btn btn-sm btn-danger"
+                    onClick={async () => {
+                      const ok = await confirm({
+                        title: `Delete ${t.name}?`,
+                        message: t.panels.length
+                          ? `${t.panels.map((p) => p.name).join(', ')} will no longer be on it.`
+                          : 'This cannot be undone.',
+                        confirmLabel: 'Delete',
+                        danger: true,
+                      });
+                      if (ok) remove.mutate(t.id);
+                    }}
+                  >
+                    Delete
+                  </button>
+                </span>
+              )}
+            </li>
+          ),
+        )}
+      </ul>
+      <ErrorNote error={remove.error} />
+    </section>
+  );
+}
+
+function SwitchForm({
+  generator,
+  existing,
+  onDone,
+  onCancel,
+}: {
+  generator: GeneratorDetail;
+  existing?: TransferSwitchDto;
+  onDone: () => Promise<unknown>;
+  onCancel: () => void;
+}) {
+  const places = useSwitchPlaces();
+  const [form, setForm] = useState<TransferSwitchInput>({
+    name: existing?.name ?? '',
+    kind: existing?.kind ?? 'automatic',
+    amps: existing?.amps ?? null,
+    generatorId: existing ? existing.generatorId : generator.id,
+    locationId: existing?.locationId ?? generator.locationId,
+    notes: existing?.notes ?? '',
+  });
+  const save = useMutation({
+    mutationFn: () =>
+      existing ? api.patch(`/api/transfer-switches/${existing.id}`, form) : api.post('/api/transfer-switches', form),
+    onSuccess: onDone,
+  });
+  return (
+    <form
+      className="form-band"
+      aria-label={existing ? `Edit ${existing.name}` : 'Add a transfer switch'}
+      onSubmit={(e) => {
+        e.preventDefault();
+        save.mutate();
+      }}
+    >
+      <div className="form-row">
+        <Field label="Name">
+          <input
+            required
+            value={form.name}
+            maxLength={80}
+            placeholder="e.g. ATS-1"
+            onChange={(e) => setForm({ ...form, name: e.target.value })}
+          />
+        </Field>
+        <Field label="Type">
+          <select value={form.kind} onChange={(e) => setForm({ ...form, kind: e.target.value as AtsKind })}>
+            {ATS_KINDS.map((k) => (
+              <option key={k} value={k}>
+                {ATS_KIND_LABELS[k]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Amps">
+          <input
+            type="number"
+            min={1}
+            value={form.amps ?? ''}
+            onChange={(e) => setForm({ ...form, amps: e.target.value ? Number(e.target.value) : null })}
+          />
+        </Field>
+        <Field label="Where">
+          <select value={form.locationId} onChange={(e) => setForm({ ...form, locationId: Number(e.target.value) })}>
+            {!places.some((p) => p.id === form.locationId) && (
+              <option value={form.locationId}>{existing?.locationPath ?? generator.locationPath}</option>
+            )}
+            {places.map((p) => (
+              <option key={p.id} value={p.id}>
+                {p.label}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <button className="btn btn-dark" disabled={save.isPending}>
+          {existing ? 'Save' : 'Add'}
+        </button>
+        <button type="button" className="btn" onClick={onCancel}>
+          Cancel
+        </button>
+      </div>
+      <ErrorNote error={save.error} />
+    </form>
   );
 }

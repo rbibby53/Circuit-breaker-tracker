@@ -56,6 +56,7 @@ export interface EditPanel {
   generatorId: number | null;
   transferSwitch: string;
   controlSystem: string;
+  atsId: number | null;
   breakers: EditBreaker[];
 }
 
@@ -77,6 +78,7 @@ export function fromDetail(p: PanelDetail): EditPanel {
     generatorId: p.generatorId,
     transferSwitch: p.transferSwitch,
     controlSystem: p.controlSystem,
+    atsId: p.atsId,
     breakers: p.breakers.map((b) => ({
       key: `id-${b.id}`,
       id: b.id,
@@ -136,6 +138,7 @@ export function toRequest(doc: EditPanel, version: number, baselineFedFrom: numb
     generatorId: doc.generatorId,
     transferSwitch: doc.transferSwitch,
     controlSystem: doc.controlSystem,
+    atsId: doc.atsId,
     version,
     breakers,
     ...(doc.fedFromBreakerId !== baselineFedFrom ? { fedFromBreakerId: doc.fedFromBreakerId } : {}),

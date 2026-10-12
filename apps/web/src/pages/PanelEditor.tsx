@@ -11,6 +11,7 @@ import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 import { api, ApiError, errorMessage } from '../api';
 import { useCurrentUser } from '../auth';
+import { NodeIcon } from '../components/PowerIcon';
 import { PANEL_PRINT_STYLES, PrintButton } from '../components/PrintDialog';
 import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
@@ -264,6 +265,9 @@ function Editor({
   const serverBreaker = selectedBreaker?.id ? server.breakers.find((b) => b.id === selectedBreaker.id) : undefined;
   const site = siteOf(byId, initial.locationId);
   const chain = ancestry(byId, initial.locationId);
+  // The power-flow map of the nearest building (or site), centred on this panel.
+  const flowAt = [...chain].reverse().find((c) => c.kind === 'building' || c.kind === 'site');
+  const flowHref = `/power?loc=${flowAt?.id ?? initial.locationId}&focus=p${initial.id}`;
 
   // Save pending edits first so the PDF matches what is on screen.
   const printFlush = async () => {
@@ -304,8 +308,7 @@ function Editor({
                 (doc.mainType === 'lugs' ? ' · main lugs' : ` · ${doc.mainAmps ?? '?'} A main`)}
               {(doc.manufacturer || doc.model) && ` · ${[doc.manufacturer, doc.model].filter(Boolean).join(' ')}`}
             </p>
-            <FeedLine panel={server} />
-            <GeneratorLine panel={server} />
+            <PowerStrip panel={server} flowHref={flowHref} />
           </div>
           <div className="toolbar">
             {!readOnly && <SaveBadge state={saveState} />}
@@ -493,47 +496,63 @@ function SaveBadge({ state }: { state: SaveState }) {
   );
 }
 
-/** "On generator GEN-1 (250 kW diesel) · ATS-1", or through the panel feeding it. */
-function GeneratorLine({ panel }: { panel: PanelDetail }) {
+/**
+ * Where power comes from, as a strip of chips: the utility, each panel feeding this one with the
+ * circuit it is on, then this panel; and the generator that backs it up, with how.
+ */
+function PowerStrip({ panel, flowHref }: { panel: PanelDetail; flowHref: string }) {
+  const chain = [...panel.feedChain].reverse();
   const g = panel.generator;
-  if (!g) return null;
-  const name = g.canView ? <Link to={`/generators/${g.id}`}>{g.name}</Link> : <strong>{g.name}</strong>;
+  const relay = panel.layout === 'relay';
+  const notSet = chain.length === 0 && panel.mainType === 'lugs' && !relay;
   return (
-    <p className="feed-line">
-      <span className="badge badge-gen">GEN</span> On generator {name} ({generatorRating(g)})
-      {g.via ? (
-        <>
-          {' '}
-          through <Link to={`/panels/${g.via.panelId}`}>{g.via.panelName}</Link>
-        </>
-      ) : (
-        g.transferSwitch && ` through ${g.transferSwitch}`
+    <div className="power-strip">
+      {!(relay && chain.length === 0) && (
+        <ol className="ps-chain" aria-label="Fed from">
+          {notSet ? (
+            <li className="ps-chip ps-warn">Fed from: not set yet (Panel settings → Fed from)</li>
+          ) : (
+            <li className="ps-chip ps-utility">
+              <NodeIcon kind="utility" size={16} />
+              Utility
+            </li>
+          )}
+          {chain.map((f) => (
+            <li key={f.breakerId} className="ps-chip">
+              <NodeIcon kind={f.canView ? 'panel' : 'hidden'} size={16} />
+              {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>}
+              <span className="ps-ckt" title={`${f.label || 'Unlabelled'} · in ${f.locationPath}`}>
+                {f.circuit} · {f.amps}A
+              </span>
+            </li>
+          ))}
+          <li className="ps-chip ps-here" aria-current="true">
+            <NodeIcon kind={relay ? 'relay' : 'panel'} size={16} />
+            {panel.name}
+          </li>
+        </ol>
       )}
-    </p>
-  );
-}
-
-function FeedLine({ panel }: { panel: PanelDetail }) {
-  if (panel.feedChain.length === 0) {
-    // A relay panel's control power is optional detail.
-    if (panel.layout === 'relay') return null;
-    return (
-      <p className="feed-line">
-        Fed from: {panel.mainType === 'lugs' ? 'not set yet (Panel settings → Fed from)' : 'the utility service'}
-      </p>
-    );
-  }
-  return (
-    <p className="feed-line">
-      Fed from:{' '}
-      {panel.feedChain.map((f, i) => (
-        <span key={f.breakerId}>
-          {i > 0 && <span aria-hidden="true"> ← </span>}
-          {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>} ·{' '}
-          {f.circuit} {f.label || 'unlabelled'} ({f.amps}A) <span className="muted">in {f.locationPath}</span>
-        </span>
-      ))}
-    </p>
+      {g && (
+        <p className="ps-chip ps-gen">
+          <NodeIcon kind="generator" size={16} />
+          <span>
+            On generator {g.canView ? <Link to={`/generators/${g.id}`}>{g.name}</Link> : <strong>{g.name}</strong>} (
+            {generatorRating(g)})
+            {g.via ? (
+              <>
+                {' '}
+                through <Link to={`/panels/${g.via.panelId}`}>{g.via.panelName}</Link>
+              </>
+            ) : (
+              g.transferSwitch && ` through ${g.transferSwitch}`
+            )}
+          </span>
+        </p>
+      )}
+      <Link className="ps-flow" to={flowHref}>
+        Power flow →
+      </Link>
+    </div>
   );
 }
 

@@ -9,3 +9,4 @@ export * from './api';
 export * from './load';
 export * from './sso';
 export * from './generator';
+export * from './topology';
