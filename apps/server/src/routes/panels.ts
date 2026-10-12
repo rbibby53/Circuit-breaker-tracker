@@ -7,6 +7,7 @@ import {
   createPanelSchema,
   duplicatePanelSchema,
   effectiveRole,
+  isRelayPanel,
   isWithin,
   pathIds,
   savePanelSchema,
@@ -31,6 +32,7 @@ import {
   canViewPanel,
   describeChanges,
   getBreaker,
+  getGenerator,
   getPanel,
   isDownstream,
   locationName,
@@ -59,6 +61,14 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     }
   };
 
+  /** A generator the actor can see, for linking to a panel. */
+  const checkGenerator = (actor: ReturnType<typeof actorOf>, access: AccessData, generatorId: number | null) => {
+    if (generatorId === null) return;
+    const g = getGenerator(db, generatorId);
+    const node = g ? access.node(g.location_id) : undefined;
+    if (!g || !node || !canView(actor, node, access.grants)) throw badRequest('Generator not found.');
+  };
+
   app.get('/api/panels', async (req): Promise<PanelSummary[]> => {
     const auth = requireAuth(req);
     const actor = actorOf(auth);
@@ -81,23 +91,30 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     if (!AVAILABLE_LAYOUTS.includes(body.layout)) throw badRequest('That panel layout is not available yet.');
     const shapeIssue = validatePanelShape(body)[0];
     if (shapeIssue) throw badRequest(shapeIssue.message);
+    checkGenerator(actor, access, body.generatorId);
+    const relay = isRelayPanel(body);
     const t = now();
     const r = db
       .prepare(
-        `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes,
+           generator_id, transfer_switch, control_system, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
         body.name,
         body.layout,
         body.spaces,
-        body.mainAmps,
-        body.mainType,
+        // Relay panels have no main.
+        relay ? null : body.mainAmps,
+        relay ? 'lugs' : body.mainType,
         body.voltage,
         body.manufacturer,
         body.model,
         body.notes,
+        body.generatorId,
+        body.generatorId ? body.transferSwitch : '',
+        relay ? body.controlSystem : '',
         t,
         t,
       );
@@ -110,7 +127,9 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         entity: 'panel',
         entityId: panelId,
         locationId: id,
-        summary: `Added panel ${body.name} (${body.spaces} spaces)`,
+        summary: relay
+          ? `Added relay panel ${body.name} (${body.spaces} relays)`
+          : `Added panel ${body.name} (${body.spaces} spaces)`,
       },
       access,
     );
@@ -139,6 +158,14 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     if (body.layout !== panel.layout && !AVAILABLE_LAYOUTS.includes(body.layout)) {
       throw badRequest('That panel layout is not available yet.');
     }
+    const relay = isRelayPanel(panel);
+    if (isRelayPanel(body) !== relay) {
+      throw badRequest('A relay panel cannot become a breaker panel, or the other way round. Add a new panel instead.');
+    }
+    const generatorId = body.generatorId === undefined ? panel.generator_id : body.generatorId;
+    const transferSwitch = body.transferSwitch ?? panel.transfer_switch;
+    const controlSystem = body.controlSystem ?? panel.control_system;
+    if (generatorId !== panel.generator_id) checkGenerator(actor, access, generatorId);
     const shape = { layout: body.layout, spaces: body.spaces };
     const issue = validateLayout(
       shape,
@@ -171,6 +198,24 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         if (!site || !isWithin(node, site))
           throw badRequest(`${locationName(access, s.locationId)} is in a different site.`);
       }
+    }
+    // Relays switch circuits fed from breakers in other (breaker) panels. A feeding breaker the
+    // person cannot see may stay as it was, but not be newly chosen.
+    const existingSource = new Map(existing.map((b) => [b.id, b.source_breaker_id]));
+    for (const b of body.breakers) {
+      if (!relay) {
+        if (b.device !== 'breaker' && b.device !== 'surge') throw badRequest('Unknown device.');
+        continue;
+      }
+      if (b.device !== 'breaker') throw badRequest('A relay panel holds relays only.');
+      if (b.sourceBreakerId === null || (b.id !== undefined && existingSource.get(b.id) === b.sourceBreakerId))
+        continue;
+      const src = getBreaker(db, b.sourceBreakerId);
+      const srcPanel = src ? getPanel(db, src.panel_id) : undefined;
+      if (!src || !srcPanel || !canViewPanel(actor, access, srcPanel)) {
+        throw badRequest('The breaker feeding a relay was not found.');
+      }
+      if (isRelayPanel(srcPanel)) throw badRequest('A relay is fed from a breaker, not from another relay.');
     }
     const before = servesOf(db, [...existingIds]);
     const hiddenServes = before.filter((s) => visible.get(s.location_id)?.access !== 'full');
@@ -207,11 +252,12 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
 
       const update = db.prepare(
         `UPDATE breakers SET position = ?, slot = ?, poles = ?, amps = ?, protection = ?, label = ?, notes = ?,
-           is_spare = ?, critical = ?, backup = ?, device = ? WHERE id = ?`,
+           is_spare = ?, critical = ?, backup = ?, device = ?, source_breaker_id = ?, control = ? WHERE id = ?`,
       );
       const insert = db.prepare(
-        `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device,
+           source_breaker_id, control)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const clearServes = db.prepare('DELETE FROM breaker_serves WHERE breaker_id = ?');
       const addServe = db.prepare(
@@ -224,14 +270,16 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
           b.slot,
           b.poles,
           b.amps,
-          // GFCI/AFCI describe breakers; a surge protector has none of its own.
-          b.device === 'surge' ? 'standard' : b.protection,
+          // GFCI/AFCI describe breakers; surge protectors and relays have none of their own.
+          b.device === 'surge' || relay ? 'standard' : b.protection,
           b.label,
           b.notes,
           b.isSpare ? 1 : 0,
           b.critical ? 1 : 0,
           b.backup,
           b.device,
+          relay ? b.sourceBreakerId : null,
+          relay ? b.control : '',
         ] as const;
         let id: number;
         if (b.id !== undefined) {
@@ -249,18 +297,22 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
 
       db.prepare(
         `UPDATE panels SET name = ?, layout = ?, spaces = ?, main_amps = ?, main_type = ?, voltage = ?, manufacturer = ?,
-           model = ?, notes = ?, fed_from_breaker_id = ? WHERE id = ?`,
+           model = ?, notes = ?, fed_from_breaker_id = ?, generator_id = ?, transfer_switch = ?, control_system = ?
+         WHERE id = ?`,
       ).run(
         body.name,
         body.layout,
         body.spaces,
-        body.mainAmps,
-        body.mainType,
+        relay ? null : body.mainAmps,
+        relay ? 'lugs' : body.mainType,
         body.voltage,
         body.manufacturer,
         body.model,
         body.notes,
         fedFrom,
+        generatorId,
+        generatorId ? transferSwitch : '',
+        relay ? controlSystem : '',
         panel.id,
       );
 
@@ -355,12 +407,19 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     let keptTags = 0;
     let droppedTags = 0;
     const t = now();
+    // The copy stays on the same generator only when it is in the generator's site.
+    const sourceGenerator = source.generator_id ? getGenerator(db, source.generator_id) : undefined;
+    const generator =
+      sourceGenerator && destSite && siteOf(access, sourceGenerator.location_id) === destSite
+        ? sourceGenerator.id
+        : null;
 
     const id = db.transaction(() => {
       const r = db
         .prepare(
-          `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+          `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes,
+             generator_id, transfer_switch, control_system, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           dest.id,
@@ -373,13 +432,17 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
           source.manufacturer,
           source.model,
           source.notes,
+          generator,
+          generator ? source.transfer_switch : '',
+          source.control_system,
           t,
           t,
         );
       const panelId = Number(r.lastInsertRowid);
       const insert = db.prepare(
-        `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device,
+           source_breaker_id, control)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const addServe = db.prepare('INSERT INTO breaker_serves (breaker_id, location_id, note) VALUES (?, ?, ?)');
       for (const b of breakers) {
@@ -397,6 +460,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
             b.critical,
             b.backup,
             b.device,
+            b.source_breaker_id,
+            b.control,
           ).lastInsertRowid,
         );
         setTags(
@@ -471,9 +536,12 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     const actor = actorOf(auth);
     const access = new AccessData(db);
     const panel = visiblePanel(actor, access, idParam((req.params as { id: string }).id));
+    // ?for=relay: breakers a relay in this panel can be fed from (any breaker panel but this one).
+    const forRelay = (req.query as { for?: string }).for === 'relay';
     const out: FeedCandidate[] = [];
     for (const p of allPanels(db)) {
-      if (!canViewPanel(actor, access, p) || isDownstream(db, panel.id, p.id)) continue;
+      if (!canViewPanel(actor, access, p) || isRelayPanel(p)) continue;
+      if (forRelay ? p.id === panel.id : isDownstream(db, panel.id, p.id)) continue;
       for (const b of breakersOf(db, p.id)) {
         out.push({
           breakerId: b.id,

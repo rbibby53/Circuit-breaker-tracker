@@ -2,7 +2,7 @@ import { canView, circuitLabel, visibleLocations, type SearchResponse, type TagC
 import type { FastifyInstance } from 'fastify';
 import { actorOf, requireAuth } from '../context';
 import type { DB } from '../db';
-import { allPanels, canViewPanel, tagsOf, type BreakerRow, type PanelRow } from '../panels';
+import { allPanels, canViewPanel, tagsOf, type BreakerRow, type GeneratorRow, type PanelRow } from '../panels';
 import { AccessData } from '../repo';
 
 const LIMIT = 8;
@@ -21,7 +21,7 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
     const auth = requireAuth(req);
     const actor = actorOf(auth);
     const q = String((req.query as { q?: string }).q ?? '').trim();
-    if (q.length < 2) return { locations: [], panels: [], breakers: [] };
+    if (q.length < 2) return { locations: [], panels: [], generators: [], breakers: [] };
     const pattern = like(q);
     const access = new AccessData(db);
     const visible = visibleLocations(actor, [...access.nodes.values()], access.grants);
@@ -42,6 +42,13 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
       .slice(0, LIMIT)
       .map((p) => ({ id: p.id, name: p.name, path: access.pathLabel(p.location_id) }));
 
+    const generators = (
+      db.prepare("SELECT * FROM generators WHERE name LIKE ? ESCAPE '\\' ORDER BY name").all(pattern) as GeneratorRow[]
+    )
+      .filter((g) => visible.get(g.location_id)?.access === 'full')
+      .slice(0, LIMIT)
+      .map((g) => ({ id: g.id, name: g.name, path: access.pathLabel(g.location_id) }));
+
     // Breakers matching by tag, label or notes, or serving a matching place. Tags come first:
     // searching "servers" should list every breaker tagged Servers.
     const byTag = db
@@ -51,8 +58,10 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
       )
       .all(`${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`) as BreakerRow[];
     const byText = db
-      .prepare("SELECT * FROM breakers WHERE label LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' LIMIT 200")
-      .all(pattern, pattern) as BreakerRow[];
+      .prepare(
+        "SELECT * FROM breakers WHERE label LIKE ? ESCAPE '\\' OR notes LIKE ? ESCAPE '\\' OR control LIKE ? ESCAPE '\\' LIMIT 200",
+      )
+      .all(pattern, pattern, pattern) as BreakerRow[];
     const byPlace = locationIds.length
       ? (db
           .prepare(
@@ -94,7 +103,7 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
     for (const b of byText) add(b, null);
     for (const b of byPlace) add(b, access.byId.get(b.served)?.name ?? null);
 
-    return { locations, panels, breakers };
+    return { locations, panels, generators, breakers };
   });
 
   /** Tags on breakers the person can see, most used first, for suggestions and filters. */

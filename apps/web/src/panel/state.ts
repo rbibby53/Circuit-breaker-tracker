@@ -36,6 +36,10 @@ export interface EditBreaker {
   backup: Backup;
   serves: EditServe[];
   tags: string[];
+  /** Relays: the breaker whose circuit this relay switches. */
+  sourceBreakerId: number | null;
+  /** Relays: what controls it, e.g. an nLight zone. */
+  control: string;
 }
 
 export interface EditPanel {
@@ -49,6 +53,9 @@ export interface EditPanel {
   model: string;
   notes: string;
   fedFromBreakerId: number | null;
+  generatorId: number | null;
+  transferSwitch: string;
+  controlSystem: string;
   breakers: EditBreaker[];
 }
 
@@ -67,6 +74,9 @@ export function fromDetail(p: PanelDetail): EditPanel {
     model: p.model,
     notes: p.notes,
     fedFromBreakerId: p.fedFromBreakerId,
+    generatorId: p.generatorId,
+    transferSwitch: p.transferSwitch,
+    controlSystem: p.controlSystem,
     breakers: p.breakers.map((b) => ({
       key: `id-${b.id}`,
       id: b.id,
@@ -83,6 +93,8 @@ export function fromDetail(p: PanelDetail): EditPanel {
       backup: b.backup,
       serves: b.serves.map((s) => ({ locationId: s.locationId, note: s.note, hidden: s.name === null })),
       tags: b.tags,
+      sourceBreakerId: b.sourceBreakerId,
+      control: b.control,
     })),
   };
 }
@@ -108,6 +120,8 @@ export function toRequest(doc: EditPanel, version: number, baselineFedFrom: numb
     backup: b.backup,
     serves: b.serves.filter((s) => !s.hidden).map((s) => ({ locationId: s.locationId, note: s.note })),
     tags: b.tags,
+    sourceBreakerId: b.sourceBreakerId,
+    control: b.control,
   }));
   return {
     name: doc.name,
@@ -119,6 +133,9 @@ export function toRequest(doc: EditPanel, version: number, baselineFedFrom: numb
     manufacturer: doc.manufacturer,
     model: doc.model,
     notes: doc.notes,
+    generatorId: doc.generatorId,
+    transferSwitch: doc.transferSwitch,
+    controlSystem: doc.controlSystem,
     version,
     breakers,
     ...(doc.fedFromBreakerId !== baselineFedFrom ? { fedFromBreakerId: doc.fedFromBreakerId } : {}),
@@ -165,6 +182,8 @@ export function addBreaker(doc: EditPanel, position: number, slot: Slot = 'full'
     backup: 'none',
     serves: [],
     tags: [],
+    sourceBreakerId: null,
+    control: '',
   });
   return r.ok ? { ...r, key } : r;
 }

@@ -163,6 +163,10 @@ export function locationRoutes(app: FastifyInstance, db: DB): void {
     if (!removable) throw conflict(`Remove everything inside ${node.name} first.`);
     const panels = db.prepare('SELECT COUNT(*) AS n FROM panels WHERE location_id = ?').get(id) as { n: number };
     if (panels.n > 0) throw conflict(`Delete or move the panels in ${node.name} first.`);
+    const generators = db.prepare('SELECT COUNT(*) AS n FROM generators WHERE location_id = ?').get(id) as {
+      n: number;
+    };
+    if (generators.n > 0) throw conflict(`Delete the generators in ${node.name} first.`);
 
     audit(
       db,

@@ -4,6 +4,7 @@ import type { PaperSize, SettingKey, SettingValue } from './settings';
 import type { Backup, Device, MainType, PanelLayout, Protection, Slot } from './panel';
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
+import type { Fuel } from './generator';
 
 export interface UserSummary {
   id: number;
@@ -175,6 +176,10 @@ export interface PanelSummary {
   breakerCount: number;
   criticalCount: number;
   fedFrom: string | null;
+  /** The generator backing it, directly or through the panel feeding it. */
+  generatorName: string | null;
+  /** Relay panels: the lighting control system, e.g. nLight. */
+  controlSystem: string;
   role: EffectiveRole;
 }
 
@@ -206,6 +211,37 @@ export interface BreakerDto {
   feeds: { panelId: number; panelName: string }[];
   /** Sub-panels it feeds that the viewer cannot see. */
   hiddenFeeds: number;
+  /** Relays: the breaker whose circuit this relay switches. */
+  sourceBreakerId: number | null;
+  source: RelaySource | null;
+  /** Relays: what controls it, e.g. an nLight zone or schedule. */
+  control: string;
+  /** Breakers: relays that switch this circuit, when the viewer can see their panels. */
+  switchedBy: { panelId: number; panelName: string; relay: string; label: string; control: string }[];
+  /** Relays switching this circuit in panels the viewer cannot see. */
+  hiddenSwitchedBy: number;
+}
+
+/** The breaker feeding a relay. Everyone who can see the relay sees this summary. */
+export interface RelaySource {
+  breakerId: number;
+  panelId: number;
+  panelName: string;
+  circuit: string;
+  label: string;
+  amps: number;
+  canView: boolean;
+}
+
+/** The generator backing a panel: set on it, or on a panel up its feed chain (`via`). */
+export interface PanelGenerator {
+  id: number;
+  name: string;
+  kw: number | null;
+  fuel: Fuel;
+  transferSwitch: string;
+  via: { panelId: number; panelName: string } | null;
+  canView: boolean;
 }
 
 /** One step up the feed chain: the breaker feeding a panel, and the panel it sits in. */
@@ -221,7 +257,10 @@ export interface FeedLink {
   canView: boolean;
 }
 
-export interface PanelDetail extends Omit<PanelSummary, 'usedSpaces' | 'breakerCount' | 'criticalCount' | 'fedFrom'> {
+export interface PanelDetail extends Omit<
+  PanelSummary,
+  'usedSpaces' | 'breakerCount' | 'criticalCount' | 'fedFrom' | 'generatorName'
+> {
   locationPath: string;
   manufacturer: string;
   model: string;
@@ -237,6 +276,44 @@ export interface PanelDetail extends Omit<PanelSummary, 'usedSpaces' | 'breakerC
   publicPath: string | null;
   /** Whether the viewer may turn the public page on or off (Manager or admin). */
   canShare: boolean;
+  generatorId: number | null;
+  transferSwitch: string;
+  generator: PanelGenerator | null;
+}
+
+// ---- Generators -------------------------------------------------------------------------
+
+export interface GeneratorSummary {
+  id: number;
+  locationId: number;
+  locationPath: string;
+  name: string;
+  kw: number | null;
+  fuel: Fuel;
+  voltage: string;
+  /** Panels it backs up, directly or through the panels it feeds. */
+  panelCount: number;
+  role: EffectiveRole;
+}
+
+export interface GeneratorPanel {
+  id: number;
+  name: string;
+  locationPath: string;
+  transferSwitch: string;
+  /** Set when the panel is backed up through another panel on the generator. */
+  via: string | null;
+}
+
+export interface GeneratorDetail extends GeneratorSummary {
+  manufacturer: string;
+  model: string;
+  notes: string;
+  updatedAt: string;
+  canEdit: boolean;
+  /** Panels on it that the viewer can see. */
+  panels: GeneratorPanel[];
+  hiddenPanels: number;
 }
 
 /** What anyone with a panel's public link sees: the directory, read-only, nothing else. */
@@ -346,6 +423,7 @@ export interface PanelHistoryItem {
 export interface SearchResponse {
   locations: { id: number; name: string; kind: LocationKind; path: string }[];
   panels: { id: number; name: string; path: string }[];
+  generators: { id: number; name: string; path: string }[];
   breakers: {
     breakerId: number;
     panelId: number;

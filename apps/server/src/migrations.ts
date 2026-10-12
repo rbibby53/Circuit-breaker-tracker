@@ -1,4 +1,11 @@
 // Append-only. Never edit a migration that has shipped; add a new one instead.
+/**
+ * Starts a migration that rebuilds a table other tables point at. It runs with foreign keys off
+ * (dropping the old table would otherwise cascade), and is checked for broken links before it
+ * commits.
+ */
+export const FOREIGN_KEYS_OFF = '-- foreign keys off';
+
 export const MIGRATIONS: string[] = [
   `
   CREATE TABLE users (
@@ -232,5 +239,65 @@ export const MIGRATIONS: string[] = [
     created_at   TEXT NOT NULL,
     UNIQUE (group_name, location_id)
   );
+  `,
+  `
+  ${FOREIGN_KEYS_OFF}
+  -- Standby generators, where they are, and (below) the panels they back up.
+  CREATE TABLE generators (
+    id           INTEGER PRIMARY KEY,
+    location_id  INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    name         TEXT NOT NULL,
+    kw           INTEGER,
+    fuel         TEXT NOT NULL DEFAULT 'diesel'
+                 CHECK (fuel IN ('diesel', 'natural-gas', 'propane', 'bi-fuel', 'gasoline', 'other')),
+    voltage      TEXT NOT NULL DEFAULT '',
+    manufacturer TEXT NOT NULL DEFAULT '',
+    model        TEXT NOT NULL DEFAULT '',
+    notes        TEXT NOT NULL DEFAULT '',
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+  );
+  CREATE INDEX generators_location ON generators (location_id);
+
+  -- Panels gain the relay layout (lighting control relay panels such as nLight), the generator
+  -- backing them and its transfer switch, and a relay panel's control system. SQLite cannot
+  -- change a CHECK constraint, so the table is rebuilt with the same rows.
+  CREATE TABLE panels_new (
+    id                  INTEGER PRIMARY KEY,
+    location_id         INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    name                TEXT NOT NULL,
+    layout              TEXT NOT NULL CHECK (layout IN ('residential', 'commercial', 'single', 'relay')),
+    spaces              INTEGER NOT NULL,
+    main_amps           INTEGER,
+    main_type           TEXT NOT NULL DEFAULT 'breaker' CHECK (main_type IN ('breaker', 'lugs')),
+    voltage             TEXT NOT NULL DEFAULT '',
+    manufacturer        TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT '',
+    fed_from_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    version             INTEGER NOT NULL DEFAULT 1,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    public_token        TEXT,
+    generator_id        INTEGER REFERENCES generators (id) ON DELETE SET NULL,
+    transfer_switch     TEXT NOT NULL DEFAULT '',
+    control_system      TEXT NOT NULL DEFAULT ''
+  );
+  INSERT INTO panels_new (id, location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model,
+                          notes, fed_from_breaker_id, version, created_at, updated_at, public_token)
+    SELECT id, location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model,
+           notes, fed_from_breaker_id, version, created_at, updated_at, public_token
+    FROM panels;
+  DROP TABLE panels;
+  ALTER TABLE panels_new RENAME TO panels;
+  CREATE INDEX panels_location ON panels (location_id);
+  CREATE INDEX panels_fed_from ON panels (fed_from_breaker_id);
+  CREATE UNIQUE INDEX panels_public_token ON panels (public_token) WHERE public_token IS NOT NULL;
+  CREATE INDEX panels_generator ON panels (generator_id);
+
+  -- Relays: the breaker whose circuit a relay switches, and what controls it (an nLight zone…).
+  ALTER TABLE breakers ADD COLUMN source_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL;
+  ALTER TABLE breakers ADD COLUMN control TEXT NOT NULL DEFAULT '';
+  CREATE INDEX breakers_source ON breakers (source_breaker_id);
   `,
 ];

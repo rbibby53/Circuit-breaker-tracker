@@ -87,7 +87,12 @@ describe('search', () => {
   it('only shows what the person may see', async () => {
     const { guest } = await scenario();
     // The guest can see the garage only: breakers serving it or the whole site, but no kitchen.
-    expect((await guest.get('/api/search?q=kitchen')).body).toEqual({ locations: [], panels: [], breakers: [] });
+    expect((await guest.get('/api/search?q=kitchen')).body).toEqual({
+      locations: [],
+      panels: [],
+      generators: [],
+      breakers: [],
+    });
     const smoke = (await guest.get('/api/search?q=smoke')).body.breakers;
     expect(smoke).toEqual([expect.objectContaining({ label: 'Smoke alarms', canViewPanel: false })]);
     expect((await guest.get('/api/search?q=main')).body.panels).toEqual([]);

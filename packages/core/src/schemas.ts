@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { LOCATION_KINDS } from './locations';
 import { BACKUPS, DEVICES, MAIN_TYPES, MAX_SPACES, MIN_SPACES, PANEL_LAYOUTS, PROTECTIONS, SLOTS } from './panel';
 import { ROLES } from './roles';
+import { FUELS } from './generator';
 
 export const usernameSchema = z
   .string()
@@ -125,6 +126,12 @@ export const createPanelSchema = z.object({
   manufacturer: optionalText(80),
   model: optionalText(80),
   notes: optionalText(2000),
+  /** The standby generator backing this panel, through a transfer switch. */
+  generatorId: z.number().int().positive().nullable().default(null),
+  /** Which transfer switch, e.g. "ATS-1". */
+  transferSwitch: optionalText(40),
+  /** Relay panels: the lighting control system, e.g. nLight. */
+  controlSystem: optionalText(60),
 });
 
 export const servesInputSchema = z.object({
@@ -152,6 +159,10 @@ export const breakerInputSchema = z
     serves: z.array(servesInputSchema).max(50).default([]),
     /** What it powers, e.g. Lights, Outlets, Servers. Duplicates (any case) are dropped. */
     tags: z.array(z.string().trim().min(1).max(30)).max(10).default([]),
+    /** Relays: the breaker (in another panel) whose circuit this relay switches. */
+    sourceBreakerId: z.number().int().positive().nullable().default(null),
+    /** Relays: what controls it, e.g. an nLight zone, channel or schedule. */
+    control: optionalText(120),
   })
   .refine((b) => b.amps > 0 || b.device === 'surge', {
     message: 'A breaker needs a rating of at least 1 A.',
@@ -163,6 +174,10 @@ export const savePanelSchema = createPanelSchema.extend({
   version: z.number().int().min(1),
   /** Omit to leave unchanged; null to clear. */
   fedFromBreakerId: z.number().int().positive().nullable().optional(),
+  /** Omit any of these to leave them as they are. */
+  generatorId: z.number().int().positive().nullable().optional(),
+  transferSwitch: z.string().trim().max(40).optional(),
+  controlSystem: z.string().trim().max(60).optional(),
   breakers: z.array(breakerInputSchema).max(MAX_SPACES * 2),
 });
 
@@ -181,3 +196,17 @@ export const sharePanelSchema = z.object({
 export type CreatePanelInput = z.infer<typeof createPanelSchema>;
 export type BreakerInput = z.infer<typeof breakerInputSchema>;
 export type SavePanelInput = z.infer<typeof savePanelSchema>;
+
+// ---- Generators -------------------------------------------------------------------------
+
+export const generatorInputSchema = z.object({
+  name: z.string().trim().min(1, 'Give the generator a name.').max(80),
+  kw: z.number().int().min(1).max(100000).nullable().default(null),
+  fuel: z.enum(FUELS).default('diesel'),
+  voltage: optionalText(40),
+  manufacturer: optionalText(80),
+  model: optionalText(80),
+  notes: optionalText(2000),
+});
+
+export type GeneratorInput = z.infer<typeof generatorInputSchema>;

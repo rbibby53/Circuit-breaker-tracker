@@ -6,6 +6,23 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ### Added
 
+- **Standby generators.** Add a generator to a site or building (Add a generator on its page)
+  with its size in kW, fuel, voltage, make, model and notes.
+  - Tie a panel to it under **Panel settings → Standby generator**, with the transfer switch
+    (e.g. ATS-1). Panels fed from that panel are on the generator too, "through" it.
+  - Panels show "On generator GEN-1 (250 kW diesel) through ATS-1", and so do printed panel
+    sheets and CSV exports (a new Generator column).
+  - Each generator's page lists every panel it backs up, directly or through another panel.
+  - Generators appear on their building's page and in search. Changes are in Activity.
+- **Lighting relay panels** (nLight and other lighting control systems). Choose **Lighting
+  relay panel** when adding a panel.
+  - Relays are numbered 1 up in one column, 1- or 2-pole, with a rating, flags, rooms and tags
+    like breakers.
+  - Each relay records **Fed by circuit** (the breaker, in any breaker panel, whose circuit it
+    switches) and its **Control** (nLight zone, channel, schedule, occupancy…).
+  - The feeding breaker shows "Switched by RP-1 relay 5". Search finds relays by their control,
+    e.g. "zone 3". PDFs and CSV exports (new Fed by, Control and Switched by columns) include it.
+  - The panel records its control system (nLight by default) instead of a main breaker.
 - **Authentik sign-in, and access from single sign-on groups.**
   - Authentik works as a single sign-on provider. Paste the provider's issuer (the slash at the
     end is kept), and the button reads **Sign in with Authentik**. Keycloak, Authelia and other
