@@ -14,6 +14,7 @@ import {
   type AtsTransition,
   type Mounting,
   type PanelNameplate,
+  type PanelSection,
   type PowerDeviceKind,
   type PowerDeviceShape,
   type Backup,
@@ -58,6 +59,8 @@ export interface PanelRow {
   enclosure: string;
   feeder_wire: string;
   feeder_conduit: string;
+  /** JSON list of the sections after the first. */
+  sections: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -82,6 +85,23 @@ export interface BreakerRow {
   control: string;
   load_va: number | null;
   demand_pct: number | null;
+  section: number;
+  unit: string;
+  frame_amps: number | null;
+  wire: string;
+  conduit: string;
+  starter: string;
+  hp: number | null;
+}
+
+/** A panel's sections after the first, as stored. */
+export function sectionsOfRow(p: { sections?: string }): PanelSection[] {
+  try {
+    const list = JSON.parse(p.sections || '[]') as PanelSection[];
+    return Array.isArray(list) ? list : [];
+  } catch {
+    return [];
+  }
 }
 
 export interface GeneratorRow {
@@ -228,7 +248,7 @@ export const getBreaker = (db: DB, id: number) =>
   db.prepare('SELECT * FROM breakers WHERE id = ?').get(id) as BreakerRow | undefined;
 
 export const breakersOf = (db: DB, panelId: number) =>
-  db.prepare('SELECT * FROM breakers WHERE panel_id = ? ORDER BY position, slot').all(panelId) as BreakerRow[];
+  db.prepare('SELECT * FROM breakers WHERE panel_id = ? ORDER BY section, position, slot').all(panelId) as BreakerRow[];
 
 export function servesOf(db: DB, breakerIds: number[]): ServesRow[] {
   if (breakerIds.length === 0) return [];
@@ -504,6 +524,13 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
       hiddenSwitchedBy: switching.length - switchingShown.length,
       loadVa: b.load_va,
       demandPct: b.demand_pct,
+      section: b.section ?? 1,
+      unit: b.unit ?? '',
+      frameAmps: b.frame_amps ?? null,
+      wire: b.wire ?? '',
+      conduit: b.conduit ?? '',
+      starter: b.starter ?? '',
+      hp: b.hp ?? null,
     };
   };
   const check = loadCheck(db, panel);
@@ -545,6 +572,7 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     fedFromBreakerId: panel.fed_from_breaker_id,
     fedFromDeviceId: panel.fed_from_device_id,
     nameplate: nameplateOf(panel),
+    sections: sectionsOfRow(panel),
     loadCheck: check,
     warnings: [...voltageWarnings(db, panel, breakers), ...capacityWarnings(check)],
     publicPath: panel.public_token ? `/p/${panel.public_token}` : null,
@@ -584,6 +612,9 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
     atsId: panel.ats_id ?? null,
     fedFromDeviceId: panel.fed_from_device_id ?? null,
     ...nameplateOf(panel),
+    sections: sectionsOfRow(panel)
+      .map((x) => `${x.name} (${x.spaces}${x.throughLugs ? ', through lugs' : ''})`)
+      .join('; '),
     breakers: breakers
       .map((b) => ({
         id: b.id,
@@ -602,6 +633,13 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
         control: b.control ?? '',
         loadVa: b.load_va ?? null,
         demandPct: b.demand_pct ?? null,
+        section: b.section ?? 1,
+        unit: b.unit ?? '',
+        frameAmps: b.frame_amps ?? null,
+        wire: b.wire ?? '',
+        conduit: b.conduit ?? '',
+        starter: b.starter ?? '',
+        hp: b.hp ?? null,
         serves: serves
           .filter((s) => s.breaker_id === b.id)
           .map((s) => `${s.location_id}:${s.note}`)
@@ -638,6 +676,7 @@ const PANEL_FIELDS: [keyof Snapshot, string][] = [
   ['enclosure', 'enclosure'],
   ['feederWire', 'feeder wire'],
   ['feederConduit', 'feeder conduit'],
+  ['sections', 'sections'],
 ];
 
 const BREAKER_FIELDS = [
@@ -658,6 +697,13 @@ const BREAKER_FIELDS = [
   ['control', 'control'],
   ['loadVa', 'load (VA)'],
   ['demandPct', 'demand %'],
+  ['section', 'section'],
+  ['unit', 'unit'],
+  ['frameAmps', 'frame'],
+  ['wire', 'wire'],
+  ['conduit', 'conduit'],
+  ['starter', 'starter'],
+  ['hp', 'HP'],
 ] as const;
 
 /** Human-readable lines describing what changed between two snapshots. */
@@ -695,7 +741,9 @@ export function describeChanges(
     for (const [k, label] of BREAKER_FIELDS) {
       if (JSON.stringify(value(old, k)) === JSON.stringify(value(b, k))) continue;
       if (k === 'position') changes.push(`moved from ${circuitLabel(layout, old)}`);
-      else if (k === 'serves') {
+      else if (k === 'section') {
+        if (old.position === b.position) changes.push(`moved from ${circuitLabel(layout, old)}`);
+      } else if (k === 'serves') {
         const names = (list: string[]) => list.map((s) => locationName(Number(s.split(':')[0])));
         changes.push(
           `serves ${names(old.serves).join(', ') || 'nothing'} → ${names(b.serves).join(', ') || 'nothing'}`,

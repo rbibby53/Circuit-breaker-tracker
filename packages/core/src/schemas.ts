@@ -1,6 +1,16 @@
 import { z } from 'zod';
 import { LOCATION_KINDS } from './locations';
-import { BACKUPS, DEVICES, MAIN_TYPES, MAX_SPACES, MIN_SPACES, PANEL_LAYOUTS, PROTECTIONS, SLOTS } from './panel';
+import {
+  BACKUPS,
+  DEVICES,
+  MAIN_TYPES,
+  MAX_SECTIONS,
+  MAX_SPACES,
+  MAX_UNITS,
+  PANEL_LAYOUTS,
+  PROTECTIONS,
+  SLOTS,
+} from './panel';
 import { ROLES } from './roles';
 import { ATS_DUTIES, ATS_TRANSITIONS, MOUNTINGS, POWER_DEVICE_KINDS } from './devices';
 import { ATS_KINDS, FUELS } from './generator';
@@ -117,10 +127,17 @@ export const updateUserSchema = z.object({
 const amps = z.number().int().min(1).max(4000);
 const optionalText = (max: number) => z.string().trim().max(max).default('');
 
+export const sectionSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  spaces: z.number().int().min(1).max(MAX_UNITS),
+  throughLugs: z.boolean().default(false),
+});
+
 export const createPanelSchema = z.object({
   name: z.string().trim().min(1).max(80),
   layout: z.enum(PANEL_LAYOUTS).default('residential'),
-  spaces: z.number().int().min(MIN_SPACES).max(MAX_SPACES),
+  /** Spaces in the first section (units on a switchboard or MCC); checked per layout. */
+  spaces: z.number().int().min(1).max(MAX_UNITS),
   mainAmps: amps.nullable().default(null),
   mainType: z.enum(MAIN_TYPES).default('breaker'),
   voltage: optionalText(40),
@@ -142,6 +159,11 @@ export const createPanelSchema = z.object({
   enclosure: optionalText(40),
   feederWire: optionalText(80),
   feederConduit: optionalText(40),
+  /** Sections after the first, each numbered from 1. */
+  sections: z
+    .array(sectionSchema)
+    .max(MAX_SECTIONS - 1)
+    .default([]),
 });
 
 export const servesInputSchema = z.object({
@@ -154,7 +176,9 @@ export const breakerInputSchema = z
     id: z.number().int().positive().optional(),
     /** Client-side key, echoed back so new breakers can be matched to their new ids. */
     clientKey: z.string().min(1).max(64),
-    position: z.number().int().min(1).max(MAX_SPACES),
+    position: z.number().int().min(1).max(MAX_UNITS),
+    /** Which section of the panel, from 1. */
+    section: z.number().int().min(1).max(MAX_SECTIONS).default(1),
     slot: z.enum(SLOTS).default('full'),
     poles: z.number().int().min(1).max(3),
     /** 0 only for a surge protector without breakers of its own. */
@@ -177,6 +201,14 @@ export const breakerInputSchema = z
     loadVa: z.number().min(0).max(100_000_000).nullable().default(null),
     /** Demand factor in percent (unset means 100%). */
     demandPct: z.number().int().min(0).max(200).nullable().default(null),
+    /** Switchboards and MCCs: unit number as written, frame size, feeder wire and conduit. */
+    unit: optionalText(20),
+    frameAmps: z.number().int().min(1).max(10000).nullable().default(null),
+    wire: optionalText(80),
+    conduit: optionalText(40),
+    /** MCC buckets: starter size and motor horsepower (control type goes in `control`). */
+    starter: optionalText(30),
+    hp: z.number().min(0).max(100000).nullable().default(null),
   })
   .refine((b) => b.amps > 0 || b.device === 'surge', {
     message: 'A breaker needs a rating of at least 1 A.',
@@ -201,7 +233,12 @@ export const savePanelSchema = createPanelSchema.extend({
   enclosure: z.string().trim().max(40).optional(),
   feederWire: z.string().trim().max(80).optional(),
   feederConduit: z.string().trim().max(40).optional(),
-  breakers: z.array(breakerInputSchema).max(MAX_SPACES * 2),
+  breakers: z.array(breakerInputSchema).max(MAX_SPACES * 2 * MAX_SECTIONS),
+  /** Omit to leave unchanged. */
+  sections: z
+    .array(sectionSchema)
+    .max(MAX_SECTIONS - 1)
+    .optional(),
 });
 
 export const duplicatePanelSchema = z.object({

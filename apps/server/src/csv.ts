@@ -47,6 +47,11 @@ export const BREAKER_COLUMNS = [
   'Generator',
   'Tags',
   'Notes',
+  'Frame (A)',
+  'Wire',
+  'Conduit',
+  'Starter',
+  'HP',
 ];
 
 /** One row per breaker, in panel order. Locations the reader cannot see are counted, not named. */
@@ -90,6 +95,11 @@ export function breakerRows(panel: PanelDetail): (string | number | boolean | nu
       panel.generator ? panel.generator.name : '',
       b.tags.join('; '),
       b.notes,
+      b.frameAmps ?? '',
+      b.wire,
+      b.conduit,
+      b.starter,
+      b.hp ?? '',
     ];
   });
 }

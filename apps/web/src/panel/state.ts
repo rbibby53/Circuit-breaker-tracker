@@ -1,7 +1,11 @@
 import {
+  MAX_UNITS,
   checkChange,
   freeAt,
-  validateLayout,
+  isListLayout,
+  sectionShape,
+  sectionsOf,
+  validateSections,
   type Backup,
   type BreakerInput,
   type Device,
@@ -9,6 +13,7 @@ import {
   type PanelDetail,
   type PanelLayout,
   type PanelNameplate,
+  type PanelSection,
   type Protection,
   type Slot,
 } from '@cbt/core';
@@ -44,6 +49,15 @@ export interface EditBreaker {
   /** Connected load (VA) and demand factor (%), when recorded. */
   loadVa: number | null;
   demandPct: number | null;
+  /** Which section of the panel, from 1. */
+  section: number;
+  /** Switchboards and MCCs: unit number, frame, feeder wire and conduit; MCC starter and HP. */
+  unit: string;
+  frameAmps: number | null;
+  wire: string;
+  conduit: string;
+  starter: string;
+  hp: number | null;
 }
 
 export interface EditPanel {
@@ -60,6 +74,8 @@ export interface EditPanel {
   /** A transformer, disconnect, UPS or service feeding it instead of a breaker. */
   fedFromDeviceId: number | null;
   nameplate: PanelNameplate;
+  /** Sections after the first. */
+  sections: PanelSection[];
   generatorId: number | null;
   transferSwitch: string;
   controlSystem: string;
@@ -84,6 +100,7 @@ export function fromDetail(p: PanelDetail): EditPanel {
     fedFromBreakerId: p.fedFromBreakerId,
     fedFromDeviceId: p.fedFromDeviceId,
     nameplate: { ...p.nameplate },
+    sections: p.sections.map((x) => ({ ...x })),
     generatorId: p.generatorId,
     transferSwitch: p.transferSwitch,
     controlSystem: p.controlSystem,
@@ -108,6 +125,13 @@ export function fromDetail(p: PanelDetail): EditPanel {
       control: b.control,
       loadVa: b.loadVa,
       demandPct: b.demandPct,
+      section: b.section,
+      unit: b.unit,
+      frameAmps: b.frameAmps,
+      wire: b.wire,
+      conduit: b.conduit,
+      starter: b.starter,
+      hp: b.hp,
     })),
   };
 }
@@ -141,6 +165,13 @@ export function toRequest(doc: EditPanel, version: number, baselineFeed: string,
     control: b.control,
     loadVa: b.loadVa,
     demandPct: b.demandPct,
+    section: b.section,
+    unit: b.unit,
+    frameAmps: b.frameAmps,
+    wire: b.wire,
+    conduit: b.conduit,
+    starter: b.starter,
+    hp: b.hp,
   }));
   return {
     name: doc.name,
@@ -157,6 +188,7 @@ export function toRequest(doc: EditPanel, version: number, baselineFeed: string,
     controlSystem: doc.controlSystem,
     atsId: doc.atsId,
     ...doc.nameplate,
+    sections: doc.sections,
     version,
     breakers,
     ...(feedKey(doc) !== baselineFeed
@@ -173,10 +205,21 @@ export function applyIds(doc: EditPanel, idMap: Record<string, number>): EditPan
 
 export type Result = { ok: true; doc: EditPanel } | { ok: false; error: string };
 
-const shape = (b: EditBreaker) => ({ key: b.key, position: b.position, slot: b.slot, poles: b.poles, label: b.label });
+const shape = (b: EditBreaker) => ({
+  key: b.key,
+  position: b.position,
+  slot: b.slot,
+  poles: b.poles,
+  label: b.label,
+  section: b.section,
+});
+
+/** The breakers in one section, as layout shapes. */
+const inSection = (doc: EditPanel, section: number) => doc.breakers.filter((b) => b.section === section).map(shape);
 
 function replace(doc: EditPanel, next: EditBreaker): Result {
-  const error = checkChange(doc, doc.breakers.map(shape), shape(next));
+  if (next.section > sectionsOf(doc).length) return { ok: false, error: 'That section is gone.' };
+  const error = checkChange(sectionShape(doc, next.section), inSection(doc, next.section), shape(next));
   if (error) return { ok: false, error };
   const exists = doc.breakers.some((b) => b.key === next.key);
   return {
@@ -188,8 +231,14 @@ function replace(doc: EditPanel, next: EditBreaker): Result {
   };
 }
 
-export function addBreaker(doc: EditPanel, position: number, slot: Slot = 'full'): Result & { key?: string } {
+export function addBreaker(
+  doc: EditPanel,
+  position: number,
+  slot: Slot = 'full',
+  section = 1,
+): Result & { key?: string } {
   const key = newKey();
+  const units = isListLayout(doc);
   const r = replace(doc, {
     key,
     position,
@@ -209,8 +258,25 @@ export function addBreaker(doc: EditPanel, position: number, slot: Slot = 'full'
     control: '',
     loadVa: null,
     demandPct: null,
+    section,
+    unit: units ? String(position) : '',
+    frameAmps: null,
+    wire: '',
+    conduit: '',
+    starter: '',
+    hp: null,
   });
   return r.ok ? { ...r, key } : r;
+}
+
+/** Add a unit to a switchboard or MCC on the first free row, adding a row when all are used. */
+export function addUnit(doc: EditPanel): Result & { key?: string } {
+  const used = new Set(doc.breakers.filter((b) => b.section === 1).map((b) => b.position));
+  let position = 1;
+  while (used.has(position)) position++;
+  const grown = position > doc.spaces ? { ...doc, spaces: position } : doc;
+  if (position > MAX_UNITS) return { ok: false, error: `A switchboard or MCC has up to ${MAX_UNITS} units.` };
+  return addBreaker(grown, position, 'full', 1);
 }
 
 export function updateBreaker(doc: EditPanel, key: string, patch: Partial<EditBreaker>): Result {
@@ -229,21 +295,22 @@ export function setSize(doc: EditPanel, key: string, size: Size): Result {
   const b = doc.breakers.find((x) => x.key === key);
   if (!b) return { ok: false, error: 'That breaker is gone.' };
   if (size === 'tandem') {
-    const free = freeAt(doc, doc.breakers.map(shape), b.position, key);
+    const free = freeAt(sectionShape(doc, b.section), inSection(doc, b.section), b.position, key);
     const slot: Slot = free.A ? 'A' : free.B ? 'B' : 'A';
     return updateBreaker(doc, key, { poles: 1, slot });
   }
   return updateBreaker(doc, key, { poles: Number(size), slot: 'full' });
 }
 
-/** Move a breaker to start at `position`, keeping it a tandem half when it is one. */
-export function moveBreaker(doc: EditPanel, key: string, position: number, slot?: Slot): Result {
+/** Move a breaker to start at `position` (in `section`, or its own), keeping it a tandem half when it is one. */
+export function moveBreaker(doc: EditPanel, key: string, position: number, slot?: Slot, section?: number): Result {
   const b = doc.breakers.find((x) => x.key === key);
   if (!b) return { ok: false, error: 'That breaker is gone.' };
-  if (b.slot === 'full') return updateBreaker(doc, key, { position, slot: 'full' });
-  const free = freeAt(doc, doc.breakers.map(shape), position, key);
+  const to = section ?? b.section;
+  if (b.slot === 'full') return updateBreaker(doc, key, { position, slot: 'full', section: to });
+  const free = freeAt(sectionShape(doc, to), inSection(doc, to), position, key);
   const target: Slot = slot ?? (free[b.slot] ? b.slot : free.A ? 'A' : 'B');
-  return updateBreaker(doc, key, { position, slot: target });
+  return updateBreaker(doc, key, { position, slot: target, section: to });
 }
 
 export function removeBreaker(doc: EditPanel, key: string): EditPanel {
@@ -253,13 +320,25 @@ export function removeBreaker(doc: EditPanel, key: string): EditPanel {
 /** Change panel-level fields; checks that the breakers still fit. */
 export function updatePanel(doc: EditPanel, patch: Partial<Omit<EditPanel, 'breakers'>>): Result {
   const next = { ...doc, ...patch };
-  const issue = validateLayout(next, next.breakers.map(shape))[0];
+  const issue = validateSections(next, next.breakers.map(shape))[0];
   return issue ? { ok: false, error: issue.message } : { ok: true, doc: next };
 }
 
 /** Spaces a breaker could start at (for the "starts at" picker). */
 export function validStarts(doc: EditPanel, key: string): number[] {
+  const b = doc.breakers.find((x) => x.key === key);
+  const spaces = sectionShape(doc, b?.section ?? 1).spaces;
   const out: number[] = [];
-  for (let p = 1; p <= doc.spaces; p++) if (moveBreaker(doc, key, p).ok) out.push(p);
+  for (let p = 1; p <= spaces; p++) if (moveBreaker(doc, key, p).ok) out.push(p);
   return out;
+}
+
+/** The first place a breaker fits in another section (its own position first), or null. */
+export function firstFitIn(doc: EditPanel, key: string, section: number): number | null {
+  const b = doc.breakers.find((x) => x.key === key);
+  if (!b) return null;
+  const spaces = sectionShape(doc, section).spaces;
+  const order = [b.position, ...Array.from({ length: spaces }, (_, i) => i + 1)];
+  for (const p of order) if (p <= spaces && moveBreaker(doc, key, p, undefined, section).ok) return p;
+  return null;
 }

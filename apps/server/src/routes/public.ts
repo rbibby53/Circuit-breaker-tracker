@@ -51,6 +51,8 @@ export function publicPanel(db: DB, access: AccessData, panel: PanelRow): Public
       position: b.position,
       slot: b.slot,
       poles: b.poles,
+      section: b.section ?? 1,
+      unit: b.unit ?? '',
       amps: b.amps,
       device: b.device,
       protection: b.protection,

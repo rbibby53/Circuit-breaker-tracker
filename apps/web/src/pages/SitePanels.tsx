@@ -8,6 +8,8 @@ import {
   PROTECTION_LABELS,
   VOLTAGE_PRESETS,
   spaceChoices,
+  isListLayout,
+  MAX_UNITS,
   type PanelLayout,
   type PanelSummary,
   type ServedByItem,
@@ -31,11 +33,20 @@ export function isInside(byId: Map<number, TreeNode>, locationId: number, ancest
   return false;
 }
 
-/** Small picture of a panel: two columns of bars, filled ones light. */
+/** Small picture of a panel: two columns of bars, filled ones light (one column for a switchboard). */
 export function PanelThumb({ panel }: { panel: PanelSummary }) {
   const rows = Math.ceil(panel.spaces / 2);
   const bars: boolean[] = [];
   for (let i = 0; i < rows * 2; i++) bars.push(i < panel.usedSpaces);
+  if (isListLayout(panel)) {
+    return (
+      <span className="thumb thumb-list" aria-hidden="true">
+        {Array.from({ length: Math.min(12, panel.spaces) }, (_, i) => (
+          <span key={i} className={i < panel.usedSpaces ? 'on' : ''} />
+        ))}
+      </span>
+    );
+  }
   return (
     <span className="thumb" aria-hidden="true">
       {bars.slice(0, 42).map((on, i) => (
@@ -70,7 +81,7 @@ export function PanelsHere({ node, byId }: { node: TreeNode; byId: Map<number, T
                   : `${p.voltage || LAYOUT_LABELS[p.layout]} · ${p.mainType === 'lugs' ? 'main lugs' : `${p.mainAmps ?? '?'} A main`}`}
               </span>
               <span className="mono small muted">
-                {p.usedSpaces}/{p.spaces} {p.layout === 'relay' ? 'relays' : 'spaces'}
+                {p.usedSpaces}/{p.spaces} {p.layout === 'relay' ? 'relays' : isListLayout(p) ? 'units' : 'spaces'}
                 {p.criticalCount ? ` · ${p.criticalCount} critical` : ''}
               </span>
               {p.fedFrom && <span className="small muted">Fed from {p.fedFrom}</span>}
@@ -146,6 +157,9 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
                 {l === 'commercial' && 'Three-phase, rows on phases A, B and C. 1-, 2- and 3-pole, no tandems.'}
                 {l === 'relay' &&
                   'Lighting control relays (nLight and others), numbered 1 up. Each relay switches a circuit from a breaker panel.'}
+                {l === 'switchboard' &&
+                  'Distribution boards and switchboards with feeders numbered 1, 2, 3… as units: frame, trip, wire and conduit.'}
+                {l === 'mcc' && 'Buckets numbered as units, with starter size, motor HP and control type.'}
               </span>
             </label>
           );
@@ -160,15 +174,27 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
         </Field>
-        <Field label={relay ? 'Relays' : 'Spaces'}>
-          <select value={form.spaces} onChange={(e) => setForm({ ...form, spaces: Number(e.target.value) })}>
-            {spaceChoices(layout).map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </Field>
+        {isListLayout({ layout }) ? (
+          <Field label="Units">
+            <input
+              type="number"
+              min={1}
+              max={MAX_UNITS}
+              value={form.spaces}
+              onChange={(e) => setForm({ ...form, spaces: Number(e.target.value) || 1 })}
+            />
+          </Field>
+        ) : (
+          <Field label={relay ? 'Relays' : 'Spaces'}>
+            <select value={form.spaces} onChange={(e) => setForm({ ...form, spaces: Number(e.target.value) })}>
+              {spaceChoices(layout).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </Field>
+        )}
         {relay ? (
           <Field label="Control system">
             <input

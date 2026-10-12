@@ -392,4 +392,66 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE breakers ADD COLUMN load_va REAL;
   ALTER TABLE breakers ADD COLUMN demand_pct INTEGER;
   `,
+  `
+  ${FOREIGN_KEYS_OFF}
+  -- Switchboards and motor control centers number their units 1, 2, 3…; panels can have more
+  -- than one section, each numbered from 1. The layout is checked by the app from now on, so
+  -- new layouts need no rebuild: the table is rebuilt once, without that CHECK, same rows.
+  CREATE TABLE panels_new (
+    id                  INTEGER PRIMARY KEY,
+    location_id         INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    name                TEXT NOT NULL,
+    layout              TEXT NOT NULL,
+    spaces              INTEGER NOT NULL,
+    main_amps           INTEGER,
+    main_type           TEXT NOT NULL DEFAULT 'breaker' CHECK (main_type IN ('breaker', 'lugs')),
+    voltage             TEXT NOT NULL DEFAULT '',
+    manufacturer        TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT '',
+    fed_from_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    version             INTEGER NOT NULL DEFAULT 1,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    public_token        TEXT,
+    generator_id        INTEGER REFERENCES generators (id) ON DELETE SET NULL,
+    transfer_switch     TEXT NOT NULL DEFAULT '',
+    control_system      TEXT NOT NULL DEFAULT '',
+    ats_id              INTEGER REFERENCES transfer_switches (id) ON DELETE SET NULL,
+    fed_from_device_id  INTEGER REFERENCES power_devices (id) ON DELETE SET NULL,
+    aic_ka              INTEGER,
+    bus_amps            INTEGER,
+    mounting            TEXT NOT NULL DEFAULT '',
+    enclosure           TEXT NOT NULL DEFAULT '',
+    feeder_wire         TEXT NOT NULL DEFAULT '',
+    feeder_conduit      TEXT NOT NULL DEFAULT '',
+    sections            TEXT NOT NULL DEFAULT '[]'
+  );
+  INSERT INTO panels_new (id, location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model,
+                          notes, fed_from_breaker_id, version, created_at, updated_at, public_token, generator_id,
+                          transfer_switch, control_system, ats_id, fed_from_device_id, aic_ka, bus_amps, mounting,
+                          enclosure, feeder_wire, feeder_conduit)
+    SELECT id, location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model,
+           notes, fed_from_breaker_id, version, created_at, updated_at, public_token, generator_id,
+           transfer_switch, control_system, ats_id, fed_from_device_id, aic_ka, bus_amps, mounting,
+           enclosure, feeder_wire, feeder_conduit
+    FROM panels;
+  DROP TABLE panels;
+  ALTER TABLE panels_new RENAME TO panels;
+  CREATE INDEX panels_location ON panels (location_id);
+  CREATE INDEX panels_fed_from ON panels (fed_from_breaker_id);
+  CREATE UNIQUE INDEX panels_public_token ON panels (public_token) WHERE public_token IS NOT NULL;
+  CREATE INDEX panels_generator ON panels (generator_id);
+  CREATE INDEX panels_ats ON panels (ats_id);
+  CREATE INDEX panels_fed_device ON panels (fed_from_device_id);
+
+  -- Which section a breaker is in, and switchboard / MCC unit details.
+  ALTER TABLE breakers ADD COLUMN section INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE breakers ADD COLUMN unit TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN frame_amps INTEGER;
+  ALTER TABLE breakers ADD COLUMN wire TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN conduit TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN starter TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN hp REAL;
+  `,
 ];

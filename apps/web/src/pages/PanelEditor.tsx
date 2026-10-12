@@ -1,5 +1,8 @@
 import {
   LAYOUT_LABELS,
+  isListLayout,
+  sectionsOf,
+  spacesText,
   POWER_DEVICE_LABELS,
   generatorRating,
   nameplateText,
@@ -19,11 +22,13 @@ import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { Inspector } from '../panel/Inspector';
 import { LoadSummary } from '../panel/LoadSummary';
+import { UnitList } from '../panel/UnitList';
 import { PanelGrid } from '../panel/PanelGrid';
 import { PanelSettings } from '../panel/PanelSettings';
 import { siteOf } from '../panel/serves';
 import {
   addBreaker,
+  addUnit,
   applyIds,
   feedKey,
   fromDetail,
@@ -287,6 +292,26 @@ function Editor({
     }
   };
 
+  // What the rows are called in words.
+  const thing =
+    doc.layout === 'mcc' ? 'bucket' : isListLayout(doc) ? 'unit' : doc.layout === 'relay' ? 'relay' : 'breaker';
+  const feedsMap = new Map(
+    server.breakers.map((b) => [
+      b.id,
+      [
+        ...b.feedsDevices.map((d) => d.name),
+        ...b.feeds.map((f) => f.panelName),
+        ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more`] : []),
+      ],
+    ]),
+  );
+  const relaySources =
+    doc.layout === 'relay'
+      ? new Map(
+          server.breakers.map((b) => [b.id, b.source ? `${b.source.panelName} · ${b.source.circuit}` : 'Feed not set']),
+        )
+      : undefined;
+
   return (
     <main className="editor">
       <div className="editor-head">
@@ -306,7 +331,7 @@ function Editor({
               {doc.layout === 'relay' && doc.controlSystem
                 ? `${doc.controlSystem} relay panel`
                 : LAYOUT_LABELS[doc.layout]}
-              {doc.voltage && ` · ${doc.voltage}`} · {doc.spaces} {doc.layout === 'relay' ? 'relays' : 'spaces'}
+              {doc.voltage && ` · ${doc.voltage}`} · {spacesText(doc)}
               {doc.layout !== 'relay' &&
                 (doc.mainType === 'lugs' ? ' · main lugs' : ` · ${doc.mainAmps ?? '?'} A main`)}
               {(doc.manufacturer || doc.model) && ` · ${[doc.manufacturer, doc.model].filter(Boolean).join(' ')}`}
@@ -437,41 +462,48 @@ function Editor({
             />
           )}
           <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
-          <PanelGrid
-            doc={doc}
-            highlightTag={tagFilter}
-            byId={byId}
-            selectedKey={selected}
-            readOnly={readOnly}
-            onSelect={setSelected}
-            onAdd={(position: number, slot: Slot) => {
-              const r = addBreaker(docRef.current, position, slot);
-              if (apply(r) && r.ok && 'key' in r && r.key) setSelected(r.key);
-            }}
-            onMove={(key, position, slot) => apply(moveBreaker(docRef.current, key, position, slot))}
-            relaySources={
-              doc.layout === 'relay'
-                ? new Map(
-                    server.breakers.map((b) => [
-                      b.id,
-                      b.source ? `${b.source.panelName} · ${b.source.circuit}` : 'Feed not set',
-                    ]),
-                  )
-                : undefined
-            }
-            feeds={
-              new Map(
-                server.breakers.map((b) => [
-                  b.id,
-                  [
-                    ...b.feedsDevices.map((d) => d.name),
-                    ...b.feeds.map((f) => f.panelName),
-                    ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more`] : []),
-                  ],
-                ]),
-              )
-            }
-          />
+          {isListLayout(doc) ? (
+            <UnitList
+              doc={doc}
+              byId={byId}
+              highlightTag={tagFilter}
+              selectedKey={selected}
+              readOnly={readOnly}
+              onSelect={setSelected}
+              onAdd={() => {
+                const r = addUnit(docRef.current);
+                if (apply(r) && r.ok && 'key' in r && r.key) setSelected(r.key);
+              }}
+              feeds={feedsMap}
+            />
+          ) : (
+            sectionsOf(doc).map((sec, i) => (
+              <div key={i} className="pg-section">
+                {i > 0 && (
+                  <h3 className="pg-section-title">
+                    {sec.name}
+                    {sec.throughLugs && <span className="muted"> · fed through lugs</span>}
+                  </h3>
+                )}
+                <PanelGrid
+                  doc={{ ...doc, spaces: sec.spaces, breakers: doc.breakers.filter((b) => b.section === i + 1) }}
+                  heading={i === 0 ? undefined : sec.throughLugs ? 'THROUGH LUGS' : sec.name.toUpperCase()}
+                  highlightTag={tagFilter}
+                  byId={byId}
+                  selectedKey={selected}
+                  readOnly={readOnly}
+                  onSelect={setSelected}
+                  onAdd={(position: number, slot: Slot) => {
+                    const r = addBreaker(docRef.current, position, slot, i + 1);
+                    if (apply(r) && r.ok && 'key' in r && r.key) setSelected(r.key);
+                  }}
+                  onMove={(key, position, slot) => apply(moveBreaker(docRef.current, key, position, slot, i + 1))}
+                  relaySources={relaySources}
+                  feeds={feedsMap}
+                />
+              </div>
+            ))
+          )}
         </section>
         {selectedBreaker ? (
           <Inspector
@@ -485,7 +517,9 @@ function Editor({
             readOnly={readOnly}
             onPatch={(patch, coalesce) => apply(updateBreaker(docRef.current, selectedBreaker.key, patch), coalesce)}
             onSize={(size: Size) => apply(setSize(docRef.current, selectedBreaker.key, size))}
-            onMove={(position, slot) => apply(moveBreaker(docRef.current, selectedBreaker.key, position, slot))}
+            onMove={(position, slot, section) =>
+              apply(moveBreaker(docRef.current, selectedBreaker.key, position, slot, section))
+            }
             onRemove={() => {
               commit(removeBreaker(docRef.current, selectedBreaker.key));
               setSelected(null);
@@ -493,11 +527,13 @@ function Editor({
           />
         ) : (
           <aside className="inspector inspector-empty">
-            <h2>{readOnly ? 'Pick a breaker' : 'Pick or add a breaker'}</h2>
+            <h2>{readOnly ? `Pick a ${thing}` : `Pick or add a ${thing}`}</h2>
             <p className="muted">
               {readOnly
-                ? 'Select any breaker to see what it powers.'
-                : 'Click an empty space to add a breaker, click a breaker to edit it, or drag it to another space. Changes save automatically.'}
+                ? `Select any ${thing} to see what it powers.`
+                : isListLayout(doc)
+                  ? `Add a ${thing} below the list, or click one to edit it. Changes save automatically.`
+                  : 'Click an empty space to add a breaker, click a breaker to edit it, or drag it to another space. Changes save automatically.'}
             </p>
             {initial.notes && <p className="notes">{initial.notes}</p>}
           </aside>

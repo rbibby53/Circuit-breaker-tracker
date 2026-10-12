@@ -12,8 +12,12 @@ import {
   allowsTandem,
   circuitLabel,
   circuitVolts,
+  MCC_CONTROLS,
+  STARTER_SIZES,
+  isListLayout,
   isRelayPanel,
   maxPoles,
+  sectionsOf,
   phasesOf,
   type BreakerDto,
   type FeedCandidate,
@@ -28,7 +32,7 @@ import type { TreeNode } from '../tree';
 import { servesByFloor } from './serves';
 import { ServesPicker } from './ServesPicker';
 import { TagInput } from './TagInput';
-import { sizeOf, validStarts, type EditBreaker, type EditPanel, type Size } from './state';
+import { firstFitIn, sizeOf, validStarts, type EditBreaker, type EditPanel, type Size } from './state';
 
 interface Props {
   panelId: number;
@@ -40,7 +44,7 @@ interface Props {
   readOnly: boolean;
   onPatch: (patch: Partial<EditBreaker>, coalesce?: string) => void;
   onSize: (size: Size) => void;
-  onMove: (position: number, slot?: Slot) => void;
+  onMove: (position: number, slot?: Slot, section?: number) => void;
   onRemove: () => void;
 }
 
@@ -60,6 +64,9 @@ export function Inspector({
   const [picking, setPicking] = useState(false);
   const confirm = useConfirm();
   const relay = isRelayPanel(doc);
+  const units = isListLayout(doc);
+  const mcc = doc.layout === 'mcc';
+  const sections = sectionsOf(doc);
   const thing = relay ? 'relay' : b.device === 'surge' ? 'surge protector' : 'breaker';
   const size = sizeOf(b);
   const groups = servesByFloor(byId, b.serves);
@@ -80,12 +87,12 @@ export function Inspector({
       disabled: allowsTandem(doc) ? undefined : 'Three-phase panelboards take no tandems',
     },
   ];
-  // Relays come in 1- and 2-pole.
-  const sizes = relay ? allSizes.slice(0, 2) : allSizes;
+  // Relays come in 1- and 2-pole; switchboard and MCC units have no tandems.
+  const sizes = relay ? allSizes.slice(0, 2) : units ? allSizes.slice(0, 3) : allSizes;
   const phases = phasesOf(doc, b);
   const volts = circuitVolts(doc.voltage, b.poles);
   const where = [
-    `${relay ? 'Relay' : 'Circuit'} ${circuitLabel(doc, b)}`,
+    `${relay ? 'Relay' : units ? 'Unit' : 'Circuit'} ${circuitLabel(doc, b)}`,
     phases.length ? `Phase ${phases.join(' ')}` : null,
     volts ? `${volts} V` : null,
   ]
@@ -121,6 +128,20 @@ export function Inspector({
             <>
               <dt>Type</dt>
               <dd>{PROTECTION_LABELS[b.protection]}</dd>
+            </>
+          )}
+          {units && (
+            <>
+              <dt>Frame</dt>
+              <dd>{b.frameAmps ? `${b.frameAmps} A` : 'Not set'}</dd>
+              <dt>Feeder</dt>
+              <dd>{[b.wire, b.conduit].filter(Boolean).join(' in ') || 'Not set'}</dd>
+            </>
+          )}
+          {mcc && (
+            <>
+              <dt>Starter</dt>
+              <dd>{[b.starter, b.hp ? `${b.hp} HP` : '', b.control].filter(Boolean).join(' · ') || 'Not set'}</dd>
             </>
           )}
           {b.loadVa ? (
@@ -170,6 +191,8 @@ export function Inspector({
           onChange={(e) => onPatch({ label: e.target.value }, `label:${b.key}`)}
         />
       </label>
+
+      {units && <UnitFields b={b} mcc={mcc} onPatch={onPatch} />}
 
       {relay && (
         <>
@@ -237,9 +260,28 @@ export function Inspector({
         </div>
       </fieldset>
 
+      {sections.length > 1 && (
+        <label className="field">
+          <span className="field-label">Section</span>
+          <select
+            value={b.section}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              onMove(firstFitIn(doc, b.key, n) ?? b.position, undefined, n);
+            }}
+          >
+            {sections.map((sec, n) => (
+              <option key={n} value={n + 1}>
+                {sec.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <div className="two-col">
         <label className="field">
-          <span className="field-label">{relay ? 'Relay number' : 'Starts at space'}</span>
+          <span className="field-label">{relay ? 'Relay number' : units ? 'Row' : 'Starts at space'}</span>
           <select value={b.position} onChange={(e) => onMove(Number(e.target.value))}>
             {validStarts(doc, b.key).map((p) => (
               <option key={p} value={p}>
@@ -526,5 +568,105 @@ function LoadFields({
         />
       </label>
     </div>
+  );
+}
+
+/** Switchboard and MCC units: the unit number as written, frame, feeder; MCC starter, HP, control. */
+function UnitFields({
+  b,
+  mcc,
+  onPatch,
+}: {
+  b: EditBreaker;
+  mcc: boolean;
+  onPatch: (patch: Partial<EditBreaker>, coalesce?: string) => void;
+}) {
+  const num = (v: string) => (v ? Number(v) : null);
+  return (
+    <>
+      <div className="two-col">
+        <label className="field">
+          <span className="field-label">Unit number</span>
+          <input
+            value={b.unit}
+            maxLength={20}
+            placeholder={String(b.position)}
+            onChange={(e) => onPatch({ unit: e.target.value }, `unit:${b.key}`)}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Frame (A)</span>
+          <input
+            type="number"
+            min={1}
+            value={b.frameAmps ?? ''}
+            onChange={(e) => onPatch({ frameAmps: num(e.target.value) }, `frame:${b.key}`)}
+          />
+        </label>
+      </div>
+      <div className="two-col">
+        <label className="field">
+          <span className="field-label">Feeder wire</span>
+          <input
+            value={b.wire}
+            maxLength={80}
+            placeholder="e.g. 4 #500 kcmil + #3 G"
+            onChange={(e) => onPatch({ wire: e.target.value }, `wire:${b.key}`)}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Conduit</span>
+          <input
+            value={b.conduit}
+            maxLength={40}
+            placeholder='e.g. 3" EMT'
+            onChange={(e) => onPatch({ conduit: e.target.value }, `conduit:${b.key}`)}
+          />
+        </label>
+      </div>
+      {mcc && (
+        <div className="three-col">
+          <label className="field">
+            <span className="field-label">Starter</span>
+            <input
+              value={b.starter}
+              maxLength={30}
+              list="starter-sizes"
+              onChange={(e) => onPatch({ starter: e.target.value }, `starter:${b.key}`)}
+            />
+            <datalist id="starter-sizes">
+              {STARTER_SIZES.map((x) => (
+                <option key={x} value={x} />
+              ))}
+            </datalist>
+          </label>
+          <label className="field">
+            <span className="field-label">HP</span>
+            <input
+              type="number"
+              min={0}
+              step="any"
+              value={b.hp ?? ''}
+              onChange={(e) => onPatch({ hp: num(e.target.value) }, `hp:${b.key}`)}
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Control</span>
+            <input
+              value={b.control}
+              maxLength={120}
+              list="mcc-controls"
+              placeholder="e.g. FVNR"
+              onChange={(e) => onPatch({ control: e.target.value }, `control:${b.key}`)}
+            />
+            <datalist id="mcc-controls">
+              {MCC_CONTROLS.map((x) => (
+                <option key={x} value={x} />
+              ))}
+            </datalist>
+          </label>
+        </div>
+      )}
+    </>
   );
 }

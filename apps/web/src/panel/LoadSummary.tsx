@@ -1,4 +1,4 @@
-import { formatVa, panelLoad, vaFromText, type LoadCheck, type PanelShape } from '@cbt/core';
+import { formatVa, isListLayout, panelLoad, vaFromText, type LoadCheck, type PanelShape } from '@cbt/core';
 import { useState } from 'react';
 import type { EditBreaker } from './state';
 
@@ -30,7 +30,8 @@ export function LoadSummary({
   const load = panelLoad(panel, breakers);
   const critical = breakers.filter((b) => b.critical).length;
   const onBackup = breakers.filter((b) => b.backup !== 'none').length;
-  const phase = panel.layout === 'commercial';
+  const units = isListLayout(panel);
+  const phase = panel.layout === 'commercial' || units;
   const hasLoads = load.loadedCircuits > 0;
   const max = Math.max(1, ...load.legs.map((l) => (hasLoads ? l.demandVa : l.amps)));
   const inNotes = new Map<string, number>();
@@ -54,7 +55,7 @@ export function LoadSummary({
           </span>
         )}
         <span>
-          <strong>{load.freeSpaces}</strong> free {load.freeSpaces === 1 ? 'space' : 'spaces'}
+          <strong>{load.freeSpaces}</strong> free {units ? 'units' : load.freeSpaces === 1 ? 'space' : 'spaces'}
         </span>
         {critical > 0 && (
           <span>

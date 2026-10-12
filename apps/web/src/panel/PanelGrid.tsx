@@ -35,6 +35,8 @@ interface Props {
   relaySources?: Map<number, string>;
   /** When set, breakers without this tag are dimmed. */
   highlightTag?: string | null;
+  /** Shown where the main breaker is, for a second section ("THROUGH LUGS"). */
+  heading?: string;
 }
 
 const DRAG_TYPE = 'application/x-cbt-breaker';
@@ -50,6 +52,7 @@ export function PanelGrid({
   feeds,
   relaySources,
   highlightTag,
+  heading,
 }: Props) {
   const cols = columnsFor(doc);
   const relay = doc.layout === 'relay';
@@ -135,7 +138,9 @@ export function PanelGrid({
     <div className="pg-frame">
       <div className="pg-inner">
         <div className="pg-main" aria-label="Main breaker">
-          {doc.layout === 'relay' ? (
+          {heading ? (
+            <span className="pg-main-amps">{heading}</span>
+          ) : doc.layout === 'relay' ? (
             <span className="pg-main-amps">{`${doc.controlSystem} relay panel`.trim().toUpperCase()}</span>
           ) : doc.mainType === 'lugs' ? (
             <span className="pg-main-amps">MAIN LUGS</span>

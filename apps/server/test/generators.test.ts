@@ -664,3 +664,103 @@ describe('connected load and capacity', () => {
     ]);
   });
 });
+
+describe('switchboards, MCCs and sections', () => {
+  it('number switchboard and MCC units in a list, with frame, wire, conduit, starter and HP', async () => {
+    const c = await campus();
+    const msb = (
+      await c.admin.post(`/api/locations/${c.elec}/panels`, {
+        name: 'MSB',
+        layout: 'switchboard',
+        spaces: 120,
+        mainAmps: 2000,
+        voltage: '277/480 V 3-phase',
+      })
+    ).body.id as number;
+    const saved = await save(c.admin, msb, [
+      row('u1', 1, {
+        unit: '1',
+        poles: 3,
+        amps: 400,
+        frameAmps: 400,
+        wire: '4 #500 kcmil + #3 G',
+        conduit: '3" EMT',
+        label: 'DP-1',
+      }),
+      row('u2', 2, { unit: '2A', poles: 3, amps: 225, frameAmps: 250, label: 'MCC-1' }),
+      row('u3', 3, { unit: '2B', poles: 3, amps: 100, label: 'Spare', isSpare: true }),
+      row('u100', 100, { poles: 3, amps: 60, label: 'Far down' }),
+    ]);
+    expect(saved.status).toBe(200);
+    const detail = saved.body.panel;
+    expect(detail.breakers[0]).toMatchObject({
+      unit: '1',
+      frameAmps: 400,
+      wire: '4 #500 kcmil + #3 G',
+      conduit: '3" EMT',
+    });
+
+    // An MCC with buckets: starter size, HP and control type.
+    const mcc = (
+      await c.admin.post(`/api/locations/${c.elec}/panels`, {
+        name: 'MCC-1',
+        layout: 'mcc',
+        spaces: 6,
+        voltage: '480 V 3-phase',
+      })
+    ).body.id as number;
+    const bucket = {
+      unit: '1A',
+      poles: 3,
+      amps: 30,
+      label: 'AHU-1 supply fan',
+      starter: 'NEMA 2',
+      hp: 15,
+      control: 'VFD',
+    };
+    expect((await save(c.admin, mcc, [row('b1', 1, bucket)], { fedFromBreakerId: saved.body.idMap.u2 })).status).toBe(
+      200,
+    );
+    const m = (await c.admin.get(`/api/panels/${mcc}`)).body;
+    expect(m.breakers[0]).toMatchObject({ starter: 'NEMA 2', hp: 15, control: 'VFD' });
+    expect(m.feedChain[0]).toMatchObject({ panelName: 'MSB', circuit: '2A', amps: 225 });
+    const csv = (await c.admin.raw(`/api/panels/${mcc}/csv`)).body.toString();
+    expect(csv).toContain(',VFD,');
+    expect(csv).toContain(',NEMA 2,15');
+    expect((await c.admin.raw(`/api/panels/${msb}/pdf`)).status).toBe(200);
+
+    // Units do not span rows, so a list cannot become a panelboard.
+    expect((await save(c.admin, msb, null, { layout: 'commercial', spaces: 42 })).status).toBe(400);
+  });
+
+  it('give a panel sections, each numbered from 1', async () => {
+    const c = await campus();
+    const sections = [{ name: 'Section 2', spaces: 42, throughLugs: true }];
+    expect((await save(c.admin, c.lp, null, { sections })).status).toBe(200);
+    const both = [
+      row('a', 1, { label: 'Left half' }),
+      row('b', 1, { label: 'Right half', section: 2, poles: 3 }),
+      row('c', 41, { label: 'Low', section: 2 }),
+    ];
+    const saved = await save(c.admin, c.lp, both);
+    expect(saved.status).toBe(200);
+    expect(saved.body.panel.sections).toEqual(sections);
+    expect(saved.body.panel.breakers.map((b: any) => [b.section, b.position])).toEqual([
+      [1, 1],
+      [2, 1],
+      [2, 41],
+    ]);
+    // A clash inside one section, or a section the panel does not have, is refused.
+    expect((await save(c.admin, c.lp, [...both, row('d', 1, { section: 2 })])).status).toBe(400);
+    expect((await save(c.admin, c.lp, [row('e', 1, { section: 3 })])).status).toBe(400);
+
+    // Circuits in section 2 are labelled with it wherever they show.
+    const ldp = (
+      await c.admin.post(`/api/locations/${c.elec}/panels`, { name: 'LDP', layout: 'commercial', spaces: 42 })
+    ).body.id;
+    const options = (await c.admin.get(`/api/feed-options?panel=${ldp}`)).body.breakers;
+    expect(options.map((o: any) => o.circuit)).toContain('S2 · 1 + 3 + 5');
+    expect((await c.admin.raw(`/api/panels/${c.lp}/pdf`)).status).toBe(200);
+    expect((await c.admin.raw(`/api/panels/${c.lp}/pdf?format=card`)).status).toBe(200);
+  });
+});

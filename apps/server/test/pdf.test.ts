@@ -234,11 +234,11 @@ describe('CSV export', () => {
     expect(r.body.subarray(0, 3)).toEqual(Buffer.from([0xef, 0xbb, 0xbf]));
     const rows = lines(r.body);
     expect(rows[0]).toBe(
-      'Location,Panel,Circuit,Phase,Poles,Type,Amps,Load (VA),Demand %,Label,Protection,Critical,Backup power,Spare,Serves,Feeds,Fed by,Control,Switched by,Generator,Tags,Notes',
+      'Location,Panel,Circuit,Phase,Poles,Type,Amps,Load (VA),Demand %,Label,Protection,Critical,Backup power,Spare,Serves,Feeds,Fed by,Control,Switched by,Generator,Tags,Notes,Frame (A),Wire,Conduit,Starter,HP',
     );
     expect(rows).toHaveLength(7);
     expect(rows[1]).toBe(
-      'Personal › Home › Basement › Utility room,Main panel,1 + 3,,2,Breaker,50,,,Range,Standard,No,,No,Personal › Home › Ground › Kitchen,,,,,,,',
+      'Personal › Home › Basement › Utility room,Main panel,1 + 3,,2,Breaker,50,,,Range,Standard,No,,No,Personal › Home › Ground › Kitchen,,,,,,,,,,,,',
     );
     expect(rows.find((l) => l.includes('Garage feeder'))).toContain(',Garage sub,');
     expect(rows.find((l) => l.includes('Alarm'))).toContain(

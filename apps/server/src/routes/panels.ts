@@ -7,12 +7,12 @@ import {
   createPanelSchema,
   duplicatePanelSchema,
   effectiveRole,
+  isListLayout,
   isRelayPanel,
   isWithin,
   pathIds,
   savePanelSchema,
-  validateLayout,
-  validatePanelShape,
+  validateSections,
   visibleLocations,
   type DuplicatePanelResponse,
   type FeedCandidate,
@@ -38,6 +38,7 @@ import {
   feedReaches,
   getDevice,
   isDownstream,
+  sectionsOfRow,
   locationName,
   panelDetail,
   panelSummary,
@@ -100,7 +101,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     requireEdit(actor, access, id);
     const body = parse(createPanelSchema, req.body);
     if (!AVAILABLE_LAYOUTS.includes(body.layout)) throw badRequest('That panel layout is not available yet.');
-    const shapeIssue = validatePanelShape(body)[0];
+    const shapeIssue = validateSections(body, [])[0];
     if (shapeIssue) throw badRequest(shapeIssue.message);
     checkGenerator(actor, access, body.generatorId);
     checkAts(actor, access, body.atsId);
@@ -112,8 +113,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       .prepare(
         `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes,
            generator_id, transfer_switch, control_system, ats_id, aic_ka, bus_amps, mounting, enclosure, feeder_wire,
-           feeder_conduit, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           feeder_conduit, sections, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
       .run(
         id,
@@ -137,6 +138,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         body.enclosure,
         body.feederWire,
         body.feederConduit,
+        JSON.stringify(body.sections),
         t,
         t,
       );
@@ -184,6 +186,13 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     if (isRelayPanel(body) !== relay) {
       throw badRequest('A relay panel cannot become a breaker panel, or the other way round. Add a new panel instead.');
     }
+    if (isListLayout(body) !== isListLayout(panel)) {
+      throw badRequest(
+        'A switchboard or MCC numbers its units in a list, so it cannot become a panelboard or the other way round. Add a new panel instead.',
+      );
+    }
+    const mcc = body.layout === 'mcc';
+    const sections = body.sections ?? sectionsOfRow(panel);
     const atsId = body.atsId === undefined ? panel.ats_id : body.atsId;
     if (atsId !== panel.ats_id) checkAts(actor, access, atsId);
     // A panel is on a transfer switch (whose generator backs it) or on a generator directly.
@@ -192,14 +201,15 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
     const controlSystem = body.controlSystem ?? panel.control_system;
     if (generatorId !== panel.generator_id) checkGenerator(actor, access, generatorId);
     const shape = { layout: body.layout, spaces: body.spaces };
-    const issue = validateLayout(
-      shape,
+    const issue = validateSections(
+      { ...shape, sections },
       body.breakers.map((b) => ({
         key: b.clientKey,
         position: b.position,
         slot: b.slot,
         poles: b.poles,
         label: b.label,
+        section: b.section,
       })),
     )[0];
     if (issue) throw badRequest(issue.message);
@@ -289,12 +299,12 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       const update = db.prepare(
         `UPDATE breakers SET position = ?, slot = ?, poles = ?, amps = ?, protection = ?, label = ?, notes = ?,
            is_spare = ?, critical = ?, backup = ?, device = ?, source_breaker_id = ?, control = ?, load_va = ?,
-           demand_pct = ? WHERE id = ?`,
+           demand_pct = ?, section = ?, unit = ?, frame_amps = ?, wire = ?, conduit = ?, starter = ?, hp = ? WHERE id = ?`,
       );
       const insert = db.prepare(
         `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device,
-           source_breaker_id, control, load_va, demand_pct)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           source_breaker_id, control, load_va, demand_pct, section, unit, frame_amps, wire, conduit, starter, hp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const clearServes = db.prepare('DELETE FROM breaker_serves WHERE breaker_id = ?');
       const addServe = db.prepare(
@@ -316,9 +326,17 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
           b.backup,
           b.device,
           relay ? b.sourceBreakerId : null,
-          relay ? b.control : '',
+          // A relay's control (nLight zone…) or an MCC bucket's control type (FVNR, VFD…).
+          relay || mcc ? b.control : '',
           b.loadVa,
           b.loadVa ? b.demandPct : null,
+          b.section,
+          isListLayout(body) ? b.unit : '',
+          isListLayout(body) ? b.frameAmps : null,
+          b.wire,
+          b.conduit,
+          mcc ? b.starter : '',
+          mcc ? b.hp : null,
         ] as const;
         let id: number;
         if (b.id !== undefined) {
@@ -338,7 +356,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         `UPDATE panels SET name = ?, layout = ?, spaces = ?, main_amps = ?, main_type = ?, voltage = ?, manufacturer = ?,
            model = ?, notes = ?, fed_from_breaker_id = ?, generator_id = ?, transfer_switch = ?, control_system = ?,
            ats_id = ?, fed_from_device_id = ?, aic_ka = ?, bus_amps = ?, mounting = ?, enclosure = ?, feeder_wire = ?,
-           feeder_conduit = ?
+           feeder_conduit = ?, sections = ?
          WHERE id = ?`,
       ).run(
         body.name,
@@ -362,6 +380,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         body.enclosure ?? panel.enclosure,
         body.feederWire ?? panel.feeder_wire,
         body.feederConduit ?? panel.feeder_conduit,
+        JSON.stringify(sections),
         panel.id,
       );
 
@@ -470,8 +489,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         .prepare(
           `INSERT INTO panels (location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model, notes,
              generator_id, transfer_switch, control_system, ats_id, aic_ka, bus_amps, mounting, enclosure, feeder_wire,
-             feeder_conduit, created_at, updated_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+             feeder_conduit, sections, created_at, updated_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
         )
         .run(
           dest.id,
@@ -494,14 +513,15 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
           source.enclosure,
           source.feeder_wire,
           source.feeder_conduit,
+          source.sections,
           t,
           t,
         );
       const panelId = Number(r.lastInsertRowid);
       const insert = db.prepare(
         `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device,
-           source_breaker_id, control, load_va, demand_pct)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           source_breaker_id, control, load_va, demand_pct, section, unit, frame_amps, wire, conduit, starter, hp)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const addServe = db.prepare('INSERT INTO breaker_serves (breaker_id, location_id, note) VALUES (?, ?, ?)');
       for (const b of breakers) {
@@ -523,6 +543,13 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
             b.control,
             b.load_va,
             b.demand_pct,
+            b.section,
+            b.unit,
+            b.frame_amps,
+            b.wire,
+            b.conduit,
+            b.starter,
+            b.hp,
           ).lastInsertRowid,
         );
         setTags(

@@ -2,7 +2,18 @@
 // and, where circuits have a connected load (VA) recorded, the load on each phase with its
 // demand total and how far the phases are out of balance.
 
-import { cellOf, isSurgeOnly, phaseOf, positionsOf, type Device, type PanelShape } from './panel';
+import {
+  cellOf,
+  isListLayout,
+  isSurgeOnly,
+  phaseOf,
+  positionsOf,
+  sectionShape,
+  sectionsOf,
+  type Device,
+  type PanelSection,
+  type PanelShape,
+} from './panel';
 import { formatVa, parseVoltage } from './voltage';
 
 export interface LoadBreaker {
@@ -11,6 +22,7 @@ export interface LoadBreaker {
   amps: number;
   isSpare: boolean;
   device?: Device;
+  section?: number;
   /** Connected load in volt-amps, when known. */
   loadVa?: number | null;
   /** Demand factor in percent; unset means 100%. */
@@ -60,6 +72,7 @@ const MIN_VA_FOR_WARNING = 3000;
 
 /** Which leg a space is on: phases on 3-phase panels; on split-phase ones the bus alternates by row. */
 export function legOf(panel: PanelShape, position: number): string {
+  if (isListLayout(panel)) return 'A';
   const phase = phaseOf(panel, position);
   if (phase) return phase;
   if (panel.layout === 'single' || panel.layout === 'relay') return 'L1';
@@ -70,9 +83,13 @@ export function legOf(panel: PanelShape, position: number): string {
 export const demandOf = (b: { loadVa?: number | null; demandPct?: number | null }) =>
   (b.loadVa ?? 0) * ((b.demandPct ?? 100) / 100);
 
-export function panelLoad(panel: PanelShape & { voltage?: string }, breakers: readonly LoadBreaker[]): PanelLoad {
+export function panelLoad(
+  panel: PanelShape & { voltage?: string; sections?: readonly PanelSection[] },
+  breakers: readonly LoadBreaker[],
+): PanelLoad {
+  const units = isListLayout(panel);
   const legNames =
-    panel.layout === 'commercial'
+    panel.layout === 'commercial' || units
       ? ['A', 'B', 'C']
       : panel.layout === 'single' || panel.layout === 'relay'
         ? ['L1']
@@ -81,13 +98,15 @@ export function panelLoad(panel: PanelShape & { voltage?: string }, breakers: re
     legNames.map((leg) => [leg, { leg, amps: 0, circuits: 0, va: 0, demandVa: 0, loadAmps: null }]),
   );
   let loadedCircuits = 0;
-  const used = new Set<number>();
+  const used = new Set<string>();
   let circuits = 0;
   let spares = 0;
   const surge: number[][] = [];
+  const sections = sectionsOf(panel);
   for (const b of breakers) {
-    const spots = positionsOf(panel, b).filter((p) => p >= 1 && p <= panel.spaces);
-    spots.forEach((p) => used.add(p));
+    const shape = sectionShape(panel, b.section ?? 1);
+    const spots = positionsOf(shape, b).filter((p) => p >= 1 && p <= shape.spaces);
+    spots.forEach((p) => used.add(`${b.section ?? 1}:${p}`));
     if (b.device === 'surge') surge.push(spots);
     // A surge protector without breakers feeds nothing, so it is not a circuit.
     if (isSurgeOnly({ device: b.device, amps: b.amps })) continue;
@@ -99,7 +118,9 @@ export function panelLoad(panel: PanelShape & { voltage?: string }, breakers: re
     if (b.loadVa) loadedCircuits++;
     // A multi-pole breaker draws on every leg it spans; count each leg once, and share its
     // load evenly between them.
-    const onLegs = [...new Set(spots.map((p) => legOf(panel, p)))].filter((leg) => legs.has(leg));
+    // Switchboard and MCC units do not say which phases they are on: a 3-pole unit is on all
+    // three, and smaller ones are taken as spread evenly too.
+    const onLegs = units ? legNames : [...new Set(spots.map((p) => legOf(shape, p)))].filter((leg) => legs.has(leg));
     for (const leg of onLegs) {
       const l = legs.get(leg)!;
       l.amps += b.amps;
@@ -146,7 +167,7 @@ export function panelLoad(panel: PanelShape & { voltage?: string }, breakers: re
     circuits,
     spares,
     surge,
-    freeSpaces: panel.spaces - used.size,
+    freeSpaces: sections.reduce((n, s) => n + s.spaces, 0) - used.size,
     legs: list,
     imbalance,
     warning,

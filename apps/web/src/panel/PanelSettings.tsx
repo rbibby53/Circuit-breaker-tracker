@@ -1,6 +1,9 @@
 import {
   AIC_RATINGS,
   AVAILABLE_LAYOUTS,
+  MAX_SECTIONS,
+  MAX_UNITS,
+  isListLayout,
   CONTROL_SYSTEMS,
   ENCLOSURES,
   MOUNTINGS,
@@ -15,6 +18,7 @@ import {
   type Mounting,
   type PanelDetail,
   type PanelLayout,
+  type PanelSection,
 } from '@cbt/core';
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
@@ -48,8 +52,9 @@ export function PanelSettings({
   const generators = useGenerators();
   const switches = useTransferSwitches();
   const relay = doc.layout === 'relay';
-  // A relay panel stays one, and a breaker panel cannot become one.
-  const layouts = AVAILABLE_LAYOUTS.filter((l) => (l === 'relay') === relay);
+  // A relay panel stays one, a switchboard or MCC stays a list, and a panelboard stays a grid.
+  const units = isListLayout(doc);
+  const layouts = AVAILABLE_LAYOUTS.filter((l) => (l === 'relay') === relay && isListLayout({ layout: l }) === units);
   const inherited = server.generator?.via ? server.generator : null;
   const spaces = spaceChoices(doc.layout);
   if (!spaces.includes(doc.spaces)) spaces.push(doc.spaces);
@@ -86,16 +91,34 @@ export function PanelSettings({
             ))}
           </select>
         </label>
-        <label className="field">
-          <span className="field-label">{relay ? 'Relays' : 'Spaces'}</span>
-          <select value={doc.spaces} onChange={(e) => onChange({ spaces: Number(e.target.value) })}>
-            {spaces.map((n) => (
-              <option key={n} value={n}>
-                {n}
-              </option>
-            ))}
-          </select>
-        </label>
+        {units ? (
+          <label className="field">
+            <span className="field-label">Units (rows)</span>
+            <input
+              type="number"
+              min={1}
+              max={MAX_UNITS}
+              value={doc.spaces}
+              onChange={(e) => {
+                const n = Number(e.target.value);
+                if (Number.isInteger(n) && n >= 1 && n <= MAX_UNITS) onChange({ spaces: n }, 'spaces');
+              }}
+            />
+          </label>
+        ) : (
+          <label className="field">
+            <span className="field-label">
+              {relay ? 'Relays' : doc.sections.length ? 'Spaces (section 1)' : 'Spaces'}
+            </span>
+            <select value={doc.spaces} onChange={(e) => onChange({ spaces: Number(e.target.value) })}>
+              {spaces.map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+        )}
         {relay ? (
           <label className="field">
             <span className="field-label">Control system</span>
@@ -331,6 +354,7 @@ export function PanelSettings({
           <textarea rows={2} value={doc.notes} onChange={(e) => onChange({ notes: e.target.value }, 'notes')} />
         </label>
       </div>
+      {!relay && !units && <SectionsEditor doc={doc} onChange={onChange} />}
       <SharePanel panel={server} />
       <div className="row">
         <DuplicatePanel panel={server} />
@@ -351,5 +375,83 @@ export function PanelSettings({
         </button>
       </div>
     </section>
+  );
+}
+
+/**
+ * Sections after the first: the second half of a panel numbered from 1 again, or the rest of a
+ * panel past 84 circuits. Each has its own spaces, and may be fed through the first's lugs.
+ */
+function SectionsEditor({
+  doc,
+  onChange,
+}: {
+  doc: EditPanel;
+  onChange: (patch: Partial<Omit<EditPanel, 'breakers'>>, coalesce?: string) => void;
+}) {
+  const choices = spaceChoices(doc.layout);
+  const set = (i: number, patch: Partial<PanelSection>, coalesce?: string) =>
+    onChange({ sections: doc.sections.map((x, n) => (n === i ? { ...x, ...patch } : x)) }, coalesce);
+  return (
+    <div className="stack-sm sections-editor">
+      <span className="field-label">Sections</span>
+      <p className="muted small">
+        For a panel whose second half is numbered from 1 again, or that goes past {choices[choices.length - 1]}{' '}
+        circuits. Each section has its own numbering.
+      </p>
+      {doc.sections.map((sec, i) => (
+        <div key={i} className="form-row section-row">
+          <label className="field">
+            <span className="field-label">Name</span>
+            <input
+              value={sec.name}
+              maxLength={40}
+              onChange={(e) => set(i, { name: e.target.value }, `section-name-${i}`)}
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Spaces</span>
+            <select value={sec.spaces} onChange={(e) => set(i, { spaces: Number(e.target.value) })}>
+              {(choices.includes(sec.spaces) ? choices : [...choices, sec.spaces]).map((n) => (
+                <option key={n} value={n}>
+                  {n}
+                </option>
+              ))}
+            </select>
+          </label>
+          <label className="check field-check">
+            <input
+              type="checkbox"
+              checked={sec.throughLugs}
+              onChange={(e) => set(i, { throughLugs: e.target.checked })}
+            />
+            Fed through lugs
+          </label>
+          <button
+            type="button"
+            className="btn btn-sm"
+            onClick={() => onChange({ sections: doc.sections.filter((_, n) => n !== i) })}
+          >
+            Remove
+          </button>
+        </div>
+      ))}
+      {doc.sections.length < MAX_SECTIONS - 1 && (
+        <button
+          type="button"
+          className="btn btn-sm"
+          onClick={() =>
+            onChange({
+              sections: [
+                ...doc.sections,
+                { name: `Section ${doc.sections.length + 2}`, spaces: doc.spaces, throughLugs: true },
+              ],
+            })
+          }
+        >
+          + Add a section
+        </button>
+      )}
+    </div>
   );
 }

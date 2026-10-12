@@ -1,7 +1,7 @@
 // Response shapes shared by the server and the web app.
 import type { LocationKind } from './locations';
 import type { PaperSize, SettingKey, SettingValue } from './settings';
-import type { Backup, Device, MainType, PanelLayout, Protection, Slot } from './panel';
+import type { Backup, Device, MainType, PanelLayout, PanelSection, Protection, Slot } from './panel';
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
 import type { AtsKind, Fuel } from './generator';
@@ -226,6 +226,15 @@ export interface BreakerDto {
   /** Connected load (VA) and demand factor (%), when recorded. */
   loadVa: number | null;
   demandPct: number | null;
+  /** Which section of the panel, from 1. */
+  section: number;
+  /** Switchboards and MCCs. */
+  unit: string;
+  frameAmps: number | null;
+  wire: string;
+  conduit: string;
+  starter: string;
+  hp: number | null;
 }
 
 /** The breaker feeding a relay. Everyone who can see the relay sees this summary. */
@@ -333,6 +342,8 @@ export interface PanelDetail extends Omit<
   /** The transformer, disconnect, UPS or service feeding it, instead of a breaker. */
   fedFromDeviceId: number | null;
   nameplate: PanelNameplate;
+  /** Sections after the first, each numbered from 1. */
+  sections: PanelSection[];
   /** Demand below the panel against its main, feeder and transformer. */
   loadCheck: LoadCheck;
   /** Things that look wrong, e.g. a voltage that does not match the feed. */
@@ -422,6 +433,8 @@ export interface PublicPanel {
     position: number;
     slot: Slot;
     poles: number;
+    section: number;
+    unit: string;
     amps: number;
     device: Device;
     protection: Protection;

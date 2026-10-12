@@ -112,7 +112,10 @@ export function PublicPanelPage() {
                         .includes(q),
                 )
                 .map(({ b, circuit, phases, tags }) => (
-                  <li key={`${b.position}${b.slot}`} className={`public-breaker${b.critical ? ' is-critical' : ''}`}>
+                  <li
+                    key={`${b.section}-${b.position}${b.slot}`}
+                    className={`public-breaker${b.critical ? ' is-critical' : ''}`}
+                  >
                     <span className="public-circuit mono">
                       {circuit}
                       {phases.length > 0 && <span className="public-phase">Ø {phases.join(' ')}</span>}
