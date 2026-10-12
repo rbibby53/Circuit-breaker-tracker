@@ -169,6 +169,7 @@ export function Inspector({
           </dd>
         </dl>
         {(feeds.length > 0 || feedsDevices.length > 0) && <FeedsNote feeds={feeds} devices={feedsDevices} />}
+        {server && <EquipmentNote breaker={server} />}
         {server && <SwitchedByNote breaker={server} />}
         {b.notes && <p className="notes">{b.notes}</p>}
       </aside>
@@ -419,6 +420,7 @@ export function Inspector({
       </label>
 
       {(feeds.length > 0 || feedsDevices.length > 0) && <FeedsNote feeds={feeds} devices={feedsDevices} />}
+      {server && <EquipmentNote breaker={server} />}
       {server && <SwitchedByNote breaker={server} />}
 
       <button
@@ -668,5 +670,21 @@ function UnitFields({
         </div>
       )}
     </>
+  );
+}
+
+/** "Equipment: AHU-2, EF-1", linked to the register. */
+function EquipmentNote({ breaker }: { breaker: BreakerDto }) {
+  if (!breaker.equipment.length) return null;
+  return (
+    <p className="feeds-note">
+      Equipment{' '}
+      {breaker.equipment.map((e, i) => (
+        <span key={e.id}>
+          {i > 0 && ', '}
+          <Link to={`/equipment/${e.id}`}>{e.tag}</Link>
+        </span>
+      ))}
+    </p>
   );
 }

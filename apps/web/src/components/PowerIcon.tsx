@@ -1,7 +1,7 @@
 import type { TopologyKind } from '@cbt/core';
 
 /** Line icons for the things on the power-flow map: utility, panels, generators, switches. */
-export function NodeIcon({ kind, size = 24 }: { kind: TopologyKind; size?: number }) {
+export function NodeIcon({ kind, size = 24 }: { kind: TopologyKind | 'equipment'; size?: number }) {
   const common = {
     width: size,
     height: size,
@@ -68,6 +68,14 @@ export function NodeIcon({ kind, size = 24 }: { kind: TopologyKind; size?: numbe
         <svg {...common}>
           <circle cx="12" cy="11" r="8" />
           <path d="M12 11l4-3M8 17h8" />
+        </svg>
+      );
+    case 'equipment': // a fan
+      return (
+        <svg {...common}>
+          <circle cx="12" cy="12" r="9.5" />
+          <circle cx="12" cy="12" r="1.6" fill="currentColor" />
+          <path d="M12 10.4c0-3 1-5 3-5.4 1.6 1 .8 4-3 5.4M13.4 12.8c2.6 1.5 3.8 3.4 3.2 5.3-1.8.4-3.9-1.8-3.2-5.3M10.6 12.8c-2.6 1.5-4.8 1.6-6-.1.8-1.7 3.9-2.1 6 .1" />
         </svg>
       );
     case 'hidden':

@@ -454,4 +454,28 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE breakers ADD COLUMN starter TEXT NOT NULL DEFAULT '';
   ALTER TABLE breakers ADD COLUMN hp REAL;
   `,
+  `
+  -- The equipment register: AHU-1, EF-2, CT-1… with what they are, where, and what feeds them
+  -- (a breaker, or a disconnect or other device), so "what feeds AHU-2?" is one search.
+  CREATE TABLE equipment (
+    id                  INTEGER PRIMARY KEY,
+    location_id         INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    tag                 TEXT NOT NULL,
+    kind                TEXT NOT NULL DEFAULT '',
+    description         TEXT NOT NULL DEFAULT '',
+    hp                  REAL,
+    voltage             TEXT NOT NULL DEFAULT '',
+    manufacturer        TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT '',
+    fed_from_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    fed_from_device_id  INTEGER REFERENCES power_devices (id) ON DELETE SET NULL,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+  );
+  CREATE INDEX equipment_location ON equipment (location_id);
+  CREATE INDEX equipment_tag ON equipment (tag COLLATE NOCASE);
+  CREATE INDEX equipment_breaker ON equipment (fed_from_breaker_id);
+  CREATE INDEX equipment_device ON equipment (fed_from_device_id);
+  `,
 ];

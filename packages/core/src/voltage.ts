@@ -89,3 +89,16 @@ export function vaFromText(text: string): number | null {
   if (!Number.isFinite(n) || n <= 0) return null;
   return Math.round(m[2] ? n * 1000 : n);
 }
+
+/**
+ * Whether equipment rated `rated` (e.g. "277 V", "208-230 V", "460 V") can run on a circuit of
+ * this many poles in a panel at `panelVoltage`. Within 10% counts (460 V on 480 V is fine). Null
+ * when either voltage is unknown.
+ */
+export function voltageFits(rated: string, panelVoltage: string, poles: number): boolean | null {
+  const nums = (rated.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter((n) => n >= 24 && n <= 35000);
+  const v = parseVoltage(panelVoltage);
+  if (!nums.length || !v) return null;
+  const circuit = poles >= 2 ? v.lineToLine : (v.lineToNeutral ?? v.lineToLine);
+  return nums.some((n) => Math.abs(n - circuit) / circuit <= 0.1);
+}

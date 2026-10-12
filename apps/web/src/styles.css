@@ -3085,3 +3085,24 @@ code {
 .sections-editor .section-row {
   align-items: end;
 }
+
+/* Equipment register and room links. */
+.badge-warn {
+  margin-left: 6px;
+  background: var(--accent-soft);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+.ok-note {
+  color: var(--ok);
+  font-weight: 600;
+}
+.row.space-between {
+  justify-content: space-between;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+.equipment-filter {
+  max-width: 420px;
+}

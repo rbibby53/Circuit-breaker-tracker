@@ -56,6 +56,14 @@ const DevicePage = lazyPage(
   () => import('./pages/Devices'),
   (m) => m.DevicePage,
 );
+const EquipmentListPage = lazyPage(
+  () => import('./pages/Equipment'),
+  (m) => m.EquipmentListPage,
+);
+const EquipmentPage = lazyPage(
+  () => import('./pages/Equipment'),
+  (m) => m.EquipmentPage,
+);
 const PowerPage = lazyPage(
   () => import('./pages/Power'),
   (m) => m.PowerPage,
@@ -138,6 +146,8 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="/generators/:id" element={<GeneratorPage />} />
                 <Route path="/power" element={<PowerPage />} />
                 <Route path="/devices/:id" element={<DevicePage />} />
+                <Route path="/equipment" element={<EquipmentListPage />} />
+                <Route path="/equipment/:id" element={<EquipmentPage />} />
                 <Route path="/access" element={<AccessPage />} />
                 <Route path="/users" element={<UsersPage />} />
                 <Route path="/activity" element={<ActivityPage />} />

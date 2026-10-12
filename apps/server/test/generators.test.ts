@@ -764,3 +764,103 @@ describe('switchboards, MCCs and sections', () => {
     expect((await c.admin.raw(`/api/panels/${c.lp}/pdf?format=card`)).status).toBe(200);
   });
 });
+
+describe('equipment register', () => {
+  it('records equipment, what feeds it, and finds it by tag', async () => {
+    const c = await campus();
+    await save(c.admin, c.lp, null, { voltage: '120/208 V 3-phase' });
+    const lp = (await c.admin.get(`/api/panels/${c.lp}`)).body;
+    const feeder = (
+      await save(c.admin, c.lp, [
+        ...lp.breakers.map((b: any) => ({ ...b, clientKey: String(b.id), serves: [] })),
+        row('ahu', 5, { poles: 3, amps: 30, label: 'AHU-2' }),
+      ])
+    ).body.idMap.ahu;
+    const ds = (
+      await c.admin.post('/api/power-devices', {
+        kind: 'disconnect',
+        name: 'DS-AHU2',
+        locationId: c.elec,
+        amps: 30,
+        fedFromBreakerId: feeder,
+      })
+    ).body.id;
+    const ahu = await c.admin.post('/api/equipment', {
+      tag: 'AHU-2',
+      kind: 'Air handler (AHU)',
+      locationId: c.corridor,
+      hp: 10,
+      voltage: '208 V',
+      fedFromDeviceId: ds,
+    });
+    expect(ahu.status).toBe(200);
+    const ef = (
+      await c.admin.post('/api/equipment', {
+        tag: 'EF-2',
+        locationId: c.corridor,
+        voltage: '277 V',
+        fedFromBreakerId: c.corridorBreaker,
+      })
+    ).body.id;
+
+    // "What feeds AHU-2?": search answers with its feed.
+    const found = (await c.admin.get('/api/search?q=AHU-2')).body.equipment;
+    expect(found).toEqual([expect.objectContaining({ tag: 'AHU-2', fedFrom: 'DS-AHU2' })]);
+    const detail = (await c.admin.get(`/api/equipment/${ahu.body.id}`)).body;
+    expect(detail.feedChain.map((f: any) => (f.kind === 'device' ? f.name : f.panelName))).toEqual(['DS-AHU2', 'LP-1']);
+    expect(detail.warnings).toEqual([]);
+
+    // The breaker shows its equipment, through the disconnect too; a 277 V fan on 120 V is flagged.
+    const panel = (await c.admin.get(`/api/panels/${c.lp}`)).body;
+    expect(panel.breakers.find((b: any) => b.id === feeder).equipment).toEqual([
+      { id: ahu.body.id, tag: 'AHU-2', kind: 'Air handler (AHU)' },
+    ]);
+    expect(panel.warnings).toContain('EF-2 is rated 277 V, but circuit 1 is a 1-pole circuit on 120/208 V 3-phase.');
+    expect((await c.admin.get(`/api/equipment/${ef}`)).body.warnings).toEqual([
+      'EF-2 is rated 277 V, but it is fed from a 1-pole circuit on 120/208 V 3-phase.',
+    ]);
+    expect((await c.admin.get(`/api/power-devices/${ds}`)).body.loads).toEqual([
+      expect.objectContaining({ kind: 'equipment', name: 'AHU-2' }),
+    ]);
+
+    const viewer = await invite(app, c.admin, c.hall, 'viewer', 'viewer');
+    expect((await viewer.get(`/api/equipment/${ef}`)).body.canEdit).toBe(false);
+    expect((await viewer.req('PATCH', `/api/equipment/${ef}`, { tag: 'X', locationId: c.corridor })).status).toBe(403);
+    expect((await c.admin.del(`/api/locations/${c.corridor}`)).status).toBe(409);
+    expect((await c.admin.del(`/api/equipment/${ef}`)).status).toBe(200);
+  });
+
+  it('suggests room links from labels and accepts them in bulk, into panel history', async () => {
+    const c = await campus();
+    const room = await createLocation(c.admin, c.floor, 'room', 'Room 3002');
+    const other = await createLocation(c.admin, c.floor, 'room', 'Lab 110');
+    await save(c.admin, c.lp, [
+      row('a', 1, { label: 'RECEPT ROOM 3002' }),
+      row('b', 3, { label: 'LIGHTS 3002 + 0110' }),
+      row('c', 5, { label: 'Hallway' }),
+      row('d', 7, { label: 'RECEPT 3002', serves: [{ locationId: room }] }),
+    ]);
+    const suggestions = (await c.admin.get(`/api/locations/${c.hall}/room-links`)).body;
+    expect(suggestions.map((s: any) => [s.label, s.roomName])).toEqual([
+      ['RECEPT ROOM 3002', 'Room 3002'],
+      ['LIGHTS 3002 + 0110', 'Room 3002'],
+      ['LIGHTS 3002 + 0110', 'Lab 110'],
+    ]);
+    const viewer = await invite(app, c.admin, c.hall, 'viewer', 'viewer');
+    expect((await viewer.get(`/api/locations/${c.hall}/room-links`)).body).toEqual([]);
+    expect(
+      (await viewer.post('/api/room-links', { links: [{ breakerId: suggestions[0].breakerId, locationId: room }] }))
+        .status,
+    ).toBe(403);
+
+    const accepted = await c.admin.post('/api/room-links', {
+      links: suggestions.map((s: any) => ({ breakerId: s.breakerId, locationId: s.locationId })),
+    });
+    expect(accepted.body).toEqual({ linked: 3 });
+    expect((await c.admin.get(`/api/locations/${c.hall}/room-links`)).body).toEqual([]);
+    const history = (await c.admin.get(`/api/panels/${c.lp}/history`)).body;
+    expect(history[0].summary).toMatch(/^Linked rooms from breaker labels on LP-1/);
+    expect(history[0].details.join('\n')).toContain('Lab 110');
+    expect(other).toBeGreaterThan(0);
+  });
+});

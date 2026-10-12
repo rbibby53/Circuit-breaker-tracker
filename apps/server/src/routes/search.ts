@@ -6,9 +6,13 @@ import {
   allPanels,
   canViewPanel,
   deviceShape,
+  equipmentFeed,
+  nearestFeedText,
   tagsOf,
+  upstream,
   type BreakerRow,
   type DeviceRow,
+  type EquipmentRow,
   type GeneratorRow,
   type PanelRow,
 } from '../panels';
@@ -30,7 +34,7 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
     const auth = requireAuth(req);
     const actor = actorOf(auth);
     const q = String((req.query as { q?: string }).q ?? '').trim();
-    if (q.length < 2) return { locations: [], panels: [], generators: [], devices: [], breakers: [] };
+    if (q.length < 2) return { locations: [], panels: [], generators: [], devices: [], equipment: [], breakers: [] };
     const pattern = like(q);
     const access = new AccessData(db);
     const visible = visibleLocations(actor, [...access.nodes.values()], access.grants);
@@ -72,6 +76,26 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
         kind: d.kind,
         rating: deviceRating(deviceShape(d)),
         path: access.pathLabel(d.location_id),
+      }));
+
+    // Equipment by tag or description: "what feeds AHU-2?" Tags that start with the search come first.
+    const equipment = (
+      db
+        .prepare(
+          `SELECT * FROM equipment WHERE tag LIKE ? ESCAPE '\\' OR description LIKE ? ESCAPE '\\'
+           ORDER BY (tag LIKE ? ESCAPE '\\') DESC, tag COLLATE NOCASE`,
+        )
+        .all(pattern, pattern, `${q.replace(/[\\%_]/g, (c) => `\\${c}`)}%`) as EquipmentRow[]
+    )
+      .filter((e) => visible.get(e.location_id)?.access === 'full')
+      .slice(0, LIMIT)
+      .map((e) => ({
+        id: e.id,
+        tag: e.tag,
+        kind: e.kind,
+        description: e.description,
+        path: access.pathLabel(e.location_id),
+        fedFrom: nearestFeedText(upstream(db, equipmentFeed(e))),
       }));
 
     // Breakers matching by tag, label or notes, or serving a matching place. Tags come first:
@@ -128,7 +152,7 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
     for (const b of byText) add(b, null);
     for (const b of byPlace) add(b, access.byId.get(b.served)?.name ?? null);
 
-    return { locations, panels, generators, devices, breakers };
+    return { locations, panels, generators, devices, equipment, breakers };
   });
 
   /** Tags on breakers the person can see, most used first, for suggestions and filters. */

@@ -30,7 +30,7 @@ import {
   type Protection,
   type Slot,
 } from '@cbt/core';
-import { capacityWarnings, loadCheck, voltageWarnings } from './capacity';
+import { capacityWarnings, equipmentVoltageWarnings, loadCheck, voltageWarnings } from './capacity';
 import type { DB } from './db';
 import type { AccessData } from './repo';
 
@@ -163,6 +163,48 @@ export interface DeviceRow {
   fed_from_device_id: number | null;
   created_at: string;
   updated_at: string;
+}
+
+/** An item in the equipment register (AHU-1, EF-2…). */
+export interface EquipmentRow {
+  id: number;
+  location_id: number;
+  tag: string;
+  kind: string;
+  description: string;
+  hp: number | null;
+  voltage: string;
+  manufacturer: string;
+  model: string;
+  notes: string;
+  fed_from_breaker_id: number | null;
+  fed_from_device_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getEquipment = (db: DB, id: number) =>
+  db.prepare('SELECT * FROM equipment WHERE id = ?').get(id) as EquipmentRow | undefined;
+
+export const equipmentFeed = (e: EquipmentRow): FeedRef => ({
+  breakerId: e.fed_from_breaker_id,
+  deviceId: e.fed_from_device_id,
+});
+
+/** Equipment fed by each of a panel's breakers: directly, or through a device on that breaker. */
+export function equipmentByBreaker(db: DB, panelId: number): Map<number, EquipmentRow[]> {
+  const rows = db
+    .prepare(
+      `SELECT e.*, COALESCE(e.fed_from_breaker_id, d.fed_from_breaker_id) AS via_breaker
+         FROM equipment e
+         LEFT JOIN power_devices d ON d.id = e.fed_from_device_id
+         JOIN breakers b ON b.id = COALESCE(e.fed_from_breaker_id, d.fed_from_breaker_id)
+        WHERE b.panel_id = ? ORDER BY e.tag COLLATE NOCASE`,
+    )
+    .all(panelId) as (EquipmentRow & { via_breaker: number })[];
+  const out = new Map<number, EquipmentRow[]>();
+  for (const r of rows) out.set(r.via_breaker, [...(out.get(r.via_breaker) ?? []), r]);
+  return out;
 }
 
 export const getDevice = (db: DB, id: number) =>
@@ -426,6 +468,7 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     .prepare(`SELECT p.* FROM panels p JOIN breakers b ON b.id = p.fed_from_breaker_id WHERE b.panel_id = ?`)
     .all(panel.id) as PanelRow[];
   const role = effectiveRole(actor, access.node(panel.location_id)!, access.grants)!;
+  const equipment = equipmentByBreaker(db, panel.id);
   const fedDevices = db
     .prepare(
       `SELECT d.* FROM power_devices d JOIN breakers b ON b.id = d.fed_from_breaker_id
@@ -504,6 +547,9 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
         }),
       tags: tags.filter((t) => t.breaker_id === b.id).map((t) => t.tag),
       feeds: shown.map((p) => ({ panelId: p.id, panelName: p.name })),
+      equipment: (equipment.get(b.id) ?? [])
+        .filter((e) => canSeeLocation(e.location_id))
+        .map((e) => ({ id: e.id, tag: e.tag, kind: e.kind })),
       feedsDevices: fedDevices
         .filter((d) => d.fed_from_breaker_id === b.id && canSeeLocation(d.location_id))
         .map((d) => ({ deviceId: d.id, name: d.name, kind: d.kind })),
@@ -574,7 +620,11 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     nameplate: nameplateOf(panel),
     sections: sectionsOfRow(panel),
     loadCheck: check,
-    warnings: [...voltageWarnings(db, panel, breakers), ...capacityWarnings(check)],
+    warnings: [
+      ...voltageWarnings(db, panel, breakers),
+      ...equipmentVoltageWarnings(panel, breakers, equipment),
+      ...capacityWarnings(check),
+    ],
     publicPath: panel.public_token ? `/p/${panel.public_token}` : null,
     canShare: role === 'admin' || role === 'manager',
     generatorId: panel.generator_id,
@@ -765,3 +815,16 @@ export function locationName(access: AccessData, id: number): string {
   const l = access.byId.get(id);
   return l ? `${l.name}${l.kind === 'room' ? '' : ` (${KIND_LABELS[l.kind].toLowerCase()})`}` : 'a deleted location';
 }
+
+/** The nearest thing feeding something, in a few words: "LP-1A · 5 + 7 + 9 (30 A)" or "DS-AHU1". */
+export function nearestFeedText(steps: UpStep[]): string | null {
+  const up = steps[0];
+  if (!up) return null;
+  return up.kind === 'breaker'
+    ? `${up.panel.name} · ${circuitLabel(up.panel, up.breaker)} (${up.breaker.amps} A)`
+    : up.device.name;
+}
+
+/** The voltage a device puts out (a transformer's secondary). */
+export const outputVoltageOf = (d: DeviceRow) =>
+  outputVoltage({ kind: d.kind, voltage: d.voltage, secondaryVoltage: d.secondary_voltage });

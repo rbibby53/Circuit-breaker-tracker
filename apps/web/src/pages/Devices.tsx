@@ -32,8 +32,8 @@ export function DevicesHere({ node, byId }: { node: TreeNode; byId: Map<number, 
   const here = (devices.data ?? []).filter((d) => isInside(byId, d.locationId, node.id));
   if (here.length === 0) return null;
   return (
-    <section className="stack" aria-label="Transformers and equipment">
-      <h2 className="h-caps">Transformers and equipment</h2>
+    <section className="stack" aria-label="Transformers and disconnects">
+      <h2 className="h-caps">Transformers and disconnects</h2>
       <div className="card-grid">
         {here.map((d) => (
           <Link key={d.id} to={`/devices/${d.id}`} className="card panel-card">
@@ -185,7 +185,7 @@ function DeviceFields({ form, setForm }: { form: PowerDeviceInput; setForm: (f: 
 }
 
 /** "Fed from": a breaker in a breaker panel, or another device. Not shown for a utility service. */
-function FeedField({
+export function FeedField({
   value,
   options,
   current,
@@ -214,7 +214,7 @@ function FeedField({
         <option value="">Not set</option>
         {selected && !known && <option value={selected}>{current ?? 'Current feed'}</option>}
         {(options?.devices ?? []).length > 0 && (
-          <optgroup label="Transformers and other equipment">
+          <optgroup label="Transformers, disconnects and UPSs">
             {options!.devices.map((d) => (
               <option key={d.id} value={`d:${d.id}`}>
                 {d.name} · {POWER_DEVICE_LABELS[d.kind]} ({d.locationPath})
@@ -236,7 +236,7 @@ function FeedField({
   );
 }
 
-/** "+ Add a transformer or other equipment" on a site, building or room. */
+/** "+ Add a transformer or disconnect" on a site, building or room. */
 export function AddDeviceForm({ locationId }: { locationId: number }) {
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -255,7 +255,7 @@ export function AddDeviceForm({ locationId }: { locationId: number }) {
   if (!form) {
     return (
       <button type="button" className="btn" onClick={() => setForm(blank('transformer', locationId))}>
-        + Add a transformer or other equipment
+        + Add a transformer or disconnect
       </button>
     );
   }

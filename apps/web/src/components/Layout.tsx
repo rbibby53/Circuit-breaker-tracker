@@ -49,6 +49,7 @@ export function Layout() {
             Sites
           </NavLink>
           <NavLink to="/power">Power</NavLink>
+          <NavLink to="/equipment">Equipment</NavLink>
           {manages && (
             <>
               <NavLink to="/access">Access</NavLink>

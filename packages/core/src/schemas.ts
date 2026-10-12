@@ -317,3 +317,28 @@ export const powerDeviceInputSchema = z.object({
 });
 
 export type PowerDeviceInput = z.infer<typeof powerDeviceInputSchema>;
+
+export const equipmentInputSchema = z.object({
+  tag: z.string().trim().min(1, 'Give it a tag, e.g. AHU-1.').max(40),
+  kind: optionalText(60),
+  description: optionalText(120),
+  locationId: z.number().int().positive(),
+  hp: z.number().min(0).max(100000).nullable().default(null),
+  voltage: optionalText(40),
+  manufacturer: optionalText(80),
+  model: optionalText(80),
+  notes: optionalText(2000),
+  /** What feeds it: a breaker, or a disconnect or other device. Omit to leave unchanged. */
+  fedFromBreakerId: z.number().int().positive().nullable().optional(),
+  fedFromDeviceId: z.number().int().positive().nullable().optional(),
+});
+
+export type EquipmentInput = z.infer<typeof equipmentInputSchema>;
+
+/** Room links suggested from breaker labels, accepted in bulk. */
+export const acceptRoomLinksSchema = z.object({
+  links: z
+    .array(z.object({ breakerId: z.number().int().positive(), locationId: z.number().int().positive() }))
+    .min(1)
+    .max(2000),
+});

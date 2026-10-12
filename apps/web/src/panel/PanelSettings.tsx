@@ -283,7 +283,7 @@ export function PanelSettings({
               </option>
             )}
             {(options.data?.devices ?? []).length > 0 && (
-              <optgroup label="Transformers and other equipment">
+              <optgroup label="Transformers, disconnects and UPSs">
                 {options.data!.devices.map((d) => (
                   <option key={d.id} value={`d:${d.id}`}>
                     {d.name} · {POWER_DEVICE_LABELS[d.kind]}

@@ -20,6 +20,7 @@ import { ssoGroupRoutes } from './routes/ssoGroups';
 import { generatorRoutes } from './routes/generators';
 import { topologyRoutes } from './routes/topology';
 import { deviceRoutes } from './routes/devices';
+import { equipmentRoutes } from './routes/equipment';
 import { searchRoutes } from './routes/search';
 import { totpRoutes } from './routes/totp';
 import { loadAuth } from './sessions';
@@ -165,6 +166,7 @@ export async function buildApp(
   generatorRoutes(app, db);
   topologyRoutes(app, db);
   deviceRoutes(app, db);
+  equipmentRoutes(app, db);
   pdfRoutes(app, db, config);
   exportRoutes(app, db);
   publicRoutes(app, db, config);

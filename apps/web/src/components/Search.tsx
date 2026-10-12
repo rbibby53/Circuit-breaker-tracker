@@ -49,7 +49,13 @@ export function Search() {
   };
   const r = results.data;
   const empty =
-    r && !r.breakers.length && !r.locations.length && !r.panels.length && !r.generators.length && !r.devices.length;
+    r &&
+    !r.breakers.length &&
+    !r.locations.length &&
+    !r.panels.length &&
+    !r.generators.length &&
+    !r.devices.length &&
+    !r.equipment.length;
   const show = open && debounced.length >= 2;
 
   return (
@@ -162,9 +168,30 @@ export function Search() {
               </ul>
             </section>
           )}
+          {r && r.equipment.length > 0 && (
+            <section>
+              <h3>Equipment</h3>
+              <ul>
+                {r.equipment.map((e) => (
+                  <li key={e.id}>
+                    <Link to={`/equipment/${e.id}`} onClick={done}>
+                      <span className="search-main">
+                        <span className="strong">{e.tag}</span>{' '}
+                        <span className="muted small">{[e.kind, e.description].filter(Boolean).join(' · ')}</span>
+                        <span className="small block">
+                          {e.fedFrom ? `Fed from ${e.fedFrom}` : 'Feed not set'}
+                          <span className="muted"> · {e.path}</span>
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {r && r.devices.length > 0 && (
             <section>
-              <h3>Transformers and equipment</h3>
+              <h3>Transformers and disconnects</h3>
               <ul>
                 {r.devices.map((d) => (
                   <li key={d.id}>

@@ -212,6 +212,8 @@ export interface BreakerDto {
   feeds: { panelId: number; panelName: string }[];
   /** Transformers, disconnects and UPSs it feeds, when the viewer can see them. */
   feedsDevices: { deviceId: number; name: string; kind: PowerDeviceKind }[];
+  /** Equipment (AHU-1, EF-2…) on this circuit, directly or through a disconnect. */
+  equipment: { id: number; tag: string; kind: string }[];
   /** Sub-panels it feeds that the viewer cannot see. */
   hiddenFeeds: number;
   /** Relays: the breaker whose circuit this relay switches. */
@@ -527,6 +529,8 @@ export interface SearchResponse {
   panels: { id: number; name: string; path: string }[];
   generators: { id: number; name: string; path: string }[];
   devices: { id: number; name: string; kind: PowerDeviceKind; rating: string; path: string }[];
+  /** Equipment by tag or description, with what feeds it. */
+  equipment: { id: number; tag: string; kind: string; description: string; path: string; fedFrom: string | null }[];
   breakers: {
     breakerId: number;
     panelId: number;
@@ -681,7 +685,7 @@ export interface PowerDeviceSummary extends PowerDeviceShape {
 
 /** What a device feeds: panels and other devices. */
 export interface DeviceLoad {
-  kind: 'panel' | 'device';
+  kind: 'panel' | 'device' | 'equipment';
   id: number;
   name: string;
   /** Panel voltage, or the device's rating. */
@@ -711,4 +715,41 @@ export interface PowerDeviceDetail extends PowerDeviceSummary {
 export interface FeedOptions {
   breakers: FeedCandidate[];
   devices: { id: number; name: string; kind: PowerDeviceKind; rating: string; locationPath: string }[];
+}
+
+// ---- Equipment register -----------------------------------------------------------------
+
+export interface EquipmentDto {
+  id: number;
+  tag: string;
+  kind: string;
+  description: string;
+  locationId: number;
+  locationPath: string;
+  hp: number | null;
+  voltage: string;
+  manufacturer: string;
+  model: string;
+  notes: string;
+  fedFromBreakerId: number | null;
+  fedFromDeviceId: number | null;
+  /** "LP-1A · 5 + 7 + 9 (30 A)" or "DS-AHU1": the nearest thing feeding it. */
+  fedFrom: string | null;
+  /** From its breaker or disconnect up to the service. */
+  feedChain: FeedLink[];
+  /** E.g. a 277 V motor on a 208 V circuit. */
+  warnings: string[];
+  canEdit: boolean;
+}
+
+/** A breaker whose label names a room it does not serve yet. */
+export interface RoomLinkSuggestion {
+  breakerId: number;
+  panelId: number;
+  panelName: string;
+  circuit: string;
+  label: string;
+  locationId: number;
+  roomName: string;
+  roomPath: string;
 }

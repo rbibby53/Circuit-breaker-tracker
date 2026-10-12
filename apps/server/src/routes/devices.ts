@@ -39,6 +39,7 @@ import {
   panelFeed,
   upstream,
   type DeviceRow,
+  type EquipmentRow,
   type FeedRef,
   type PanelRow,
 } from '../panels';
@@ -140,6 +141,9 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
     const d = visibleDevice(actor, access, idParam((req.params as { id: string }).id));
     const base = summary(actor, access, d);
     const { panels, devices } = loadsOf(d);
+    const equipment = db
+      .prepare('SELECT * FROM equipment WHERE fed_from_device_id = ? ORDER BY tag COLLATE NOCASE')
+      .all(d.id) as EquipmentRow[];
     const demandVa = new LoadWalk(db).device(d);
     const ratio = (d.kind === 'transformer' || d.kind === 'ups') && d.kva ? demandVa / (d.kva * 1000) : null;
     const loads: DeviceLoad[] = [
@@ -159,6 +163,15 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
           id: x.id,
           name: x.name,
           detail: deviceRating(deviceShape(x)),
+          locationPath: access.pathLabel(x.location_id),
+        })),
+      ...equipment
+        .filter((x) => canSeeLocation(actor, access, x.location_id))
+        .map((x): DeviceLoad => ({
+          kind: 'equipment',
+          id: x.id,
+          name: x.tag,
+          detail: [x.kind, x.hp ? `${x.hp} HP` : '', x.voltage].filter(Boolean).join(' · '),
           locationPath: access.pathLabel(x.location_id),
         })),
     ];
@@ -181,7 +194,7 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
           : []),
       ],
       loads,
-      hiddenLoads: panels.length + devices.length - loads.length,
+      hiddenLoads: panels.length + devices.length + equipment.length - loads.length,
     };
   });
 
@@ -304,7 +317,7 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
   });
 
   /**
-   * What could feed a panel (?panel=) or a device (?device=): visible breakers in breaker panels
+   * What could feed a panel (?panel=), a device (?device=) or, with neither, a piece of equipment: visible breakers in breaker panels
    * and visible devices (not utility-service-fed loops), leaving out anything downstream of it.
    */
   app.get('/api/feed-options', async (req): Promise<FeedOptions> => {
@@ -319,7 +332,7 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
     } else if (q.device) {
       const d = visibleDevice(actor, access, idParam(q.device));
       target = { deviceId: d.id };
-    } else throw badRequest('Say what is being fed.');
+    } else target = {}; // equipment and other new loads: nothing to loop through
     const loops = (feed: FeedRef) => feedReaches(db, feed, target);
 
     const breakers: FeedCandidate[] = [];

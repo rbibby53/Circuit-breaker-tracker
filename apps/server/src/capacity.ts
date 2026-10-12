@@ -12,11 +12,20 @@ import {
   parseVoltage,
   sameVoltage,
   serviceCapacityVa,
+  voltageFits,
   type CapacityLimit,
   type LoadCheck,
 } from '@cbt/core';
 import type { DB } from './db';
-import { breakersOf, panelFeed, upstream, type BreakerRow, type DeviceRow, type PanelRow } from './panels';
+import {
+  breakersOf,
+  panelFeed,
+  upstream,
+  type BreakerRow,
+  type DeviceRow,
+  type EquipmentRow,
+  type PanelRow,
+} from './panels';
 
 /** At this share of a rating or above, the item is flagged. */
 export const CAPACITY_WARNING = 0.8;
@@ -218,4 +227,24 @@ export function deviceVoltageWarnings(db: DB, d: DeviceRow): string[] {
     return [];
   }
   return [];
+}
+
+/** Equipment rated for another voltage than the circuit feeding it, e.g. a 277 V motor on 208 V. */
+export function equipmentVoltageWarnings(
+  panel: PanelRow,
+  breakers: BreakerRow[],
+  equipment: Map<number, EquipmentRow[]>,
+): string[] {
+  const out: string[] = [];
+  for (const b of breakers) {
+    for (const e of equipment.get(b.id) ?? []) {
+      if (e.fed_from_breaker_id !== b.id || !e.voltage) continue; // through a transformer or disconnect: checked there
+      if (voltageFits(e.voltage, panel.voltage, b.poles) === false) {
+        out.push(
+          `${e.tag} is rated ${e.voltage}, but circuit ${circuitLabel(panel, b)} is a ${b.poles}-pole circuit on ${panel.voltage}.`,
+        );
+      }
+    }
+  }
+  return out;
 }

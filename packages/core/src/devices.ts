@@ -137,3 +137,25 @@ export const ATS_TRANSITION_LABELS: Record<AtsTransition, string> = {
   closed: 'Closed transition',
   delayed: 'Delayed transition',
 };
+
+// ---- Equipment register -----------------------------------------------------------------
+
+/** Kinds of equipment offered as suggestions (any text is accepted), with their usual tag prefix. */
+export const EQUIPMENT_KINDS = [
+  'Air handler (AHU)',
+  'Rooftop unit (RTU)',
+  'Exhaust fan (EF)',
+  'Supply fan (SF)',
+  'Fan coil (FCU)',
+  'Cooling tower (CT)',
+  'Chiller (CH)',
+  'Boiler (B)',
+  'Pump (P)',
+  'Unit heater (UH)',
+  'Water heater (WH)',
+  'Compressor',
+  'Elevator',
+  'Kitchen equipment',
+  'Lab equipment',
+  'Other',
+];
