@@ -127,7 +127,7 @@ describe('what the server logs', () => {
     expect(text).toMatch(/0 people, 0 locations, 0 panels, 0 breakers/);
     expect(text).toMatch(/No accounts yet/);
     expect(text).toMatch(/Public address not set/);
-    expect(text).toMatch(/warn Microsoft sign-in is partly set up/);
+    expect(text).toMatch(/warn Single sign-on is partly set up/);
     expect(text).toMatch(/Set by environment variables \(locked in Settings\): OIDC_ISSUER/);
   });
 });

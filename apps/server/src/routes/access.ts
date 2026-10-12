@@ -24,7 +24,7 @@ import type { Config } from '../config';
 import { actorOf, requireAdmin, requireAuth, requireRealAdmin } from '../context';
 import { now, type DB } from '../db';
 import { assertCheck, badRequest, conflict, forbidden, idParam, notFound, parse } from '../errors';
-import { AccessData, getUser, toActor, toSummary, type GrantRow, type UserRow } from '../repo';
+import { AccessData, getUser, ssoGroupsOf, toActor, toSummary, type GrantRow, type UserRow } from '../repo';
 import { destroyUserSessions } from '../sessions';
 import { daysFromNow, hoursFromNow, newToken } from '../tokens';
 import { adminCount } from '../users';
@@ -69,14 +69,23 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       );
     };
     const l = access.byId.get(id)!;
+    const groupDto = (g: (typeof access.groupGrants)[number]) => access.groupGrantDto(g, users.get(g.userId)!);
     return {
       location: { id, name: l.name, kind: l.kind, path: access.pathLabel(id) },
-      applies: access.grantRows
-        .filter((g) => chain.has(g.location_id))
-        .map((g) => ({ ...dto(g), inherited: g.location_id !== id })),
-      inside: access.grantRows
-        .filter((g) => g.location_id !== id && isWithin(access.node(g.location_id)!, id))
-        .map(dto),
+      applies: [
+        ...access.grantRows
+          .filter((g) => chain.has(g.location_id))
+          .map((g) => ({ ...dto(g), inherited: g.location_id !== id })),
+        ...access.groupGrants
+          .filter((g) => chain.has(g.locationId))
+          .map((g) => ({ ...groupDto(g), inherited: g.locationId !== id })),
+      ],
+      inside: [
+        ...access.grantRows.filter((g) => g.location_id !== id && isWithin(access.node(g.location_id)!, id)).map(dto),
+        ...access.groupGrants
+          .filter((g) => g.locationId !== id && isWithin(access.node(g.locationId)!, id))
+          .map(groupDto),
+      ],
       ceiling,
       admins: [...users.values()].filter((u) => u.is_admin && !u.disabled).map(toSummary),
     };
@@ -320,9 +329,9 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       const theirLike = access.grants.filter((g) => g.userId === u.id);
       if (!actor.isAdmin && !canSeeUser(actor, theirLike, access.nodes, access.grants)) continue;
       // Managers only see the grants inside their own scope.
-      const shown = theirs.filter(
-        (g) => actor.isAdmin || grantCeiling(actor, access.node(g.location_id)!, access.grants),
-      );
+      const inScope = (locationId: number) =>
+        actor.isAdmin || !!grantCeiling(actor, access.node(locationId)!, access.grants);
+      const shown = theirs.filter((g) => inScope(g.location_id));
       out.push({
         ...toSummary(u),
         disabled: !!u.disabled,
@@ -330,19 +339,27 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
         hasPassword: !!u.password_hash,
         totp: !!u.totp_enabled_at,
         identities: identities.filter((i) => i.user_id === u.id).map((i) => i.provider),
-        grants: shown.map((g) =>
-          access.grantDto(
-            g,
-            u,
-            canManageGrant(
-              actor,
-              access.node(g.location_id)!,
-              { userId: g.user_id, locationId: g.location_id, role: g.role, inviteLimit: g.invite_limit },
-              access.grants,
-            ).ok,
+        grants: [
+          ...shown.map((g) =>
+            access.grantDto(
+              g,
+              u,
+              canManageGrant(
+                actor,
+                access.node(g.location_id)!,
+                { userId: g.user_id, locationId: g.location_id, role: g.role, inviteLimit: g.invite_limit },
+                access.grants,
+              ).ok,
+            ),
           ),
-        ),
+          ...access.groupGrants
+            .filter((g) => g.userId === u.id && inScope(g.locationId))
+            .map((g) => access.groupGrantDto(g, u)),
+        ],
         canReset: canResetUser(actor, toActor(u), theirLike, access.nodes, access.grants).ok,
+        ssoGroups: ssoGroupsOf(u),
+        ssoGroupsAt: u.sso_groups_at,
+        adminFromGroups: !!u.is_admin && !!u.admin_from_sso,
       });
     }
     return out.sort((a, b) => a.displayName.localeCompare(b.displayName));
@@ -386,6 +403,8 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       next.disabled ? 1 : 0,
       id,
     );
+    // Admin rights set by hand are no longer managed by admin groups.
+    if (body.isAdmin !== undefined) db.prepare('UPDATE users SET admin_from_sso = 0 WHERE id = ?').run(id);
     if (next.disabled) destroyUserSessions(db, id);
     audit(db, auth, {
       action: 'user.update',
@@ -437,6 +456,12 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       id,
       (req.params as { provider: string }).provider,
     );
+    // Without single sign-on their groups no longer apply: drop group access, and admin rights
+    // that came from an admin group (unless they are the last admin).
+    db.prepare('UPDATE users SET sso_groups = NULL, sso_groups_at = NULL WHERE id = ?').run(id);
+    if (user.is_admin && user.admin_from_sso && adminCount(db) > 1) {
+      db.prepare('UPDATE users SET is_admin = 0, admin_from_sso = 0 WHERE id = ?').run(id);
+    }
     audit(db, auth, {
       action: 'user.unlink',
       entity: 'user',

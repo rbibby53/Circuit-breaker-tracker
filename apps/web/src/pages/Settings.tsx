@@ -15,6 +15,7 @@ import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useCurrentUser } from '../auth';
 import { useConfirm } from '../components/ConfirmDialog';
+import { GroupAccess } from '../components/GroupAccess';
 import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 
@@ -73,6 +74,7 @@ export function SettingsPage() {
           title={g.title}
           defs={SETTING_DEFS.filter((d) => d.group === g.id)}
           current={byKey}
+          after={g.id === 'sso' ? <GroupAccess provider={s.ssoProvider} /> : undefined}
           extra={
             g.id === 'sso' ? (
               <SsoStatus data={s} />
@@ -137,12 +139,16 @@ function SettingsGroup({
   defs,
   current,
   extra,
+  after,
 }: {
   id: string;
   title: string;
   defs: SettingDef[];
   current: Map<SettingKey, AdminSetting>;
+  /** Shown inside the settings form, before the save button. */
   extra: React.ReactNode;
+  /** Shown below the form, for parts with forms of their own. */
+  after?: React.ReactNode;
 }) {
   const qc = useQueryClient();
   const [draft, setDraft] = useState<Partial<Record<SettingKey, SettingValue | null>>>({});
@@ -169,35 +175,38 @@ function SettingsGroup({
   };
 
   return (
-    <form className="panel stack" onSubmit={submit} aria-label={title} id={`settings-${id}`}>
-      <h2 className="h-caps">{title}</h2>
-      {defs.map((def) => (
-        <SettingField
-          key={def.key}
-          def={def}
-          setting={current.get(def.key)!}
-          draft={draft[def.key]}
-          onChange={(v) => change(def.key, v)}
-        />
-      ))}
-      {extra}
-      <ErrorNote error={save.error} />
-      <div className="row">
-        <button className="btn btn-primary" disabled={!dirty || save.isPending}>
-          Save {title.toLowerCase()}
-        </button>
-        {dirty && (
-          <button type="button" className="btn" onClick={() => setDraft({})}>
-            Undo changes
+    <section className="panel stack" id={`settings-${id}`}>
+      <form className="stack" onSubmit={submit} aria-label={title}>
+        <h2 className="h-caps">{title}</h2>
+        {defs.map((def) => (
+          <SettingField
+            key={def.key}
+            def={def}
+            setting={current.get(def.key)!}
+            draft={draft[def.key]}
+            onChange={(v) => change(def.key, v)}
+          />
+        ))}
+        {extra}
+        <ErrorNote error={save.error} />
+        <div className="row">
+          <button className="btn btn-primary" disabled={!dirty || save.isPending}>
+            Save {title.toLowerCase()}
           </button>
-        )}
-        {saved && !dirty && (
-          <span className="ok" role="status">
-            Saved
-          </span>
-        )}
-      </div>
-    </form>
+          {dirty && (
+            <button type="button" className="btn" onClick={() => setDraft({})}>
+              Undo changes
+            </button>
+          )}
+          {saved && !dirty && (
+            <span className="ok" role="status">
+              Saved
+            </span>
+          )}
+        </div>
+      </form>
+      {after}
+    </section>
   );
 }
 
@@ -328,7 +337,10 @@ function SsoStatus({ data }: { data: AdminSettingsResponse }) {
       <span className="strong">Single sign-on is {data.ssoEnabled ? 'on' : 'off'}.</span>
       {data.redirectUri ? (
         <span className="small">
-          Redirect URI to register with Microsoft (platform: Web): <code>{data.redirectUri}</code>
+          Redirect URI to register with your identity provider: <code>{data.redirectUri}</code>
+          <br />
+          Microsoft: add it under Authentication with platform Web. Authentik: add it to the provider&apos;s Redirect
+          URIs (strict).
         </span>
       ) : (
         <span className="small">Set the public address under General first; it is needed for the redirect URI.</span>

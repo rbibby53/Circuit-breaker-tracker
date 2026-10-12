@@ -35,7 +35,7 @@ export interface SessionRow {
   method: string | null;
 }
 
-/** Start a session. `how` says how they signed in, for the log: "password", "Microsoft"… */
+/** Start a session. `how` says how they signed in, for the log: "password", "Authentik"… */
 export function createSession(
   db: DB,
   config: Config,

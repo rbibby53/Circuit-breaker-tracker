@@ -8,7 +8,7 @@ A self-hosted web app for recreating your electrical panels, labelling what ever
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
 
-> **Status: 1.0, stable.** Accounts with scoped access, Microsoft sign-in, the panel editor for
+> **Status: 1.0, stable.** Accounts with scoped access, Microsoft and Authentik sign-in, the panel editor for
 > residential load centers and commercial 3-phase panelboards, printing, logs and automatic
 > backups. Upgrades are automatic; see [Upgrading](#upgrading). What could come next is in
 > [docs/PLAN.md](docs/PLAN.md).
@@ -23,8 +23,11 @@ as a single Docker container with its data in one SQLite file.
   grant covers everything inside that location, and nothing outside it.
 - **Manager invite limits:** a manager can only invite people inside their own scope, and
   only up to their limit (_Viewers only_, _Viewers and editors_, or _Up to managers_).
-- **Two ways to sign in:** Microsoft Entra ID (or any OIDC provider), and local accounts
-  with passwords for family, roommates and anyone without a work account.
+- **Two ways to sign in:** single sign-on with Microsoft Entra ID, Authentik or any OIDC
+  provider, and local accounts with passwords for family, roommates and anyone without one.
+- **Access from SSO groups:** give everyone in an Authentik (or Entra, Keycloak…) group
+  access to a location, make members of an admin group admins, or only let certain groups
+  sign in. Accounts are made on first sign-in for people whose groups give them access.
 - **Two-step sign-in** for password accounts: a code from an authenticator app, with
   one-time recovery codes. Whoever can send someone a reset link can also turn it off for
   them if they lose their phone.
@@ -34,7 +37,7 @@ as a single Docker container with its data in one SQLite file.
   everywhere they have access, change a role, remove access or grant a new location in one
   place, and set their name and email. You can also invite someone from there.
 - **Profile pictures from [Gravatar](https://gravatar.com)** for people with an email: added
-  under Your account, by an admin or manager under People, or from their Microsoft sign-in.
+  under Your account, by an admin or manager under People, or from their single sign-on.
   Everyone else gets initials. Browsers fetch the pictures straight from
   gravatar.com using a hash of the email; admins can turn this off in Settings.
 - **Where you're signed in:** Your account lists each browser with its address and when it
@@ -156,7 +159,7 @@ docker run -d --name breakers --network host -e PORT=2757 -v breakers-data:/data
 With `--network host`, `-p` mappings are ignored and `PORT` decides where it listens.
 
 Open the app and create the first admin account on the setup screen, then go to **Settings**
-to set the public address, reverse proxy, Microsoft sign-in and the rest. To build the image
+to set the public address, reverse proxy, single sign-on and the rest. To build the image
 yourself, use `docker build -t circuit-breaker-tracker .` or set `build: .` in the compose
 file.
 
@@ -202,23 +205,24 @@ page and applies without a restart.
 Any setting can also be pinned with an environment variable. It then wins over the Settings page
 and shows there as locked. This suits infrastructure-as-code setups:
 
-| Setting                    | Variable                                                                 |
-| -------------------------- | ------------------------------------------------------------------------ |
-| App name                   | `APP_NAME`                                                               |
-| Public address             | `PUBLIC_URL`                                                             |
-| Allow password sign-in     | `ALLOW_LOCAL_LOGIN`                                                      |
-| Stay signed in for (days)  | `SESSION_DAYS`                                                           |
-| Microsoft / OIDC           | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`                    |
-| SSO button text            | `OIDC_LABEL`                                                             |
-| Invite / reset link expiry | `INVITE_DAYS`, `RESET_HOURS`                                             |
-| New panel defaults         | `DEFAULT_PANEL_SPACES`, `DEFAULT_MAIN_AMPS`, `DEFAULT_VOLTAGE`           |
-| Printing and QR codes      | `PAPER_SIZE` (`letter`, `a4`), `PRINT_QR`, `PRINT_NOTE`, `PUBLIC_PANELS` |
-| Gravatar profile pictures  | `GRAVATAR`                                                               |
-| Behind a reverse proxy     | `TRUST_PROXY`                                                            |
-| HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                              |
-| Log level                  | `LOG_LEVEL` (`error`, `warn`, `info`, `debug`)                           |
-| Log format                 | `LOG_FORMAT` (`text`, `json`)                                            |
-| Automatic backups          | `BACKUP_KEEP` (`0` = off, default 14), `BACKUP_HOUR` (0–23, default 3)   |
+| Setting                    | Variable                                                                                |
+| -------------------------- | --------------------------------------------------------------------------------------- |
+| App name                   | `APP_NAME`                                                                              |
+| Public address             | `PUBLIC_URL`                                                                            |
+| Allow password sign-in     | `ALLOW_LOCAL_LOGIN`                                                                     |
+| Stay signed in for (days)  | `SESSION_DAYS`                                                                          |
+| Single sign-on (OIDC)      | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_SCOPES`                    |
+| SSO button text            | `OIDC_LABEL`                                                                            |
+| SSO groups                 | `OIDC_GROUPS_CLAIM`, `OIDC_ADMIN_GROUPS`, `OIDC_ALLOWED_GROUPS`, `OIDC_CREATE_ACCOUNTS` |
+| Invite / reset link expiry | `INVITE_DAYS`, `RESET_HOURS`                                                            |
+| New panel defaults         | `DEFAULT_PANEL_SPACES`, `DEFAULT_MAIN_AMPS`, `DEFAULT_VOLTAGE`                          |
+| Printing and QR codes      | `PAPER_SIZE` (`letter`, `a4`), `PRINT_QR`, `PRINT_NOTE`, `PUBLIC_PANELS`                |
+| Gravatar profile pictures  | `GRAVATAR`                                                                              |
+| Behind a reverse proxy     | `TRUST_PROXY`                                                                           |
+| HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                                             |
+| Log level                  | `LOG_LEVEL` (`error`, `warn`, `info`, `debug`)                                          |
+| Log format                 | `LOG_FORMAT` (`text`, `json`)                                                           |
+| Automatic backups          | `BACKUP_KEEP` (`0` = off, default 14), `BACKUP_HOUR` (0–23, default 3)                  |
 
 ### Logs
 
@@ -228,7 +232,7 @@ container's time zone (`TZ`):
 ```
 2026-10-11 14:05:09 INFO  Circuit Breaker Tracker 1.0.0 starting · Node v24.21.0 · times in this log are America/Chicago
 2026-10-11 14:05:09 INFO  Database /data/breakers.db (1.2 MB, schema 8): 4 people, 31 locations, 6 panels, 212 breakers
-2026-10-11 14:05:09 INFO  Sign-in: passwords, Microsoft / OIDC via login.microsoftonline.com · sessions last 30 days
+2026-10-11 14:05:09 INFO  Sign-in: passwords, Authentik via auth.example.com (admin groups, 2 group access rules) · sessions last 30 days
 2026-10-11 14:06:41 INFO  Signed in: ryan (password and two-step code) from 192.168.1.20
 2026-10-11 14:07:02 INFO  ryan: Edited panel Main panel: Changed 14 label · Personal › Home › Basement › Utility room
 2026-10-11 14:09:15 WARN  POST /api/auth/login → 403 in 98 ms · 192.168.1.31 · Sign-in refused for "sam": wrong password
@@ -275,20 +279,61 @@ location / {
    - **Redirect URI:** platform _Web_. The exact value is shown on the Settings page, e.g.
      `https://breakers.example.com/api/auth/oidc/callback`.
 2. Under **Certificates & secrets**, create a client secret.
-3. In the app, open **Settings → Microsoft / single sign-on** and fill in:
+3. In the app, open **Settings → Single sign-on** and fill in:
    - **Issuer URL:** `https://login.microsoftonline.com/<directory-tenant-id>/v2.0`
    - **Client ID:** the application (client) ID
    - **Client secret:** the secret value
 4. Save, then press **Test connection**.
 
-Signing in with Microsoft does not give access to anything by itself:
+To use Entra security groups, add a **groups claim** under **Token configuration** (Security
+groups, ID token). Entra sends group object IDs, so use those IDs as group names below.
 
-- A new person still needs an invite link. They can accept it with Microsoft instead of a
-  password.
-- Existing local users can link their Microsoft account from **Account**.
-- Accounts are matched by the provider's subject ID, never by email.
+### Authentik sign-in
 
-Local passwords keep working alongside SSO. To make everyone except admins use Microsoft,
+1. In Authentik, open **Applications → Providers** and create an **OAuth2/OpenID Provider**:
+   - **Client type:** Confidential.
+   - **Redirect URIs:** _Strict_, the value shown on the Settings page, e.g.
+     `https://breakers.example.com/api/auth/oidc/callback`.
+   - Keep the default scopes (`openid`, `email`, `profile`). Authentik's `profile` scope
+     includes a `groups` claim with the names of the user's groups.
+2. Create an **Application** that uses this provider, e.g. with the slug `breakers`. Bind
+   groups or users to it under **Policy / Group / User Bindings** to decide who may use it.
+3. In the app, open **Settings → Single sign-on** and fill in:
+   - **Issuer URL:** the provider's _OpenID Configuration Issuer_, e.g.
+     `https://auth.example.com/application/o/breakers/` (keep the slash at the end).
+   - **Client ID** and **Client secret:** from the provider.
+4. Save, then press **Test connection**. The sign-in button reads **Sign in with Authentik**.
+
+### Single sign-on and groups
+
+Signing in with single sign-on does not give access to anything by itself. Someone gets in
+when any of these apply:
+
+- They accept an **invite link** with single sign-on instead of a password.
+- An existing local user links their single sign-on account from **Account**.
+- Their **groups** give them access (below). Their account is made the first time they sign
+  in, unless **Create accounts from groups** is off.
+
+Accounts are matched by the provider's subject ID, never by email.
+
+Groups come from the token's `groups` claim (change **Groups claim** for another, e.g.
+`realm_access.roles` for Keycloak roles; add `groups` to **Scopes** for Authelia or Keycloak).
+Group names are matched ignoring case. Under **Settings → Single sign-on**:
+
+- **Group access** gives everyone in a group a role on a location, just like a grant: for
+  example _Electricians_ → Editor on _KSU › Main campus_. It shows on People and Access as
+  "from the Electricians group" and is changed here or in the provider, not per person. Access
+  given by hand stays as it is, beside it.
+- **Admin groups** make their members admins, and take it away when they leave. Admins made by
+  hand are never changed, and the last admin is never removed.
+- **Only allow these groups** refuses single sign-on for anyone outside them.
+
+People's groups are read each time they sign in with single sign-on, so a change in the
+provider applies at their next sign-in. To apply it sooner, use **People → Manage → Sign out
+everywhere**. Someone who also has a password keeps the groups from their last single sign-on
+while they use the password. Changes to group access in the app apply straight away.
+
+Local passwords keep working alongside SSO. To make everyone except admins use single sign-on,
 turn off **Settings → Sign-in → Allow password sign-in**. Admins always keep their password, so
 you cannot lock yourself out.
 

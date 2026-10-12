@@ -3,16 +3,19 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useState } from 'react';
 import { Link } from 'react-router-dom';
 import { api, ApiError } from '../api';
-import { useCurrentUser } from '../auth';
+import { useAuthConfig, useCurrentUser } from '../auth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useTitle } from '../lib/useTitle';
 import { Avatar } from '../components/Avatar';
 import { InviteDialog, ManageAccess } from '../components/ManageAccess';
 import { ErrorNote, LinkBox, relativeTime } from '../components/ui';
 import { useViewAs } from './Access';
+import { ssoName } from './Login';
 
 export function UsersPage() {
   const me = useCurrentUser();
+  const config = useAuthConfig();
+  const ssoLabel = ssoName(config.data?.oidc.provider).replace(/^single/, 'Single');
   const qc = useQueryClient();
   const users = useQuery({ queryKey: ['users'], queryFn: () => api.get<UserListItem[]>('/api/users'), retry: false });
   const viewAs = useViewAs();
@@ -122,7 +125,15 @@ export function UsersPage() {
                     <Avatar name={u.displayName} url={u.avatarUrl} light />
                     <span className="cell-stack">
                       <span className="strong">
-                        {u.displayName} {u.isAdmin && <span className="role role-admin">Admin</span>}
+                        {u.displayName}{' '}
+                        {u.isAdmin && (
+                          <span
+                            className="role role-admin"
+                            title={u.adminFromGroups ? `An admin because of their ${ssoLabel} groups` : undefined}
+                          >
+                            {u.adminFromGroups ? 'Admin · group' : 'Admin'}
+                          </span>
+                        )}
                         {u.disabled && <span className="role">Disabled</span>}
                       </span>
                       <span className="muted small">
@@ -135,7 +146,7 @@ export function UsersPage() {
                 <td>
                   {[
                     u.hasPassword ? (u.totp ? 'Password + code' : 'Password') : null,
-                    u.identities.length ? 'Microsoft' : null,
+                    u.identities.length ? ssoLabel : null,
                   ]
                     .filter(Boolean)
                     .join(' + ') || '—'}
@@ -151,6 +162,7 @@ export function UsersPage() {
                         <li key={g.id}>
                           <span className={`role role-${g.role}`}>{ROLE_LABELS[g.role]}</span>{' '}
                           <Link to={`/access?loc=${g.locationId}`}>{g.locationPath}</Link>
+                          {g.group && <span className="muted small"> · {g.group} group</span>}
                         </li>
                       ))}
                     </ul>
@@ -199,7 +211,19 @@ export function UsersPage() {
                     <>
                       <button
                         className="btn btn-sm"
-                        onClick={() => update.mutate({ id: u.id, body: { isAdmin: !u.isAdmin } })}
+                        onClick={async () => {
+                          if (
+                            u.adminFromGroups &&
+                            !(await confirm({
+                              title: `Remove admin from ${u.displayName}?`,
+                              message: `They are in an admin group in ${ssoLabel}, so they become an admin again the next time they sign in. To stop that, take them out of the group there.`,
+                              confirmLabel: 'Remove admin',
+                            }))
+                          ) {
+                            return;
+                          }
+                          update.mutate({ id: u.id, body: { isAdmin: !u.isAdmin } });
+                        }}
                       >
                         {u.isAdmin ? 'Remove admin' : 'Make admin'}
                       </button>

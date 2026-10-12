@@ -8,15 +8,37 @@ import { useAuthConfig } from '../auth';
 import { AuthShell } from '../components/AuthShell';
 import { ErrorNote, Field } from '../components/ui';
 
-export function MicrosoftIcon() {
+/** The single sign-on button's icon: Microsoft's four squares, or a key for other providers. */
+export function SsoIcon({ provider }: { provider: string | undefined }) {
+  if (provider === 'Microsoft') {
+    return (
+      <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
+        <rect x="1" y="1" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <rect x="10" y="1" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <rect x="1" y="10" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
+        <rect x="10" y="10" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
+      </svg>
+    );
+  }
   return (
-    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden="true">
-      <rect x="1" y="1" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <rect x="10" y="1" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <rect x="1" y="10" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
-      <rect x="10" y="10" width="7" height="7" fill="none" stroke="currentColor" strokeWidth="1.6" />
+    <svg
+      width="18"
+      height="18"
+      viewBox="0 0 18 18"
+      aria-hidden="true"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="1.6"
+    >
+      <circle cx="6" cy="9" r="3.5" />
+      <path d="M9.5 9H17M14 9v3M16.5 9v2.5" strokeLinecap="round" />
     </svg>
   );
+}
+
+/** "Authentik", or "single sign-on" when the provider has no name we know. */
+export function ssoName(provider: string | undefined): string {
+  return provider && provider !== 'single sign-on' ? provider : 'single sign-on';
 }
 
 /** Only follow same-site relative paths after sign-in. */
@@ -94,7 +116,7 @@ export function LoginPage() {
         {config.data?.oidc.enabled && (
           <>
             <a className="btn btn-outline btn-block btn-lg" href="/api/auth/oidc/start">
-              <MicrosoftIcon />
+              <SsoIcon provider={config.data.oidc.provider} />
               {config.data.oidc.label}
             </a>
             <div className="divider">

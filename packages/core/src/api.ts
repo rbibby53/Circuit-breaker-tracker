@@ -52,7 +52,8 @@ export interface AuthConfig {
   publicPanels: boolean;
   /** Whether to load Gravatar pictures. */
   gravatar: boolean;
-  oidc: { enabled: boolean; label: string };
+  /** Single sign-on: the button text and the provider's name ("Microsoft", "Authentik"…). */
+  oidc: { enabled: boolean; label: string; provider: string };
 }
 
 export interface LocationDto {
@@ -80,6 +81,8 @@ export interface GrantDto {
   createdAt: string;
   /** Whether the viewer may edit or remove this grant. */
   canManage: boolean;
+  /** Set when the access comes from this single sign-on group; such grants cannot be edited here. */
+  group: string | null;
 }
 
 export interface AccessResponse {
@@ -101,6 +104,31 @@ export interface UserListItem extends UserSummary {
   totp: boolean;
   grants: GrantDto[];
   canReset: boolean;
+  /** Groups from their last single sign-on, or null if they never signed in that way. */
+  ssoGroups: string[] | null;
+  ssoGroupsAt: string | null;
+  /** Admin because of an admin group (changes with their groups at each sign-in). */
+  adminFromGroups: boolean;
+}
+
+/** Access given to everyone in a single sign-on group. */
+export interface SsoGroupMapping {
+  id: number;
+  group: string;
+  locationId: number;
+  locationName: string;
+  locationKind: LocationKind;
+  locationPath: string;
+  role: Role;
+  inviteLimit: Role | null;
+  /** People whose last sign-in put them in this group. */
+  members: number;
+}
+
+export interface SsoGroupsResponse {
+  mappings: SsoGroupMapping[];
+  /** Every group seen at someone's sign-in, for suggestions. */
+  knownGroups: string[];
 }
 
 export interface InviteInfo {
@@ -346,6 +374,8 @@ export interface AdminSetting {
 export interface AdminSettingsResponse {
   settings: AdminSetting[];
   ssoEnabled: boolean;
+  /** "Microsoft", "Authentik"… from the issuer. */
+  ssoProvider: string;
   /** What to register as the redirect URI with the identity provider. */
   redirectUri: string | null;
   about: {

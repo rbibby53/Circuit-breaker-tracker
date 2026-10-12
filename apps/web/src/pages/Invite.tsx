@@ -7,7 +7,7 @@ import { api, ApiError } from '../api';
 import { useAuthConfig, useMe } from '../auth';
 import { AuthShell } from '../components/AuthShell';
 import { ErrorNote, Field, formatDate } from '../components/ui';
-import { MicrosoftIcon } from './Login';
+import { SsoIcon, ssoName } from './Login';
 
 const ROLE_BLURB = {
   viewer: 'see panels and print labels',
@@ -105,8 +105,8 @@ export function InvitePage() {
                   className="btn btn-outline btn-block btn-lg"
                   href={`/api/auth/oidc/start?invite=${encodeURIComponent(token)}`}
                 >
-                  <MicrosoftIcon />
-                  Accept with a Microsoft work account
+                  <SsoIcon provider={config.data.oidc.provider} />
+                  Accept with {ssoName(config.data.oidc.provider)}
                 </a>
                 {localLogin && (
                   <div className="divider">

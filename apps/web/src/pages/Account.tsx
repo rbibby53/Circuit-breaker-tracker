@@ -9,7 +9,7 @@ import { Avatar } from '../components/Avatar';
 import { SessionsSection } from '../components/Sessions';
 import { TwoStepSettings } from '../components/TwoStep';
 import { ErrorNote, Field } from '../components/ui';
-import { MicrosoftIcon } from './Login';
+import { SsoIcon, ssoName } from './Login';
 
 export function AccountPage() {
   useTitle('Account');
@@ -71,7 +71,7 @@ export function AccountPage() {
       </div>
       {(saved || params.get('linked')) && (
         <p className="ok" role="status">
-          {saved ?? 'Microsoft account linked.'}
+          {saved ?? `${ssoName(config.data?.oidc.provider)} account linked.`}
         </p>
       )}
 
@@ -160,7 +160,7 @@ export function AccountPage() {
           {me.identities.length ? (
             me.identities.map((i) => (
               <div key={i.provider} className="row-between">
-                <span>Linked: {i.email ?? 'Microsoft account'}</span>
+                <span>Linked: {i.email ?? `${ssoName(config.data?.oidc.provider)} account`}</span>
                 <button className="btn btn-sm" onClick={() => unlink.mutate(i.provider)}>
                   Unlink
                 </button>
@@ -168,8 +168,8 @@ export function AccountPage() {
             ))
           ) : (
             <a className="btn btn-outline" href="/api/auth/oidc/start?link=1">
-              <MicrosoftIcon />
-              Link a Microsoft account
+              <SsoIcon provider={config.data.oidc.provider} />
+              Link your {ssoName(config.data.oidc.provider)} account
             </a>
           )}
           <ErrorNote error={unlink.error} />

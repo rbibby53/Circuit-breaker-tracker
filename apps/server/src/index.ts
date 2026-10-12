@@ -25,7 +25,7 @@ if (bootstrapped) app.log.info(`Created the admin account "${bootstrapped}" from
 
 const LABELS = {
   sessions: ['expired session', 'expired sessions'],
-  states: ['abandoned Microsoft sign-in', 'abandoned Microsoft sign-ins'],
+  states: ['abandoned single sign-on', 'abandoned single sign-ons'],
   challenges: ['unfinished two-step sign-in', 'unfinished two-step sign-ins'],
   invites: ['old invite link', 'old invite links'],
   resets: ['old reset link', 'old reset links'],

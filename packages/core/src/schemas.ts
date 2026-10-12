@@ -61,6 +61,14 @@ export const grantInputSchema = z.object({
   inviteLimit: roleSchema.nullable().default(null),
 });
 
+/** Access that members of a single sign-on group get on a location. */
+export const ssoGroupMappingSchema = z.object({
+  group: z.string().trim().min(1, 'Enter the group name.').max(200),
+  locationId: z.number().int().positive(),
+  role: roleSchema,
+  inviteLimit: roleSchema.nullable().default(null),
+});
+
 export const updateGrantSchema = z.object({
   role: roleSchema,
   inviteLimit: roleSchema.nullable().default(null),

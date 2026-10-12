@@ -16,7 +16,8 @@ import { ancestry, buildTree } from '../tree';
 import { useAuthConfig } from '../auth';
 import { Avatar } from './Avatar';
 import { useConfirm } from './ConfirmDialog';
-import { ErrorNote, Field } from './ui';
+import { ErrorNote, Field, relativeTime } from './ui';
+import { ssoName } from '../pages/Login';
 
 /** A modal dialog driven by `open`. */
 function Modal({
@@ -62,7 +63,7 @@ function Modal({
 }
 
 /** Locations where the signed-in person can hand out access, labelled with their path. */
-function useGrantableLocations() {
+export function useGrantableLocations() {
   const locations = useLocations();
   const { byId } = buildTree(locations.data ?? []);
   return [...byId.values()]
@@ -178,6 +179,7 @@ export function ManageAccess({
 }) {
   const qc = useQueryClient();
   const confirm = useConfirm();
+  const provider = ssoName(useAuthConfig().data?.oidc.provider);
   const places = useGrantableLocations();
   const [locationId, setLocationId] = useState<number | ''>('');
   const [role, setRole] = useState<Role>('viewer');
@@ -204,7 +206,8 @@ export function ManageAccess({
       await refresh();
     },
   });
-  const already = new Set(user.grants.map((g) => g.locationId));
+  // Group access sits beside grants, so a grant can still be given where a group has access.
+  const already = new Set(user.grants.filter((g) => !g.group).map((g) => g.locationId));
   const submit = (e: FormEvent) => {
     e.preventDefault();
     add.mutate();
@@ -215,8 +218,17 @@ export function ManageAccess({
       {canEditProfile && <ProfileForm key={user.id} user={user} />}
       {canEditProfile && <SignOutEverywhere user={user} />}
       <h3>Access</h3>
+      {user.ssoGroups && (
+        <p className="muted small">
+          Groups in {provider} at their last sign-in ({relativeTime(user.ssoGroupsAt)}):{' '}
+          {user.ssoGroups.length ? user.ssoGroups.join(', ') : 'none'}
+        </p>
+      )}
       {user.isAdmin ? (
-        <p>{user.displayName} is an admin and can see and change everything.</p>
+        <p>
+          {user.displayName} is an admin and can see and change everything
+          {user.adminFromGroups ? `, because they are in an admin group in ${provider}.` : '.'}
+        </p>
       ) : user.grants.length === 0 ? (
         <p className="muted">No access anywhere you manage yet.</p>
       ) : (
@@ -225,7 +237,10 @@ export function ManageAccess({
             <li key={g.id}>
               <span className="cell-stack">
                 <span className="strong">{g.locationName}</span>
-                <span className="muted small">{g.locationPath}</span>
+                <span className="muted small">
+                  {g.locationPath}
+                  {g.group && ` · from the ${g.group} group in ${provider}`}
+                </span>
               </span>
               {g.canManage ? (
                 <span className="row">

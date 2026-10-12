@@ -14,7 +14,7 @@
 The app runs as user 1000 inside the container. Before the first start, make the appdata folder writable for it, from the Unraid terminal:&#xD;
 mkdir -p /mnt/user/appdata/circuit-breaker-tracker &amp;&amp; chown -R 1000:1000 /mnt/user/appdata/circuit-breaker-tracker&#xD;
 &#xD;
-Then open the web UI and create the first admin account. Everything else (public address, reverse proxy, Microsoft sign-in, link lifetimes, logging) is set by an admin under Settings in the app.</Overview>
+Then open the web UI and create the first admin account. Everything else (public address, reverse proxy, Microsoft or Authentik sign-in and groups, link lifetimes, logging) is set by an admin under Settings in the app.</Overview>
   <Category>Tools: HomeAutomation: Productivity:</Category>
   <WebUI>http://[IP]:[PORT:2757]/</WebUI>
   <TemplateURL>https://raw.githubusercontent.com/rbibby53/Circuit-breaker-tracker/main/unraid/circuit-breaker-tracker.xml</TemplateURL>

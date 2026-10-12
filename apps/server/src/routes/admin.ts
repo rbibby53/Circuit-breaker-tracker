@@ -49,6 +49,7 @@ export function adminRoutes(app: FastifyInstance, db: DB, config: Config, backup
     return {
       settings: config.settings.list(),
       ssoEnabled: !!config.oidc,
+      ssoProvider: config.oidc?.provider ?? 'single sign-on',
       redirectUri: config.publicUrl ? redirectUri(config) : null,
       about: {
         version: config.version,

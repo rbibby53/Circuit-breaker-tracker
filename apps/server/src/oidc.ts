@@ -1,6 +1,8 @@
+import { groupsFromClaims, parseGroupList } from '@cbt/core';
 import * as client from 'openid-client';
 import type { Config } from './config';
 import { now, type DB } from './db';
+import { logger } from './log';
 
 type OidcConfig = NonNullable<Config['oidc']>;
 
@@ -10,13 +12,35 @@ let discovered: { key: string; config: Promise<client.Configuration> } | null = 
 export function discover(oidc: OidcConfig): Promise<client.Configuration> {
   const key = JSON.stringify([oidc.issuer, oidc.clientId, oidc.clientSecret]);
   if (discovered?.key !== key) {
-    const config = client.discovery(new URL(oidc.issuer), oidc.clientId, oidc.clientSecret).catch((err) => {
+    const config = discoverIssuer(oidc).catch((err) => {
       if (discovered?.key === key) discovered = null; // retry on the next attempt
       throw err;
     });
     discovered = { key, config };
   }
   return discovered.config;
+}
+
+/**
+ * The provider's metadata. The issuer must match the provider's own exactly, and Authentik's
+ * ends with a slash that is easy to leave off (or Microsoft's has none), so the other form is
+ * tried when the first fails. Plain http is allowed only when the issuer is http, e.g. a
+ * provider on the local network.
+ */
+async function discoverIssuer(oidc: OidcConfig): Promise<client.Configuration> {
+  const options = oidc.issuer.startsWith('http://') ? { execute: [client.allowInsecureRequests] } : undefined;
+  const find = (issuer: string) =>
+    client.discovery(new URL(issuer), oidc.clientId, oidc.clientSecret, undefined, options);
+  try {
+    return await find(oidc.issuer);
+  } catch (err) {
+    const other = oidc.issuer.endsWith('/') ? oidc.issuer.replace(/\/+$/, '') : `${oidc.issuer}/`;
+    try {
+      return await find(other);
+    } catch {
+      throw err;
+    }
+  }
 }
 
 export const redirectUri = (config: Config) => `${config.publicUrl}/api/auth/oidc/callback`;
@@ -42,7 +66,7 @@ export async function startOidc(
   return client
     .buildAuthorizationUrl(cfg, {
       redirect_uri: redirectUri(config),
-      scope: 'openid profile email',
+      scope: scopes(config),
       code_challenge: codeChallenge,
       code_challenge_method: 'S256',
       state,
@@ -51,12 +75,32 @@ export async function startOidc(
     .toString();
 }
 
+/** The scopes to ask for, always including `openid`. */
+function scopes(config: Config): string {
+  const list = config.settings
+    .get('oidcScopes')
+    .split(/[\s,]+/)
+    .filter(Boolean);
+  return [...new Set(['openid', ...list])].join(' ');
+}
+
+/** Whether anything uses groups, so they are worth an extra request when the token has none. */
+export function groupsInUse(db: DB, config: Config): boolean {
+  return (
+    parseGroupList(config.settings.get('oidcAdminGroups')).length > 0 ||
+    parseGroupList(config.settings.get('oidcAllowedGroups')).length > 0 ||
+    !!db.prepare('SELECT 1 FROM sso_group_grants LIMIT 1').get()
+  );
+}
+
 export interface OidcClaims {
   issuer: string;
   subject: string;
   email: string | null;
   name: string | null;
   preferredUsername: string | null;
+  /** The groups claim, or null when the provider sent none. */
+  groups: string[] | null;
 }
 
 export interface OidcState {
@@ -95,6 +139,18 @@ export async function finishOidc(
   const c = tokens.claims();
   if (!c) throw new Error('The identity provider did not return an ID token.');
   const str = (v: unknown) => (typeof v === 'string' && v.trim() ? v.trim() : null);
+  const claim = config.settings.get('oidcGroupsClaim');
+  let groups = groupsFromClaims(c, claim);
+  // Some providers only put groups in the user info, not the ID token.
+  if (groups === null && groupsInUse(db, config)) {
+    try {
+      groups = groupsFromClaims(await client.fetchUserInfo(cfg, tokens.access_token, c.sub), claim);
+    } catch (err) {
+      logger()?.warn(
+        `Could not read groups from the provider's user info: ${err instanceof Error ? err.message : err}`,
+      );
+    }
+  }
   return {
     claims: {
       issuer: c.iss,
@@ -102,6 +158,7 @@ export async function finishOidc(
       email: str(c.email),
       name: str(c.name),
       preferredUsername: str(c.preferred_username),
+      groups,
     },
     state: { inviteToken: row.invite_token, linkUserId: row.link_user_id },
   };

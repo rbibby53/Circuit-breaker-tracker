@@ -1,5 +1,8 @@
 import {
   acceptInviteSchema,
+  inAnyGroup,
+  inGroup,
+  parseGroupList,
   updateMeSchema,
   changePasswordSchema,
   loginSchema,
@@ -21,7 +24,8 @@ import { countUsers, findUserByLogin, getUser, type UserRow } from '../repo';
 import { deviceName } from '../device';
 import { clearSessionCookie, createSession, destroySession, destroyUserSessions, type SessionRow } from '../sessions';
 import { hashToken, isExpired } from '../tokens';
-import { createUser, meResponse, uniqueUsername } from '../users';
+import { adminCount, createUser, meResponse, uniqueUsername } from '../users';
+import { logger } from '../log';
 import { startTotpChallenge } from './totp';
 
 const strictLimit = { rateLimit: { max: 10, timeWindow: '1 minute' } };
@@ -40,7 +44,7 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     paperSize: config.settings.get('paperSize'),
     publicPanels: config.settings.get('publicPanels'),
     gravatar: config.settings.get('gravatar'),
-    oidc: { enabled: !!config.oidc, label: config.oidc?.label ?? '' },
+    oidc: { enabled: !!config.oidc, label: config.oidc?.label ?? '', provider: config.oidc?.provider ?? '' },
   }));
 
   app.post('/api/setup', { config: strictLimit }, async (req, reply) => {
@@ -249,7 +253,7 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     return { ok: true };
   });
 
-  // ---- OIDC (Microsoft Entra ID or any OIDC provider) -------------------------------
+  // ---- OIDC (Microsoft Entra ID, Authentik or any OIDC provider) --------------------
 
   app.get('/api/auth/oidc/start', async (req, reply) => {
     if (!config.oidc) throw notFound('Single sign-on is not configured.');
@@ -269,18 +273,21 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     const callbackUrl = new URL(req.url, config.publicUrl!);
     try {
       const { claims, state } = await finishOidc(db, config, callbackUrl);
-      const result = await completeOidcLogin(db, claims, state);
+      const result = await completeOidcLogin(db, claims, state, ssoRules(config));
+      const provider = config.oidc.provider;
       createSession(
         db,
         config,
         reply,
         result.userId,
         req.headers['user-agent'],
-        state.linkUserId ? 'Microsoft, linking it to their account' : 'Microsoft',
+        state.linkUserId ? `${provider}, linking it to their account` : provider,
       );
       return reply.redirect(result.redirect);
     } catch (err) {
-      req.log.warn(`Microsoft sign-in failed from ${req.ip}: ${err instanceof Error ? err.message : String(err)}`);
+      req.log.warn(
+        `${config.oidc.provider} sign-in failed from ${req.ip}: ${err instanceof Error ? err.message : String(err)}`,
+      );
       const message = err instanceof Error ? err.message : 'Sign-in failed.';
       return reply.redirect(`/login?error=${encodeURIComponent(message)}`);
     }
@@ -309,24 +316,110 @@ function fillEmail(db: DB, userId: number, email: string | null): void {
   ).run(email, userId, email);
 }
 
+/** How single sign-on groups are used, from the settings. */
+export interface SsoRules {
+  provider: string;
+  adminGroups: string[];
+  allowedGroups: string[];
+  createAccounts: boolean;
+}
+
+const NO_GROUP_RULES: SsoRules = {
+  provider: 'single sign-on',
+  adminGroups: [],
+  allowedGroups: [],
+  createAccounts: false,
+};
+
+export function ssoRules(config: Config): SsoRules {
+  const s = config.settings;
+  return {
+    provider: config.oidc?.provider ?? 'single sign-on',
+    adminGroups: parseGroupList(s.get('oidcAdminGroups')),
+    allowedGroups: parseGroupList(s.get('oidcAllowedGroups')),
+    createAccounts: s.get('oidcCreateAccounts'),
+  };
+}
+
+/** Whether these groups would give someone any access: an admin group or a group with access. */
+function groupsGiveAccess(db: DB, groups: readonly string[], rules: SsoRules): boolean {
+  if (inAnyGroup(groups, rules.adminGroups)) return true;
+  const mapped = db.prepare('SELECT DISTINCT group_name FROM sso_group_grants').all() as { group_name: string }[];
+  return mapped.some((m) => inGroup(groups, m.group_name));
+}
+
+/**
+ * Record someone's groups from this sign-in (group access is worked out from them), and make
+ * them an admin or not when admin groups are set. Admin rights given by hand are left alone,
+ * and the last admin is never removed.
+ */
+export function applySsoGroups(db: DB, userId: number, groups: string[] | null, rules: SsoRules): void {
+  const user = getUser(db, userId)!;
+  const list = groups ?? [];
+  const before = user.sso_groups;
+  db.prepare('UPDATE users SET sso_groups = ?, sso_groups_at = ? WHERE id = ?').run(
+    JSON.stringify(list),
+    now(),
+    userId,
+  );
+  if (before !== JSON.stringify(list)) {
+    logger()?.info(`${user.username}'s groups from ${rules.provider}: ${list.length ? list.join(', ') : 'none'}`);
+  }
+  if (groups === null && (rules.adminGroups.length || rules.allowedGroups.length)) {
+    logger()?.warn(
+      `${rules.provider} sent no groups for ${user.username}. Check the groups claim setting and that the provider includes it.`,
+    );
+  }
+  if (!rules.adminGroups.length) return;
+  const isAdminByGroup = inAnyGroup(list, rules.adminGroups);
+  if (isAdminByGroup && !user.is_admin) {
+    db.prepare('UPDATE users SET is_admin = 1, admin_from_sso = 1 WHERE id = ?').run(userId);
+    audit(db, null, {
+      action: 'user.admin',
+      entity: 'user',
+      entityId: userId,
+      summary: `${user.display_name} became an admin through their ${rules.provider} groups`,
+    });
+  } else if (!isAdminByGroup && user.is_admin && user.admin_from_sso) {
+    if (adminCount(db) <= 1) {
+      logger()?.warn(`${user.username} left the admin groups but is the only admin, so they stay an admin.`);
+      return;
+    }
+    db.prepare('UPDATE users SET is_admin = 0, admin_from_sso = 0 WHERE id = ?').run(userId);
+    audit(db, null, {
+      action: 'user.admin',
+      entity: 'user',
+      entityId: userId,
+      summary: `${user.display_name} is no longer an admin: not in an admin group in ${rules.provider}`,
+    });
+  }
+}
+
 /**
  * Decide what an SSO sign-in means: an existing linked account, linking to the signed-in
- * user, or a new account created from an invite. Identities are matched by issuer and
- * subject, never by email.
+ * user, a new account created from an invite, or (when groups give access) a new account
+ * from groups. Identities are matched by issuer and subject, never by email.
  */
 export async function completeOidcLogin(
   db: DB,
   claims: OidcClaims,
   state: OidcState,
+  rules: SsoRules = NO_GROUP_RULES,
 ): Promise<{ userId: number; redirect: string }> {
   const linked = db
     .prepare('SELECT user_id FROM user_identities WHERE issuer = ? AND subject = ?')
     .get(claims.issuer, claims.subject) as { user_id: number } | undefined;
   const email = ssoEmail(claims);
+  const groups = claims.groups ?? [];
+  const provider = rules.provider === 'single sign-on' ? 'single sign-on' : rules.provider;
+
+  if (rules.allowedGroups.length && !inAnyGroup(groups, rules.allowedGroups)) {
+    throw new Error(`Your ${provider} account is not in a group that may use this app. Ask an admin to add you.`);
+  }
 
   if (state.linkUserId) {
     if (linked && linked.user_id !== state.linkUserId) {
-      throw new Error('That Microsoft account is already linked to another user.');
+      throw new Error(`That ${provider} account is already linked to another user.`);
     }
     if (!linked) {
       db.prepare(
@@ -340,6 +433,7 @@ export async function completeOidcLogin(
       });
     }
     fillEmail(db, state.linkUserId, email);
+    applySsoGroups(db, state.linkUserId, claims.groups, rules);
     return { userId: state.linkUserId, redirect: '/account?linked=1' };
   }
 
@@ -348,32 +442,47 @@ export async function completeOidcLogin(
 
   if (state.inviteToken) {
     const { invite, access } = usableInvite(db, state.inviteToken);
-    if (!user) {
-      const base = claims.preferredUsername ?? claims.email ?? `sso-${claims.subject.slice(0, 8)}`;
-      user = await createUser(db, {
-        username: uniqueUsername(db, base),
-        displayName: claims.name ?? claims.preferredUsername ?? claims.email ?? 'New user',
-        email: null,
-      });
-      fillEmail(db, user.id, email);
-      db.prepare(
-        'INSERT INTO user_identities (user_id, provider, issuer, subject, email, linked_at) VALUES (?, ?, ?, ?, ?, ?)',
-      ).run(user.id, 'oidc', claims.issuer, claims.subject, email, now());
-      audit(db, null, {
-        action: 'user.create',
-        entity: 'user',
-        entityId: user.id,
-        summary: `${user.username} joined by invite with single sign-on`,
-      });
-    }
+    if (!user) user = await createSsoUser(db, claims, email, (name) => `${name} joined by invite with single sign-on`);
     applyInvite(db, invite, access, user.id, null);
+    applySsoGroups(db, user.id, claims.groups, rules);
     return { userId: user.id, redirect: '/' };
   }
 
   if (!user) {
-    throw new Error('No account is linked to that sign-in yet. Ask for an invite link.');
+    if (rules.createAccounts && groupsGiveAccess(db, groups, rules)) {
+      user = await createSsoUser(db, claims, email, (name) => `${name} joined with their ${provider} groups`);
+    } else {
+      throw new Error('No account is linked to that sign-in yet. Ask for an invite link.');
+    }
   }
   // People who signed in before their email was picked up get it now.
   fillEmail(db, user.id, email);
+  applySsoGroups(db, user.id, claims.groups, rules);
   return { userId: user.id, redirect: '/' };
+}
+
+/** A new account for an SSO identity, linked to it. */
+async function createSsoUser(
+  db: DB,
+  claims: OidcClaims,
+  email: string | null,
+  summary: (username: string) => string,
+): Promise<UserRow> {
+  const base = claims.preferredUsername ?? claims.email ?? `sso-${claims.subject.slice(0, 8)}`;
+  const user = await createUser(db, {
+    username: uniqueUsername(db, base),
+    displayName: claims.name ?? claims.preferredUsername ?? claims.email ?? 'New user',
+    email: null,
+  });
+  fillEmail(db, user.id, email);
+  db.prepare(
+    'INSERT INTO user_identities (user_id, provider, issuer, subject, email, linked_at) VALUES (?, ?, ?, ?, ?, ?)',
+  ).run(user.id, 'oidc', claims.issuer, claims.subject, email, now());
+  audit(db, null, {
+    action: 'user.create',
+    entity: 'user',
+    entityId: user.id,
+    summary: summary(user.username),
+  });
+  return user;
 }
