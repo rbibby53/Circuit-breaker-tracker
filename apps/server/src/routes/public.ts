@@ -6,7 +6,7 @@ import type { Config } from '../config';
 import { actorOf, requireAuth } from '../context';
 import type { DB } from '../db';
 import { badRequest, forbidden, idParam, notFound, parse } from '../errors';
-import { breakersOf, canViewPanel, getBreaker, getPanel, servesOf, tagsOf, type PanelRow } from '../panels';
+import { breakersOf, canViewPanel, getBreaker, getDevice, getPanel, servesOf, tagsOf, type PanelRow } from '../panels';
 import { AccessData } from '../repo';
 
 const newPublicToken = () => randomBytes(18).toString('base64url');
@@ -24,6 +24,7 @@ export function publicPanel(db: DB, access: AccessData, panel: PanelRow): Public
   );
   const feeder = panel.fed_from_breaker_id ? getBreaker(db, panel.fed_from_breaker_id) : undefined;
   const feederPanel = feeder ? getPanel(db, feeder.panel_id) : undefined;
+  const feederDevice = panel.fed_from_device_id ? getDevice(db, panel.fed_from_device_id) : undefined;
   const placeName = (id: number) => {
     const l = access.byId.get(id);
     if (!l) return null;
@@ -40,7 +41,12 @@ export function publicPanel(db: DB, access: AccessData, panel: PanelRow): Public
     voltage: panel.voltage,
     notes: panel.notes,
     updatedAt: panel.updated_at,
-    fedFrom: feeder && feederPanel ? { panelName: feederPanel.name, circuit: circuitLabel(feederPanel, feeder) } : null,
+    fedFrom:
+      feeder && feederPanel
+        ? { panelName: feederPanel.name, circuit: circuitLabel(feederPanel, feeder) }
+        : feederDevice
+          ? { panelName: feederDevice.name, circuit: '' }
+          : null,
     breakers: breakers.map((b) => ({
       position: b.position,
       slot: b.slot,

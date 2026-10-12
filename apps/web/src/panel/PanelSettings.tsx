@@ -1,11 +1,18 @@
 import {
+  AIC_RATINGS,
   AVAILABLE_LAYOUTS,
   CONTROL_SYSTEMS,
+  ENCLOSURES,
+  MOUNTINGS,
+  MOUNTING_LABELS,
+  POWER_DEVICE_LABELS,
   LAYOUT_DEFAULTS,
   LAYOUT_LABELS,
   VOLTAGE_PRESETS,
   spaceChoices,
   type FeedCandidate,
+  type FeedOptions,
+  type Mounting,
   type PanelDetail,
   type PanelLayout,
 } from '@cbt/core';
@@ -29,11 +36,15 @@ export function PanelSettings({
   onDelete: () => void;
 }) {
   const confirm = useConfirm();
-  const candidates = useQuery({
-    queryKey: ['feed-candidates', server.id],
-    queryFn: () => api.get<FeedCandidate[]>(`/api/panels/${server.id}/feed-candidates`),
+  const options = useQuery({
+    queryKey: ['feed-options', 'panel', server.id],
+    queryFn: () => api.get<FeedOptions>(`/api/feed-options?panel=${server.id}`),
   });
-  const known = new Set((candidates.data ?? []).map((c) => c.breakerId));
+  const known = new Set((options.data?.breakers ?? []).map((c) => c.breakerId));
+  const knownDevices = new Set((options.data?.devices ?? []).map((d) => d.id));
+  const current = server.feedChain[0];
+  const nameplate = (patch: Partial<EditPanel['nameplate']>, coalesce?: string) =>
+    onChange({ nameplate: { ...doc.nameplate, ...patch } }, coalesce);
   const generators = useGenerators();
   const switches = useTransferSwitches();
   const relay = doc.layout === 'relay';
@@ -55,7 +66,7 @@ export function PanelSettings({
   };
 
   const byPanel = new Map<number, FeedCandidate[]>();
-  for (const c of candidates.data ?? []) byPanel.set(c.panelId, [...(byPanel.get(c.panelId) ?? []), c]);
+  for (const c of options.data?.breakers ?? []) byPanel.set(c.panelId, [...(byPanel.get(c.panelId) ?? []), c]);
 
   return (
     <section className="panel stack" aria-label="Panel settings">
@@ -149,24 +160,119 @@ export function PanelSettings({
           <span className="field-label">Model</span>
           <input value={doc.model} onChange={(e) => onChange({ model: e.target.value }, 'model')} />
         </label>
+        {!relay && (
+          <>
+            <label className="field">
+              <span className="field-label">Bus rating (A)</span>
+              <input
+                type="number"
+                min={1}
+                value={doc.nameplate.busAmps ?? ''}
+                placeholder={doc.mainAmps ? String(doc.mainAmps) : ''}
+                onChange={(e) => nameplate({ busAmps: e.target.value ? Number(e.target.value) : null }, 'busAmps')}
+              />
+            </label>
+            <label className="field">
+              <span className="field-label">AIC / SCCR (kA)</span>
+              <input
+                type="number"
+                min={1}
+                list="aic-ratings"
+                value={doc.nameplate.aicKa ?? ''}
+                onChange={(e) => nameplate({ aicKa: e.target.value ? Number(e.target.value) : null }, 'aicKa')}
+              />
+              <datalist id="aic-ratings">
+                {AIC_RATINGS.map((k) => (
+                  <option key={k} value={k} />
+                ))}
+              </datalist>
+            </label>
+          </>
+        )}
+        <label className="field">
+          <span className="field-label">Mounting</span>
+          <select value={doc.nameplate.mounting} onChange={(e) => nameplate({ mounting: e.target.value as Mounting })}>
+            {MOUNTINGS.map((m) => (
+              <option key={m} value={m}>
+                {MOUNTING_LABELS[m]}
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label">Enclosure</span>
+          <input
+            value={doc.nameplate.enclosure}
+            list="enclosures"
+            maxLength={40}
+            placeholder="e.g. NEMA 1"
+            onChange={(e) => nameplate({ enclosure: e.target.value }, 'enclosure')}
+          />
+          <datalist id="enclosures">
+            {ENCLOSURES.map((x) => (
+              <option key={x} value={x} />
+            ))}
+          </datalist>
+        </label>
+        <label className="field">
+          <span className="field-label">Feeder wire</span>
+          <input
+            value={doc.nameplate.feederWire}
+            maxLength={80}
+            placeholder="e.g. 4 #3/0 + #6 G"
+            onChange={(e) => nameplate({ feederWire: e.target.value }, 'feederWire')}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Feeder conduit</span>
+          <input
+            value={doc.nameplate.feederConduit}
+            maxLength={40}
+            placeholder='e.g. 2" EMT'
+            onChange={(e) => nameplate({ feederConduit: e.target.value }, 'feederConduit')}
+          />
+        </label>
         <label className="field span-2">
           <span className="field-label">{relay ? 'Control power from' : 'Fed from'}</span>
           <select
-            value={doc.fedFromBreakerId ?? ''}
-            onChange={(e) => onChange({ fedFromBreakerId: e.target.value ? Number(e.target.value) : null })}
+            value={
+              doc.fedFromDeviceId ? `d:${doc.fedFromDeviceId}` : doc.fedFromBreakerId ? `b:${doc.fedFromBreakerId}` : ''
+            }
+            onChange={(e) => {
+              const [kind, id] = e.target.value.split(':');
+              onChange({
+                fedFromBreakerId: kind === 'b' ? Number(id) : null,
+                fedFromDeviceId: kind === 'd' ? Number(id) : null,
+              });
+            }}
           >
             <option value="">{relay ? 'Not set' : 'The utility service (this is a main panel)'}</option>
             {doc.fedFromBreakerId !== null && !known.has(doc.fedFromBreakerId) && (
-              <option value={doc.fedFromBreakerId}>
-                {server.feedChain[0]
-                  ? `${server.feedChain[0].panelName} · ${server.feedChain[0].circuit} ${server.feedChain[0].label}`
+              <option value={`b:${doc.fedFromBreakerId}`}>
+                {current?.kind === 'panel'
+                  ? `${current.panelName} · ${current.circuit} ${current.label}`
                   : 'Current feeder'}
               </option>
+            )}
+            {doc.fedFromDeviceId !== null && !knownDevices.has(doc.fedFromDeviceId) && (
+              <option value={`d:${doc.fedFromDeviceId}`}>
+                {current?.kind === 'device' ? current.name : 'Current feeder'}
+              </option>
+            )}
+            {(options.data?.devices ?? []).length > 0 && (
+              <optgroup label="Transformers and other equipment">
+                {options.data!.devices.map((d) => (
+                  <option key={d.id} value={`d:${d.id}`}>
+                    {d.name} · {POWER_DEVICE_LABELS[d.kind]}
+                    {d.rating ? ` · ${d.rating}` : ''} ({d.locationPath})
+                  </option>
+                ))}
+              </optgroup>
             )}
             {[...byPanel.entries()].map(([panelId, list]) => (
               <optgroup key={panelId} label={`${list[0]!.panelName} (${list[0]!.locationPath})`}>
                 {list.map((c) => (
-                  <option key={c.breakerId} value={c.breakerId}>
+                  <option key={c.breakerId} value={`b:${c.breakerId}`}>
                     {c.circuit} {c.label || 'Unlabelled'} ({c.amps}A)
                   </option>
                 ))}

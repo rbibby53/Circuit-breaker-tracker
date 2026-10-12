@@ -52,6 +52,10 @@ const GeneratorPage = lazyPage(
   () => import('./pages/Generators'),
   (m) => m.GeneratorPage,
 );
+const DevicePage = lazyPage(
+  () => import('./pages/Devices'),
+  (m) => m.DevicePage,
+);
 const PowerPage = lazyPage(
   () => import('./pages/Power'),
   (m) => m.PowerPage,
@@ -133,6 +137,7 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="/panels/:id" element={<PanelEditorPage />} />
                 <Route path="/generators/:id" element={<GeneratorPage />} />
                 <Route path="/power" element={<PowerPage />} />
+                <Route path="/devices/:id" element={<DevicePage />} />
                 <Route path="/access" element={<AccessPage />} />
                 <Route path="/users" element={<UsersPage />} />
                 <Route path="/activity" element={<ActivityPage />} />

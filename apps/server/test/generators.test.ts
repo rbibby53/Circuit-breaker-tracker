@@ -424,3 +424,171 @@ describe('power flow', () => {
     expect(t.nodes.find((n: any) => n.id === `h${c.em2}`)).toMatchObject({ href: null, inScope: false });
   });
 });
+
+describe('transformers and other equipment', () => {
+  /** LP-1 (480 V) → breaker → disconnect DS-1 → transformer T-1 (480 → 208 V) → panel LDP-1. */
+  async function stepDown(c: Awaited<ReturnType<typeof campus>>) {
+    const lpSaved = await save(c.admin, c.lp, null);
+    const lp = (await c.admin.get(`/api/panels/${c.lp}`)).body;
+    const withFeeder = await save(c.admin, c.lp, [
+      ...lp.breakers.map((b: any) => ({ ...b, clientKey: String(b.id), serves: [] })),
+      row('t1', 5, { poles: 3, amps: 125, label: 'T-1' }),
+    ]);
+    expect(lpSaved.status).toBe(200);
+    const feeder = withFeeder.body.idMap.t1 as number;
+    const ds = await c.admin.post('/api/power-devices', {
+      kind: 'disconnect',
+      name: 'DS-1',
+      locationId: c.elec,
+      amps: 200,
+      fused: true,
+      fuseAmps: 125,
+      fedFromBreakerId: feeder,
+    });
+    expect(ds.status).toBe(200);
+    const t1 = await c.admin.post('/api/power-devices', {
+      kind: 'transformer',
+      name: 'T-1',
+      locationId: c.elec,
+      kva: 75,
+      voltage: '480 V',
+      secondaryVoltage: '120/208 V',
+      fedFromDeviceId: ds.body.id,
+    });
+    expect(t1.status).toBe(200);
+    const ldp = (
+      await c.admin.post(`/api/locations/${c.elec}/panels`, {
+        name: 'LDP-1',
+        layout: 'commercial',
+        spaces: 42,
+        voltage: '120/208 V 3-phase',
+      })
+    ).body.id as number;
+    expect((await save(c.admin, ldp, [], { fedFromDeviceId: t1.body.id })).status).toBe(200);
+    return { feeder, ds: ds.body.id as number, t1: t1.body.id as number, ldp };
+  }
+
+  it('feed panels through transformers and disconnects, shown up the chain and on the map', async () => {
+    const c = await campus();
+    const s = await stepDown(c);
+
+    const ldp = (await c.admin.get(`/api/panels/${s.ldp}`)).body;
+    expect(ldp).toMatchObject({ fedFromDeviceId: s.t1, fedFromBreakerId: null });
+    expect(ldp.feedChain).toEqual([
+      expect.objectContaining({
+        kind: 'device',
+        name: 'T-1',
+        rating: '75 kVA · 480 V → 120/208 V',
+        voltage: '120/208 V',
+      }),
+      expect.objectContaining({ kind: 'device', name: 'DS-1', rating: '200 A fused, 125 A fuses' }),
+      expect.objectContaining({ kind: 'panel', panelName: 'LP-1', amps: 125 }),
+    ]);
+    const lp = (await c.admin.get(`/api/panels/${c.lp}`)).body;
+    expect(lp.breakers.find((b: any) => b.id === s.feeder).feedsDevices).toEqual([
+      { deviceId: s.ds, name: 'DS-1', kind: 'disconnect' },
+    ]);
+    expect((await c.admin.get('/api/panels')).body.find((p: any) => p.id === s.ldp).fedFrom).toBe('T-1');
+
+    const t1 = (await c.admin.get(`/api/power-devices/${s.t1}`)).body;
+    expect(t1).toMatchObject({ fedFrom: 'DS-1', loads: [expect.objectContaining({ kind: 'panel', name: 'LDP-1' })] });
+    expect(t1.feedChain.map((f: any) => f.kind)).toEqual(['device', 'panel']);
+
+    const map = (await c.admin.get(`/api/locations/${c.hall}/topology`)).body;
+    const edges = map.edges.map((e: any) => `${e.from}>${e.to}`);
+    expect(edges).toEqual(expect.arrayContaining([`p${c.lp}>d${s.ds}`, `d${s.ds}>d${s.t1}`, `d${s.t1}>p${s.ldp}`]));
+    expect(map.nodes.find((n: any) => n.id === `d${s.t1}`)).toMatchObject({
+      kind: 'transformer',
+      href: `/devices/${s.t1}`,
+    });
+
+    // A generator on LP-1 backs LDP-1 through the transformer.
+    await save(c.admin, c.lp, null, { generatorId: c.gen });
+    expect((await c.admin.get(`/api/panels/${s.ldp}`)).body.generator).toMatchObject({ via: { panelName: 'LP-1' } });
+
+    // Search finds equipment by name.
+    expect((await c.admin.get('/api/search?q=T-1')).body.devices).toEqual([
+      expect.objectContaining({ id: s.t1, kind: 'transformer' }),
+    ]);
+  });
+
+  it('refuse loops, feeds on a utility service, and changes without Editor access', async () => {
+    const c = await campus();
+    const s = await stepDown(c);
+    const ldpFeeder = (await save(c.admin, s.ldp, [row('back', 1, { poles: 3, amps: 100 })])).body.idMap.back;
+    const ds = (await c.admin.get(`/api/power-devices/${s.ds}`)).body;
+    const patch = (body: Record<string, unknown>) =>
+      c.admin.req('PATCH', `/api/power-devices/${s.ds}`, { ...ds, ...body });
+    // DS-1 fed from a breaker in LDP-1 (which it feeds), or from T-1 (which it feeds): a loop.
+    expect((await patch({ fedFromBreakerId: ldpFeeder, fedFromDeviceId: null })).status).toBe(400);
+    expect((await patch({ fedFromBreakerId: null, fedFromDeviceId: s.t1 })).status).toBe(400);
+    // LP-1 fed from T-1 would loop too.
+    expect((await save(c.admin, c.lp, null, { fedFromDeviceId: s.t1 })).status).toBe(400);
+    const options = (await c.admin.get(`/api/feed-options?panel=${c.lp}`)).body;
+    expect(options.devices).toEqual([]);
+    expect(options.breakers.some((b: any) => b.panelId === s.ldp)).toBe(false);
+
+    const service = { kind: 'service', name: 'Service 1', locationId: c.hall, amps: 2000, meter: '4471' };
+    expect((await c.admin.post('/api/power-devices', { ...service, fedFromBreakerId: s.feeder })).status).toBe(400);
+    const svc = (await c.admin.post('/api/power-devices', service)).body.id;
+    expect((await c.admin.get('/api/search?q=4471')).body.devices[0]).toMatchObject({
+      id: svc,
+      rating: '2000 A · meter 4471',
+    });
+
+    const viewer = await invite(app, c.admin, c.hall, 'viewer', 'viewer');
+    expect((await viewer.get(`/api/power-devices/${s.t1}`)).body.canEdit).toBe(false);
+    expect((await viewer.post('/api/power-devices', { kind: 'ups', name: 'UPS-1', locationId: c.elec })).status).toBe(
+      403,
+    );
+    expect((await c.admin.del(`/api/locations/${c.elec}`)).status).toBe(409);
+
+    // Deleting a device leaves what it fed with no feed set.
+    expect((await c.admin.del(`/api/power-devices/${s.t1}`)).status).toBe(200);
+    expect((await c.admin.get(`/api/panels/${s.ldp}`)).body).toMatchObject({ fedFromDeviceId: null, feedChain: [] });
+  });
+
+  it('keep panel nameplate details, which a save without them leaves alone', async () => {
+    const c = await campus();
+    const nameplate = {
+      aicKa: 22,
+      busAmps: 400,
+      mounting: 'surface',
+      enclosure: 'NEMA 1',
+      feederWire: '4 #3/0 + #6 G',
+      feederConduit: '2"',
+    };
+    expect((await save(c.admin, c.lp, null, nameplate)).status).toBe(200);
+    expect((await c.admin.get(`/api/panels/${c.lp}`)).body.nameplate).toEqual(nameplate);
+    expect((await save(c.admin, c.lp, null, { notes: 'x' })).status).toBe(200);
+    expect((await c.admin.get(`/api/panels/${c.lp}`)).body.nameplate).toEqual(nameplate);
+    const history = (await c.admin.get(`/api/panels/${c.lp}/history`)).body;
+    expect(history.flatMap((h: any) => h.details)).toContain('Panel AIC rating (kA): none → 22');
+  });
+
+  it('record transfer switch duty and generator fuel', async () => {
+    const c = await campus();
+    const ats = await c.admin.post('/api/transfer-switches', {
+      name: 'Life Safety ATS-1',
+      duty: 'emergency',
+      transition: 'open',
+      priority: 1,
+      generatorId: c.gen,
+      locationId: c.elec,
+    });
+    expect(ats.status).toBe(200);
+    expect((await c.admin.get('/api/transfer-switches')).body[0]).toMatchObject({
+      duty: 'emergency',
+      transition: 'open',
+      priority: 1,
+    });
+    expect(
+      (await c.admin.req('PATCH', `/api/generators/${c.gen}`, { name: 'GEN-1', tankGallons: 500, runtimeHours: 24 }))
+        .status,
+    ).toBe(200);
+    expect((await c.admin.get(`/api/generators/${c.gen}`)).body).toMatchObject({ tankGallons: 500, runtimeHours: 24 });
+    await save(c.admin, c.em1, null, { atsId: ats.body.id });
+    const map = (await c.admin.get(`/api/locations/${c.hall}/topology`)).body;
+    expect(map.nodes.find((n: any) => n.id === `a${ats.body.id}`).detail).toBe('Life safety');
+  });
+});

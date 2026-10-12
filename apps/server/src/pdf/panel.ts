@@ -6,6 +6,7 @@ import {
   columnsFor,
   generatorRating,
   isRelayPanel,
+  nameplateText,
   panelDirectory,
   phaseOf,
   type BreakerDto,
@@ -26,6 +27,7 @@ export function servesText(b: BreakerDto): string {
   for (const r of b.switchedBy) parts.push(`Switched by ${r.panelName} relay ${r.relay}`);
   if (b.hiddenSwitchedBy) parts.push(`Switched by ${b.hiddenSwitchedBy} relay${b.hiddenSwitchedBy === 1 ? '' : 's'}`);
   for (const f of b.feeds) parts.push(`Feeds ${f.panelName}`);
+  for (const d of b.feedsDevices) parts.push(`Feeds ${d.name}`);
   if (b.hiddenFeeds) parts.push(`Feeds ${b.hiddenFeeds} other panel${b.hiddenFeeds === 1 ? '' : 's'}`);
   let hidden = 0;
   for (const s of b.serves) {
@@ -54,6 +56,7 @@ function facts(panel: PanelDetail, pdf: Pdf): string {
     panel.voltage,
     `${panel.spaces} ${relay ? 'relays' : 'spaces'}`,
     [panel.manufacturer, panel.model].filter(Boolean).join(' '),
+    nameplateText(panel.nameplate, panel.mainType === 'lugs' ? null : panel.mainAmps),
     `Updated ${formatDate(panel.updatedAt, pdf.ctx)}`,
   ]
     .filter(Boolean)
@@ -71,6 +74,12 @@ export function generatorText(panel: PanelDetail): string | null {
 function fedText(panel: PanelDetail): string | null {
   const f = panel.feedChain[0];
   if (!f) return null;
+  if (f.kind === 'device') {
+    // A transformer or disconnect: name it, and the breaker above it when there is one.
+    const up = panel.feedChain.find((x) => x.kind === 'panel');
+    const above = up?.kind === 'panel' ? `, fed from ${up.panelName} circuit ${up.circuit} (${up.amps} A)` : '';
+    return `Fed from ${f.name}${f.rating ? ` (${f.rating})` : ''}${above}, in ${f.locationPath}`;
+  }
   const label = f.label ? ` "${f.label}"` : '';
   return `Fed from ${f.panelName}, circuit ${f.circuit}${label} (${f.amps} A), in ${f.locationPath}`;
 }

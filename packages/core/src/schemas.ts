@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { LOCATION_KINDS } from './locations';
 import { BACKUPS, DEVICES, MAIN_TYPES, MAX_SPACES, MIN_SPACES, PANEL_LAYOUTS, PROTECTIONS, SLOTS } from './panel';
 import { ROLES } from './roles';
+import { ATS_DUTIES, ATS_TRANSITIONS, MOUNTINGS, POWER_DEVICE_KINDS } from './devices';
 import { ATS_KINDS, FUELS } from './generator';
 
 export const usernameSchema = z
@@ -134,6 +135,13 @@ export const createPanelSchema = z.object({
   atsId: z.number().int().positive().nullable().default(null),
   /** Relay panels: the lighting control system, e.g. nLight. */
   controlSystem: optionalText(60),
+  /** Nameplate: short-circuit rating (kA), bus rating, mounting, enclosure, feeder wire and conduit. */
+  aicKa: z.number().int().min(1).max(500).nullable().default(null),
+  busAmps: amps.nullable().default(null),
+  mounting: z.enum(MOUNTINGS).default(''),
+  enclosure: optionalText(40),
+  feederWire: optionalText(80),
+  feederConduit: optionalText(40),
 });
 
 export const servesInputSchema = z.object({
@@ -176,11 +184,19 @@ export const savePanelSchema = createPanelSchema.extend({
   version: z.number().int().min(1),
   /** Omit to leave unchanged; null to clear. */
   fedFromBreakerId: z.number().int().positive().nullable().optional(),
+  /** A transformer, disconnect, UPS or service feeding it instead of a breaker. Omit to leave unchanged. */
+  fedFromDeviceId: z.number().int().positive().nullable().optional(),
   /** Omit any of these to leave them as they are. */
   generatorId: z.number().int().positive().nullable().optional(),
   transferSwitch: z.string().trim().max(40).optional(),
   atsId: z.number().int().positive().nullable().optional(),
   controlSystem: z.string().trim().max(60).optional(),
+  aicKa: z.number().int().min(1).max(500).nullable().optional(),
+  busAmps: amps.nullable().optional(),
+  mounting: z.enum(MOUNTINGS).optional(),
+  enclosure: z.string().trim().max(40).optional(),
+  feederWire: z.string().trim().max(80).optional(),
+  feederConduit: z.string().trim().max(40).optional(),
   breakers: z.array(breakerInputSchema).max(MAX_SPACES * 2),
 });
 
@@ -210,6 +226,8 @@ export const generatorInputSchema = z.object({
   manufacturer: optionalText(80),
   model: optionalText(80),
   notes: optionalText(2000),
+  tankGallons: z.number().int().min(1).max(1000000).nullable().default(null),
+  runtimeHours: z.number().min(0.1).max(10000).nullable().default(null),
 });
 
 export type GeneratorInput = z.infer<typeof generatorInputSchema>;
@@ -217,6 +235,9 @@ export type GeneratorInput = z.infer<typeof generatorInputSchema>;
 export const transferSwitchInputSchema = z.object({
   name: z.string().trim().min(1, 'Give the transfer switch a name.').max(80),
   kind: z.enum(ATS_KINDS).default('automatic'),
+  duty: z.enum(ATS_DUTIES).default(''),
+  transition: z.enum(ATS_TRANSITIONS).default(''),
+  priority: z.number().int().min(1).max(99).nullable().default(null),
   amps: z.number().int().min(1).max(10000).nullable().default(null),
   /** The generator on its emergency side. */
   generatorId: z.number().int().positive().nullable().default(null),
@@ -226,3 +247,32 @@ export const transferSwitchInputSchema = z.object({
 });
 
 export type TransferSwitchInput = z.infer<typeof transferSwitchInputSchema>;
+
+// ---- Power devices ----------------------------------------------------------------------
+
+const kva = z.number().min(0.1).max(100000).nullable().default(null);
+
+export const powerDeviceInputSchema = z.object({
+  kind: z.enum(POWER_DEVICE_KINDS),
+  name: z.string().trim().min(1, 'Give it a name, e.g. T-LDP1.').max(80),
+  locationId: z.number().int().positive(),
+  kva,
+  /** Primary (or only) voltage. */
+  voltage: optionalText(40),
+  /** Transformers: secondary voltage. */
+  secondaryVoltage: optionalText(40),
+  amps: amps.nullable().default(null),
+  fused: z.boolean().default(false),
+  fuseAmps: amps.nullable().default(null),
+  runtimeMinutes: z.number().int().min(1).max(100000).nullable().default(null),
+  meter: optionalText(60),
+  utility: optionalText(80),
+  manufacturer: optionalText(80),
+  model: optionalText(80),
+  notes: optionalText(2000),
+  /** What feeds it: a breaker, or another device (one or neither). Omit to leave unchanged. */
+  fedFromBreakerId: z.number().int().positive().nullable().optional(),
+  fedFromDeviceId: z.number().int().positive().nullable().optional(),
+});
+
+export type PowerDeviceInput = z.infer<typeof powerDeviceInputSchema>;

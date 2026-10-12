@@ -1,6 +1,8 @@
 import {
   LAYOUT_LABELS,
+  POWER_DEVICE_LABELS,
   generatorRating,
+  nameplateText,
   type PanelDetail,
   type PanelHistoryItem,
   type SavePanelResponse,
@@ -23,6 +25,7 @@ import { siteOf } from '../panel/serves';
 import {
   addBreaker,
   applyIds,
+  feedKey,
   fromDetail,
   moveBreaker,
   removeBreaker,
@@ -118,7 +121,7 @@ function Editor({
 
   const docRef = useRef(doc);
   const version = useRef(initial.version);
-  const baselineFed = useRef(initial.fedFromBreakerId);
+  const baselineFed = useRef(feedKey(initial));
   const knownIds = useRef(new Set(initial.breakers.map((b) => b.id)));
   const editSeq = useRef(0);
   const saving = useRef(false);
@@ -185,7 +188,7 @@ function Editor({
       const body = toRequest(docRef.current, version.current, baselineFed.current, knownIds.current);
       const res = await api.put<SavePanelResponse>(`/api/panels/${initial.id}`, body);
       version.current = res.panel.version;
-      baselineFed.current = res.panel.fedFromBreakerId;
+      baselineFed.current = feedKey(res.panel);
       knownIds.current = new Set(res.panel.breakers.map((b) => b.id));
       setServer(res.panel);
       const withIds = applyIds(docRef.current, res.idMap);
@@ -308,6 +311,11 @@ function Editor({
                 (doc.mainType === 'lugs' ? ' · main lugs' : ` · ${doc.mainAmps ?? '?'} A main`)}
               {(doc.manufacturer || doc.model) && ` · ${[doc.manufacturer, doc.model].filter(Boolean).join(' ')}`}
             </p>
+            {nameplateText(doc.nameplate, doc.mainType === 'lugs' ? null : doc.mainAmps) && (
+              <p className="muted small nameplate">
+                {nameplateText(doc.nameplate, doc.mainType === 'lugs' ? null : doc.mainAmps)}
+              </p>
+            )}
             <PowerStrip panel={server} flowHref={flowHref} />
           </div>
           <div className="toolbar">
@@ -439,8 +447,9 @@ function Editor({
                 server.breakers.map((b) => [
                   b.id,
                   [
+                    ...b.feedsDevices.map((d) => d.name),
                     ...b.feeds.map((f) => f.panelName),
-                    ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more panel${b.hiddenFeeds === 1 ? '' : 's'}`] : []),
+                    ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more`] : []),
                   ],
                 ]),
               )
@@ -505,6 +514,9 @@ function PowerStrip({ panel, flowHref }: { panel: PanelDetail; flowHref: string 
   const g = panel.generator;
   const relay = panel.layout === 'relay';
   const notSet = chain.length === 0 && panel.mainType === 'lugs' && !relay;
+  // A utility service at the top is the start of the chain itself.
+  const top = chain[0];
+  const fromService = top?.kind === 'device' && top.deviceKind === 'service';
   return (
     <div className="power-strip">
       {!(relay && chain.length === 0) && (
@@ -512,23 +524,40 @@ function PowerStrip({ panel, flowHref }: { panel: PanelDetail; flowHref: string 
           {notSet ? (
             <li className="ps-chip ps-warn">Fed from: not set yet (Panel settings → Fed from)</li>
           ) : (
-            <li className="ps-chip ps-utility">
-              <NodeIcon kind="utility" size={16} />
-              Utility
-            </li>
+            !fromService && (
+              <li className="ps-chip ps-utility">
+                <NodeIcon kind="utility" size={16} />
+                Utility
+              </li>
+            )
           )}
-          {chain.map((f) => (
-            <li key={f.breakerId} className="ps-chip">
-              <NodeIcon kind={f.canView ? 'panel' : 'hidden'} size={16} />
-              {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>}
-              <span className="ps-ckt" title={`${f.label || 'Unlabelled'} · in ${f.locationPath}`}>
-                {f.circuit} · {f.amps}A
-              </span>
-            </li>
-          ))}
+          {chain.map((f) =>
+            f.kind === 'device' ? (
+              <li key={`d${f.deviceId}`} className={`ps-chip ps-${f.deviceKind}`}>
+                <NodeIcon kind={f.deviceKind} size={16} />
+                {f.canView ? <Link to={`/devices/${f.deviceId}`}>{f.name}</Link> : <strong>{f.name}</strong>}
+                {f.rating && (
+                  <span className="ps-ckt" title={`${POWER_DEVICE_LABELS[f.deviceKind]} in ${f.locationPath}`}>
+                    {f.rating}
+                  </span>
+                )}
+              </li>
+            ) : (
+              <li key={f.breakerId} className="ps-chip">
+                <NodeIcon kind={f.canView ? 'panel' : 'hidden'} size={16} />
+                {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>}
+                <span className="ps-ckt" title={`${f.label || 'Unlabelled'} · in ${f.locationPath}`}>
+                  {f.circuit} · {f.amps}A
+                </span>
+              </li>
+            ),
+          )}
           <li className="ps-chip ps-here" aria-current="true">
             <NodeIcon kind={relay ? 'relay' : 'panel'} size={16} />
             {panel.name}
+            {panel.voltage && chain.some((f) => f.kind === 'device' && f.deviceKind === 'transformer') && (
+              <span className="ps-ckt">{panel.voltage}</span>
+            )}
           </li>
         </ol>
       )}

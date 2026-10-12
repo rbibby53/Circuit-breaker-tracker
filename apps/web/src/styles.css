@@ -24,6 +24,9 @@
   --ats: #7a4fd0;
   --relay: #0f766e;
   --flow: #2f6fdb;
+  --xfmr: #2563eb;
+  --disc: #57534e;
+  --ups: #16a34a;
   --radius: 6px;
   --font: 'Archivo Variable', 'Archivo', 'Helvetica Neue', Arial, sans-serif;
   --mono: 'JetBrains Mono', ui-monospace, Menlo, monospace;
@@ -54,6 +57,9 @@
     --ats: #b69cf5;
     --relay: #2dd4bf;
     --flow: #7fb0ff;
+    --xfmr: #7fb0ff;
+    --disc: #c3c8cc;
+    --ups: #6ee7a0;
     color-scheme: dark;
   }
 }
@@ -81,6 +87,9 @@
   --ats: #b69cf5;
   --relay: #2dd4bf;
   --flow: #7fb0ff;
+  --xfmr: #7fb0ff;
+  --disc: #c3c8cc;
+  --ups: #6ee7a0;
   color-scheme: dark;
 }
 
@@ -2804,4 +2813,89 @@ code {
 /* A hint under a field, outside its label so it is not part of the field's name. */
 .field-note {
   margin: -8px 0 0;
+}
+
+/* Transformers and other equipment: colours for the map, the power strip and cards. */
+.pf-transformer .pf-stripe,
+.pf-transformer .pf-icon {
+  fill: var(--xfmr);
+  color: var(--xfmr);
+}
+.pf-disconnect .pf-stripe,
+.pf-disconnect .pf-icon {
+  fill: var(--disc);
+  color: var(--disc);
+}
+.pf-ups .pf-stripe,
+.pf-ups .pf-icon {
+  fill: var(--ups);
+  color: var(--ups);
+}
+.pf-service .pf-stripe {
+  fill: var(--ink);
+}
+.pf-transformer .pf-icon,
+.pf-disconnect .pf-icon,
+.pf-ups .pf-icon,
+.pf-service .pf-icon {
+  fill: none;
+}
+.pf-service .pf-card {
+  fill: var(--surface-2);
+}
+.pf-list li.pf-transformer .pf-list-icon {
+  color: var(--xfmr);
+}
+.pf-list li.pf-ups .pf-list-icon {
+  color: var(--ups);
+}
+.ps-transformer {
+  border-color: var(--xfmr);
+}
+.ps-transformer svg {
+  color: var(--xfmr);
+}
+.ps-ups svg {
+  color: var(--ups);
+}
+.device-icon.dev-transformer {
+  background: var(--xfmr);
+}
+.device-icon.dev-disconnect {
+  background: var(--disc);
+}
+.device-icon.dev-ups {
+  background: var(--ups);
+}
+.device-icon.dev-service {
+  background: var(--ink);
+}
+.device-icon svg {
+  width: 26px;
+  height: 26px;
+}
+.gen-icon svg {
+  width: 26px;
+  height: 26px;
+}
+.field-check {
+  align-self: end;
+  min-height: 42px;
+  align-items: center;
+}
+.badge-duty {
+  margin-left: 6px;
+  background: var(--surface-2);
+  color: var(--ink);
+  box-shadow: inset 0 0 0 1px var(--line-strong);
+}
+.badge-duty.duty-emergency {
+  background: var(--danger);
+  color: var(--surface);
+  box-shadow: none;
+}
+.badge-duty.duty-legally-required {
+  background: var(--gen);
+  color: var(--surface);
+  box-shadow: none;
 }

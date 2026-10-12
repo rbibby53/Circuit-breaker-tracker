@@ -79,7 +79,8 @@ export function PublicPanelPage() {
               </p>
               {panel.data.fedFrom && (
                 <p className="small muted">
-                  Fed from {panel.data.fedFrom.panelName}, circuit {panel.data.fedFrom.circuit}
+                  Fed from {panel.data.fedFrom.panelName}
+                  {panel.data.fedFrom.circuit && `, circuit ${panel.data.fedFrom.circuit}`}
                 </p>
               )}
               {panel.data.notes && <p className="notes">{panel.data.notes}</p>}

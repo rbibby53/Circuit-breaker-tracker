@@ -7,7 +7,15 @@ import {
   pathIds,
   positionsOf,
   visibleLocations,
+  deviceRating,
+  outputVoltage,
   type Actor,
+  type AtsDuty,
+  type AtsTransition,
+  type Mounting,
+  type PanelNameplate,
+  type PowerDeviceKind,
+  type PowerDeviceShape,
   type Backup,
   type BreakerDto,
   type Device,
@@ -42,6 +50,13 @@ export interface PanelRow {
   transfer_switch: string;
   control_system: string;
   ats_id: number | null;
+  fed_from_device_id: number | null;
+  aic_ka: number | null;
+  bus_amps: number | null;
+  mounting: Mounting;
+  enclosure: string;
+  feeder_wire: string;
+  feeder_conduit: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -76,6 +91,8 @@ export interface GeneratorRow {
   manufacturer: string;
   model: string;
   notes: string;
+  tank_gallons: number | null;
+  runtime_hours: number | null;
   created_at: string;
   updated_at: string;
 }
@@ -88,6 +105,9 @@ export interface TransferSwitchRow {
   location_id: number;
   name: string;
   kind: 'automatic' | 'manual';
+  duty: AtsDuty;
+  transition: AtsTransition;
+  priority: number | null;
   amps: number | null;
   generator_id: number | null;
   notes: string;
@@ -97,6 +117,100 @@ export interface TransferSwitchRow {
 
 export const getTransferSwitch = (db: DB, id: number) =>
   db.prepare('SELECT * FROM transfer_switches WHERE id = ?').get(id) as TransferSwitchRow | undefined;
+
+/** A transformer, disconnect, UPS or utility service. */
+export interface DeviceRow {
+  id: number;
+  location_id: number;
+  kind: PowerDeviceKind;
+  name: string;
+  kva: number | null;
+  voltage: string;
+  secondary_voltage: string;
+  amps: number | null;
+  fused: number;
+  fuse_amps: number | null;
+  runtime_minutes: number | null;
+  meter: string;
+  utility: string;
+  manufacturer: string;
+  model: string;
+  notes: string;
+  fed_from_breaker_id: number | null;
+  fed_from_device_id: number | null;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getDevice = (db: DB, id: number) =>
+  db.prepare('SELECT * FROM power_devices WHERE id = ?').get(id) as DeviceRow | undefined;
+
+export const allDevices = (db: DB) =>
+  db.prepare('SELECT * FROM power_devices ORDER BY name COLLATE NOCASE').all() as DeviceRow[];
+
+export const deviceShape = (d: DeviceRow): PowerDeviceShape => ({
+  kind: d.kind,
+  kva: d.kva,
+  voltage: d.voltage,
+  secondaryVoltage: d.secondary_voltage,
+  amps: d.amps,
+  fused: !!d.fused,
+  fuseAmps: d.fuse_amps,
+  runtimeMinutes: d.runtime_minutes,
+  meter: d.meter,
+});
+
+/** What feeds a panel or device: a breaker, a device, or nothing. */
+export interface FeedRef {
+  breakerId: number | null;
+  deviceId: number | null;
+}
+export const panelFeed = (p: PanelRow): FeedRef => ({
+  breakerId: p.fed_from_breaker_id,
+  deviceId: p.fed_from_device_id,
+});
+export const deviceFeed = (d: DeviceRow): FeedRef => ({
+  breakerId: d.fed_from_breaker_id,
+  deviceId: d.fed_from_device_id,
+});
+
+export type UpStep = { kind: 'breaker'; breaker: BreakerRow; panel: PanelRow } | { kind: 'device'; device: DeviceRow };
+
+/**
+ * Everything above a feed, nearest first: each breaker with the panel it sits in, and the
+ * transformers, disconnects and UPSs in between. Stops at a loop or the top.
+ */
+export function upstream(db: DB, feed: FeedRef, start: { panelId?: number; deviceId?: number } = {}): UpStep[] {
+  const out: UpStep[] = [];
+  const panels = new Set<number>(start.panelId ? [start.panelId] : []);
+  const devices = new Set<number>(start.deviceId ? [start.deviceId] : []);
+  let next: FeedRef = feed;
+  while (out.length < MAX_CHAIN) {
+    if (next.breakerId) {
+      const breaker = getBreaker(db, next.breakerId);
+      const panel = breaker ? getPanel(db, breaker.panel_id) : undefined;
+      if (!breaker || !panel || panels.has(panel.id)) break;
+      panels.add(panel.id);
+      out.push({ kind: 'breaker', breaker, panel });
+      next = panelFeed(panel);
+    } else if (next.deviceId) {
+      const device = getDevice(db, next.deviceId);
+      if (!device || devices.has(device.id)) break;
+      devices.add(device.id);
+      out.push({ kind: 'device', device });
+      next = deviceFeed(device);
+    } else break;
+  }
+  return out;
+}
+
+/** True when the feed comes from (or through) the given panel or device: feeding it would loop. */
+export function feedReaches(db: DB, feed: FeedRef, target: { panelId?: number; deviceId?: number }): boolean {
+  if (target.deviceId && feed.deviceId === target.deviceId) return true;
+  return upstream(db, feed).some((s) =>
+    s.kind === 'breaker' ? s.panel.id === target.panelId : s.device.id === target.deviceId,
+  );
+}
 
 export interface ServesRow {
   breaker_id: number;
@@ -148,6 +262,8 @@ export function setTags(db: DB, breakerId: number, tags: string[]): void {
   for (const t of cleanTags(tags)) insert.run(breakerId, t);
 }
 
+const MAX_CHAIN = 50;
+
 export const allPanels = (db: DB) =>
   db.prepare('SELECT * FROM panels ORDER BY name COLLATE NOCASE').all() as PanelRow[];
 
@@ -164,34 +280,47 @@ export function siteOf(access: AccessData, locationId: number): number | null {
   return null;
 }
 
-const MAX_CHAIN = 50;
+/** Feed-chain links for the steps above a panel or device, as the viewer may see them. */
+export function chainLinks(actor: Actor, access: AccessData, steps: UpStep[]): FeedLink[] {
+  return steps.map((s): FeedLink => {
+    if (s.kind === 'device') {
+      const node = access.node(s.device.location_id);
+      return {
+        kind: 'device',
+        deviceId: s.device.id,
+        deviceKind: s.device.kind,
+        name: s.device.name,
+        rating: deviceRating(deviceShape(s.device)),
+        voltage: outputVoltage({
+          kind: s.device.kind,
+          voltage: s.device.voltage,
+          secondaryVoltage: s.device.secondary_voltage,
+        }),
+        locationPath: access.pathLabel(s.device.location_id),
+        canView: !!node && canView(actor, node, access.grants),
+      };
+    }
+    return {
+      kind: 'panel',
+      panelId: s.panel.id,
+      panelName: s.panel.name,
+      locationPath: access.pathLabel(s.panel.location_id),
+      breakerId: s.breaker.id,
+      circuit: circuitLabel(s.panel, s.breaker),
+      label: s.breaker.label,
+      amps: s.breaker.amps,
+      canView: canViewPanel(actor, access, s.panel),
+      voltage: s.panel.voltage,
+    };
+  });
+}
 
 /**
  * The chain of feeders above a panel, nearest first. Everyone who can see the panel sees
  * this summary, even for upstream panels they cannot open.
  */
 export function feedChain(db: DB, actor: Actor, access: AccessData, panel: PanelRow): FeedLink[] {
-  const out: FeedLink[] = [];
-  const seen = new Set<number>([panel.id]);
-  let feederId = panel.fed_from_breaker_id;
-  while (feederId && out.length < MAX_CHAIN) {
-    const breaker = getBreaker(db, feederId);
-    const up = breaker ? getPanel(db, breaker.panel_id) : undefined;
-    if (!breaker || !up || seen.has(up.id)) break;
-    seen.add(up.id);
-    out.push({
-      panelId: up.id,
-      panelName: up.name,
-      locationPath: access.pathLabel(up.location_id),
-      breakerId: breaker.id,
-      circuit: circuitLabel(up, breaker),
-      label: breaker.label,
-      amps: breaker.amps,
-      canView: canViewPanel(actor, access, up),
-    });
-    feederId = up.fed_from_breaker_id;
-  }
-  return out;
+  return chainLinks(actor, access, upstream(db, panelFeed(panel), { panelId: panel.id }));
 }
 
 /**
@@ -202,10 +331,12 @@ export function generatorFor(
   db: DB,
   panel: PanelRow,
 ): { generator: GeneratorRow; transferSwitch: string; ats: TransferSwitchRow | null; via: PanelRow | null } | null {
-  let current: PanelRow | undefined = panel;
-  const seen = new Set<number>();
-  while (current && !seen.has(current.id) && seen.size < MAX_CHAIN) {
-    seen.add(current.id);
+  // This panel, then each panel above it (through any transformers or disconnects).
+  const chain = [
+    panel,
+    ...upstream(db, panelFeed(panel), { panelId: panel.id }).flatMap((s) => (s.kind === 'breaker' ? [s.panel] : [])),
+  ];
+  for (const current of chain) {
     const via = current.id === panel.id ? null : current;
     // On a transfer switch: its generator. Otherwise a generator linked to the panel directly.
     const ats = current.ats_id ? getTransferSwitch(db, current.ats_id) : undefined;
@@ -217,25 +348,15 @@ export function generatorFor(
       const generator = getGenerator(db, current.generator_id);
       if (generator) return { generator, transferSwitch: current.transfer_switch, ats: null, via };
     }
-    const feeder: BreakerRow | undefined = current.fed_from_breaker_id
-      ? getBreaker(db, current.fed_from_breaker_id)
-      : undefined;
-    current = feeder ? getPanel(db, feeder.panel_id) : undefined;
   }
   return null;
 }
 
 /** True when `candidatePanelId` is `panelId` itself or anywhere downstream of it. */
 export function isDownstream(db: DB, panelId: number, candidatePanelId: number): boolean {
-  let current = getPanel(db, candidatePanelId);
-  const seen = new Set<number>();
-  while (current && !seen.has(current.id)) {
-    if (current.id === panelId) return true;
-    seen.add(current.id);
-    const feeder = current.fed_from_breaker_id ? getBreaker(db, current.fed_from_breaker_id) : undefined;
-    current = feeder ? getPanel(db, feeder.panel_id) : undefined;
-  }
-  return false;
+  if (panelId === candidatePanelId) return true;
+  const candidate = getPanel(db, candidatePanelId);
+  return !!candidate && feedReaches(db, panelFeed(candidate), { panelId });
 }
 
 export function panelSummary(db: DB, actor: Actor, access: AccessData, panel: PanelRow): PanelSummary {
@@ -244,6 +365,7 @@ export function panelSummary(db: DB, actor: Actor, access: AccessData, panel: Pa
   for (const b of breakers) for (const p of positionsOf(panel, b)) used.add(p);
   const feeder = panel.fed_from_breaker_id ? getBreaker(db, panel.fed_from_breaker_id) : undefined;
   const feederPanel = feeder ? getPanel(db, feeder.panel_id) : undefined;
+  const feederDevice = panel.fed_from_device_id ? getDevice(db, panel.fed_from_device_id) : undefined;
   return {
     id: panel.id,
     locationId: panel.location_id,
@@ -256,7 +378,10 @@ export function panelSummary(db: DB, actor: Actor, access: AccessData, panel: Pa
     usedSpaces: used.size,
     breakerCount: breakers.length,
     criticalCount: breakers.filter((b) => b.critical).length,
-    fedFrom: feeder && feederPanel ? `${feederPanel.name} · ${circuitLabel(feederPanel, feeder)}` : null,
+    fedFrom:
+      feeder && feederPanel
+        ? `${feederPanel.name} · ${circuitLabel(feederPanel, feeder)}`
+        : (feederDevice?.name ?? null),
     generatorName: generatorFor(db, panel)?.generator.name ?? null,
     controlSystem: panel.control_system,
     role: effectiveRole(actor, access.node(panel.location_id)!, access.grants)!,
@@ -278,6 +403,12 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     .prepare(`SELECT p.* FROM panels p JOIN breakers b ON b.id = p.fed_from_breaker_id WHERE b.panel_id = ?`)
     .all(panel.id) as PanelRow[];
   const role = effectiveRole(actor, access.node(panel.location_id)!, access.grants)!;
+  const fedDevices = db
+    .prepare(
+      `SELECT d.* FROM power_devices d JOIN breakers b ON b.id = d.fed_from_breaker_id
+        WHERE b.panel_id = ? ORDER BY d.name COLLATE NOCASE`,
+    )
+    .all(panel.id) as DeviceRow[];
 
   // Relays in other panels that switch these breakers' circuits.
   const ids = breakers.map((b) => b.id);
@@ -350,7 +481,13 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
         }),
       tags: tags.filter((t) => t.breaker_id === b.id).map((t) => t.tag),
       feeds: shown.map((p) => ({ panelId: p.id, panelName: p.name })),
-      hiddenFeeds: feeds.length - shown.length,
+      feedsDevices: fedDevices
+        .filter((d) => d.fed_from_breaker_id === b.id && canSeeLocation(d.location_id))
+        .map((d) => ({ deviceId: d.id, name: d.name, kind: d.kind })),
+      hiddenFeeds:
+        feeds.length -
+        shown.length +
+        fedDevices.filter((d) => d.fed_from_breaker_id === b.id && !canSeeLocation(d.location_id)).length,
       sourceBreakerId: b.source_breaker_id,
       source: sourceOf(b),
       control: b.control,
@@ -372,7 +509,9 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
         kw: backing.generator.kw,
         fuel: backing.generator.fuel,
         transferSwitch: backing.transferSwitch,
-        ats: backing.ats ? { id: backing.ats.id, name: backing.ats.name, kind: backing.ats.kind } : null,
+        ats: backing.ats
+          ? { id: backing.ats.id, name: backing.ats.name, kind: backing.ats.kind, duty: backing.ats.duty }
+          : null,
         via: backing.via ? { panelId: backing.via.id, panelName: backing.via.name } : null,
         canView: canSeeLocation(backing.generator.location_id),
       }
@@ -398,6 +537,8 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     breakers: breakers.map(dto),
     feedChain: feedChain(db, actor, access, panel),
     fedFromBreakerId: panel.fed_from_breaker_id,
+    fedFromDeviceId: panel.fed_from_device_id,
+    nameplate: nameplateOf(panel),
     publicPath: panel.public_token ? `/p/${panel.public_token}` : null,
     canShare: role === 'admin' || role === 'manager',
     generatorId: panel.generator_id,
@@ -407,6 +548,15 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     generator,
   };
 }
+
+export const nameplateOf = (p: PanelRow): PanelNameplate => ({
+  aicKa: p.aic_ka ?? null,
+  busAmps: p.bus_amps ?? null,
+  mounting: p.mounting ?? '',
+  enclosure: p.enclosure ?? '',
+  feederWire: p.feeder_wire ?? '',
+  feederConduit: p.feeder_conduit ?? '',
+});
 
 /** A plain snapshot used for change detection and history. */
 export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: ServesRow[], tags: TagRow[] = []) {
@@ -424,6 +574,8 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
     transferSwitch: panel.transfer_switch ?? '',
     controlSystem: panel.control_system ?? '',
     atsId: panel.ats_id ?? null,
+    fedFromDeviceId: panel.fed_from_device_id ?? null,
+    ...nameplateOf(panel),
     breakers: breakers
       .map((b) => ({
         id: b.id,
@@ -469,6 +621,13 @@ const PANEL_FIELDS: [keyof Snapshot, string][] = [
   ['transferSwitch', 'transfer switch'],
   ['controlSystem', 'control system'],
   ['atsId', 'transfer switch'],
+  ['fedFromDeviceId', 'fed from'],
+  ['aicKa', 'AIC rating (kA)'],
+  ['busAmps', 'bus rating'],
+  ['mounting', 'mounting'],
+  ['enclosure', 'enclosure'],
+  ['feederWire', 'feeder wire'],
+  ['feederConduit', 'feeder conduit'],
 ];
 
 const BREAKER_FIELDS = [
@@ -501,7 +660,7 @@ export function describeChanges(
   for (const [k, label] of PANEL_FIELDS) {
     if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) {
       lines.push(
-        k === 'notes' || k === 'fedFromBreakerId' || k === 'generatorId' || k === 'atsId'
+        k === 'notes' || k === 'fedFromBreakerId' || k === 'fedFromDeviceId' || k === 'generatorId' || k === 'atsId'
           ? `Panel ${label} changed`
           : `Panel ${label}: ${shown(before[k])} → ${shown(after[k])}`,
       );

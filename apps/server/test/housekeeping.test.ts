@@ -91,6 +91,7 @@ describe('search', () => {
       locations: [],
       panels: [],
       generators: [],
+      devices: [],
       breakers: [],
     });
     const smoke = (await guest.get('/api/search?q=smoke')).body.breakers;

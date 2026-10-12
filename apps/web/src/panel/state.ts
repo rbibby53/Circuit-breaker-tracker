@@ -8,6 +8,7 @@ import {
   type MainType,
   type PanelDetail,
   type PanelLayout,
+  type PanelNameplate,
   type Protection,
   type Slot,
 } from '@cbt/core';
@@ -53,6 +54,9 @@ export interface EditPanel {
   model: string;
   notes: string;
   fedFromBreakerId: number | null;
+  /** A transformer, disconnect, UPS or service feeding it instead of a breaker. */
+  fedFromDeviceId: number | null;
+  nameplate: PanelNameplate;
   generatorId: number | null;
   transferSwitch: string;
   controlSystem: string;
@@ -75,6 +79,8 @@ export function fromDetail(p: PanelDetail): EditPanel {
     model: p.model,
     notes: p.notes,
     fedFromBreakerId: p.fedFromBreakerId,
+    fedFromDeviceId: p.fedFromDeviceId,
+    nameplate: { ...p.nameplate },
     generatorId: p.generatorId,
     transferSwitch: p.transferSwitch,
     controlSystem: p.controlSystem,
@@ -101,11 +107,15 @@ export function fromDetail(p: PanelDetail): EditPanel {
   };
 }
 
+/** What feeds a panel, as one comparable value. */
+export const feedKey = (p: { fedFromBreakerId: number | null; fedFromDeviceId: number | null }) =>
+  `${p.fedFromBreakerId ?? ''}:${p.fedFromDeviceId ?? ''}`;
+
 /**
- * The save request body. `fedFromBreakerId` is only sent when it changed. Ids the server no
+ * The save request body. The feed is only sent when it changed. Ids the server no
  * longer has (a breaker brought back by undo after being deleted) are sent as new breakers.
  */
-export function toRequest(doc: EditPanel, version: number, baselineFedFrom: number | null, knownIds: Set<number>) {
+export function toRequest(doc: EditPanel, version: number, baselineFeed: string, knownIds: Set<number>) {
   const breakers: BreakerInput[] = doc.breakers.map((b) => ({
     id: b.id !== undefined && knownIds.has(b.id) ? b.id : undefined,
     clientKey: b.key,
@@ -139,9 +149,12 @@ export function toRequest(doc: EditPanel, version: number, baselineFedFrom: numb
     transferSwitch: doc.transferSwitch,
     controlSystem: doc.controlSystem,
     atsId: doc.atsId,
+    ...doc.nameplate,
     version,
     breakers,
-    ...(doc.fedFromBreakerId !== baselineFedFrom ? { fedFromBreakerId: doc.fedFromBreakerId } : {}),
+    ...(feedKey(doc) !== baselineFeed
+      ? { fedFromBreakerId: doc.fedFromBreakerId, fedFromDeviceId: doc.fedFromDeviceId }
+      : {}),
   };
 }
 

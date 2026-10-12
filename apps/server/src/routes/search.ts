@@ -1,8 +1,17 @@
-import { canView, circuitLabel, visibleLocations, type SearchResponse, type TagCount } from '@cbt/core';
+import { canView, circuitLabel, deviceRating, visibleLocations, type SearchResponse, type TagCount } from '@cbt/core';
 import type { FastifyInstance } from 'fastify';
 import { actorOf, requireAuth } from '../context';
 import type { DB } from '../db';
-import { allPanels, canViewPanel, tagsOf, type BreakerRow, type GeneratorRow, type PanelRow } from '../panels';
+import {
+  allPanels,
+  canViewPanel,
+  deviceShape,
+  tagsOf,
+  type BreakerRow,
+  type DeviceRow,
+  type GeneratorRow,
+  type PanelRow,
+} from '../panels';
 import { AccessData } from '../repo';
 
 const LIMIT = 8;
@@ -21,7 +30,7 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
     const auth = requireAuth(req);
     const actor = actorOf(auth);
     const q = String((req.query as { q?: string }).q ?? '').trim();
-    if (q.length < 2) return { locations: [], panels: [], generators: [], breakers: [] };
+    if (q.length < 2) return { locations: [], panels: [], generators: [], devices: [], breakers: [] };
     const pattern = like(q);
     const access = new AccessData(db);
     const visible = visibleLocations(actor, [...access.nodes.values()], access.grants);
@@ -48,6 +57,22 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
       .filter((g) => visible.get(g.location_id)?.access === 'full')
       .slice(0, LIMIT)
       .map((g) => ({ id: g.id, name: g.name, path: access.pathLabel(g.location_id) }));
+
+    // Transformers, disconnects, UPSs and services by name or meter number.
+    const devices = (
+      db
+        .prepare("SELECT * FROM power_devices WHERE name LIKE ? ESCAPE '\\' OR meter LIKE ? ESCAPE '\\' ORDER BY name")
+        .all(pattern, pattern) as DeviceRow[]
+    )
+      .filter((d) => visible.get(d.location_id)?.access === 'full')
+      .slice(0, LIMIT)
+      .map((d) => ({
+        id: d.id,
+        name: d.name,
+        kind: d.kind,
+        rating: deviceRating(deviceShape(d)),
+        path: access.pathLabel(d.location_id),
+      }));
 
     // Breakers matching by tag, label or notes, or serving a matching place. Tags come first:
     // searching "servers" should list every breaker tagged Servers.
@@ -103,7 +128,7 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
     for (const b of byText) add(b, null);
     for (const b of byPlace) add(b, access.byId.get(b.served)?.name ?? null);
 
-    return { locations, panels, generators, breakers };
+    return { locations, panels, generators, devices, breakers };
   });
 
   /** Tags on breakers the person can see, most used first, for suggestions and filters. */

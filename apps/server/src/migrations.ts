@@ -335,4 +335,56 @@ export const MIGRATIONS: string[] = [
          transfer_switch = ''
    WHERE generator_id IS NOT NULL AND transfer_switch != '';
   `,
+  `
+  -- Power devices between a breaker and what it feeds: transformers (the 480 V to 208 V step),
+  -- disconnects, UPSs, and the utility service and meter at the top. Each is fed from a breaker
+  -- or from another device; panels can be fed from one too.
+  CREATE TABLE power_devices (
+    id                  INTEGER PRIMARY KEY,
+    location_id         INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    kind                TEXT NOT NULL CHECK (kind IN ('transformer', 'disconnect', 'ups', 'service')),
+    name                TEXT NOT NULL,
+    kva                 REAL,
+    voltage             TEXT NOT NULL DEFAULT '',
+    secondary_voltage   TEXT NOT NULL DEFAULT '',
+    amps                INTEGER,
+    fused               INTEGER NOT NULL DEFAULT 0,
+    fuse_amps           INTEGER,
+    runtime_minutes     INTEGER,
+    meter               TEXT NOT NULL DEFAULT '',
+    utility             TEXT NOT NULL DEFAULT '',
+    manufacturer        TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT '',
+    fed_from_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    fed_from_device_id  INTEGER REFERENCES power_devices (id) ON DELETE SET NULL,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+  );
+  CREATE INDEX power_devices_location ON power_devices (location_id);
+  CREATE INDEX power_devices_fed_breaker ON power_devices (fed_from_breaker_id);
+  CREATE INDEX power_devices_fed_device ON power_devices (fed_from_device_id);
+  ALTER TABLE panels ADD COLUMN fed_from_device_id INTEGER REFERENCES power_devices (id) ON DELETE SET NULL;
+  CREATE INDEX panels_fed_device ON panels (fed_from_device_id);
+
+  -- Nameplate details from panel schedules.
+  ALTER TABLE panels ADD COLUMN aic_ka INTEGER;
+  ALTER TABLE panels ADD COLUMN bus_amps INTEGER;
+  ALTER TABLE panels ADD COLUMN mounting TEXT NOT NULL DEFAULT '';
+  ALTER TABLE panels ADD COLUMN enclosure TEXT NOT NULL DEFAULT '';
+  ALTER TABLE panels ADD COLUMN feeder_wire TEXT NOT NULL DEFAULT '';
+  ALTER TABLE panels ADD COLUMN feeder_conduit TEXT NOT NULL DEFAULT '';
+
+  -- Transfer switch duty (NEC 700 emergency, 701 legally required, 702 optional standby),
+  -- transition, and the order loads come back on.
+  ALTER TABLE transfer_switches ADD COLUMN duty TEXT NOT NULL DEFAULT ''
+    CHECK (duty IN ('', 'emergency', 'legally-required', 'optional'));
+  ALTER TABLE transfer_switches ADD COLUMN transition TEXT NOT NULL DEFAULT ''
+    CHECK (transition IN ('', 'open', 'closed', 'delayed'));
+  ALTER TABLE transfer_switches ADD COLUMN priority INTEGER;
+
+  -- Generator fuel tank and runtime at load.
+  ALTER TABLE generators ADD COLUMN tank_gallons INTEGER;
+  ALTER TABLE generators ADD COLUMN runtime_hours REAL;
+  `,
 ];

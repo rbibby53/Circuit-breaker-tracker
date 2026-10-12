@@ -12,6 +12,7 @@ import { ErrorNote, Field } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { useLocations, usePanels } from '../queries';
 import { ancestry, buildTree, hiddenBuilding, shownChildren, type TreeNode } from '../tree';
+import { AddDeviceForm, DevicesHere } from './Devices';
 import { AddGeneratorForm, GeneratorsHere } from './Generators';
 import { AddPanelForm, PanelsHere, ServedBy } from './SitePanels';
 
@@ -267,6 +268,7 @@ function LocationView({
 
       <PanelsHere node={node} byId={byId} />
       <GeneratorsHere node={node} byId={byId} />
+      <DevicesHere node={node} byId={byId} />
       {node.kind === 'room' && canEdit && (
         <AddPanelForm
           key={node.id}
@@ -278,6 +280,7 @@ function LocationView({
       {canEdit && (addKinds.length > 0 || node.kind !== 'company') && (
         <div className="add-actions">
           {node.kind !== 'company' && <AddGeneratorForm key={`gen-${node.id}`} locationId={node.id} />}
+          {node.kind !== 'company' && <AddDeviceForm key={`dev-${node.id}`} locationId={node.id} />}
           {addKinds.map((k) => (
             <AddForm
               key={`${node.id}-${k}`}

@@ -58,6 +58,7 @@ export function breakerRows(panel: PanelDetail): (string | number | boolean | nu
     ].join('; ');
     const feeds = [
       ...b.feeds.map((f) => f.panelName),
+      ...b.feedsDevices.map((d) => d.name),
       ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more not shown`] : []),
     ].join('; ');
     return [

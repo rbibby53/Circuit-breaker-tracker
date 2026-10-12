@@ -63,6 +63,7 @@ export function Inspector({
   const groups = servesByFloor(byId, b.serves);
   const hidden = b.serves.filter((s) => s.hidden || !byId.has(s.locationId)).length;
   const feeds = server?.feeds ?? [];
+  const feedsDevices = server?.feedsDevices ?? [];
   const allSizes: { value: Size; label: string; disabled?: string }[] = [
     { value: '1', label: '1-pole' },
     { value: '2', label: '2-pole' },
@@ -135,7 +136,7 @@ export function Inspector({
             {hidden > 0 && ` (+${hidden} outside your access)`}
           </dd>
         </dl>
-        {feeds.length > 0 && <FeedsNote feeds={feeds} />}
+        {(feeds.length > 0 || feedsDevices.length > 0) && <FeedsNote feeds={feeds} devices={feedsDevices} />}
         {server && <SwitchedByNote breaker={server} />}
         {b.notes && <p className="notes">{b.notes}</p>}
       </aside>
@@ -363,7 +364,7 @@ export function Inspector({
         <textarea rows={2} value={b.notes} onChange={(e) => onPatch({ notes: e.target.value }, `notes:${b.key}`)} />
       </label>
 
-      {feeds.length > 0 && <FeedsNote feeds={feeds} />}
+      {(feeds.length > 0 || feedsDevices.length > 0) && <FeedsNote feeds={feeds} devices={feedsDevices} />}
       {server && <SwitchedByNote breaker={server} />}
 
       <button
@@ -387,14 +388,18 @@ export function Inspector({
   );
 }
 
-function FeedsNote({ feeds }: { feeds: BreakerDto['feeds'] }) {
+function FeedsNote({ feeds, devices = [] }: { feeds: BreakerDto['feeds']; devices?: BreakerDto['feedsDevices'] }) {
+  const links = [
+    ...devices.map((d) => ({ key: `d${d.deviceId}`, to: `/devices/${d.deviceId}`, name: d.name })),
+    ...feeds.map((f) => ({ key: `p${f.panelId}`, to: `/panels/${f.panelId}`, name: f.panelName })),
+  ];
   return (
     <p className="feeds-note">
       Feeds{' '}
-      {feeds.map((f, i) => (
-        <span key={f.panelId}>
+      {links.map((l, i) => (
+        <span key={l.key}>
           {i > 0 && ', '}
-          <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link>
+          <Link to={l.to}>{l.name}</Link>
         </span>
       ))}
     </p>

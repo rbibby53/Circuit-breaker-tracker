@@ -5,6 +5,7 @@ import type { Backup, Device, MainType, PanelLayout, Protection, Slot } from './
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
 import type { AtsKind, Fuel } from './generator';
+import type { AtsDuty, AtsTransition, Mounting, PowerDeviceKind, PowerDeviceShape } from './devices';
 
 export interface UserSummary {
   id: number;
@@ -209,6 +210,8 @@ export interface BreakerDto {
   tags: string[];
   /** Panels this breaker feeds, when the viewer can see them. */
   feeds: { panelId: number; panelName: string }[];
+  /** Transformers, disconnects and UPSs it feeds, when the viewer can see them. */
+  feedsDevices: { deviceId: number; name: string; kind: PowerDeviceKind }[];
   /** Sub-panels it feeds that the viewer cannot see. */
   hiddenFeeds: number;
   /** Relays: the breaker whose circuit this relay switches. */
@@ -241,13 +244,16 @@ export interface PanelGenerator {
   fuel: Fuel;
   /** The transfer switch's name, or '' when the panel is linked to the generator directly. */
   transferSwitch: string;
-  ats: { id: number; name: string; kind: AtsKind } | null;
+  ats: { id: number; name: string; kind: AtsKind; duty: AtsDuty } | null;
   via: { panelId: number; panelName: string } | null;
   canView: boolean;
 }
 
-/** One step up the feed chain: the breaker feeding a panel, and the panel it sits in. */
-export interface FeedLink {
+/** One step up the feed chain: a breaker and the panel it sits in, or a device in between. */
+export type FeedLink = PanelFeedLink | DeviceFeedLink;
+
+export interface PanelFeedLink {
+  kind: 'panel';
   panelId: number;
   panelName: string;
   locationPath: string;
@@ -257,6 +263,34 @@ export interface FeedLink {
   amps: number;
   /** Whether the viewer may open that panel. They see this summary either way. */
   canView: boolean;
+  /** The panel's voltage, to show the step through a transformer. */
+  voltage: string;
+}
+
+/** A transformer, disconnect, UPS or utility service in the feed chain. */
+export interface DeviceFeedLink {
+  kind: 'device';
+  deviceId: number;
+  deviceKind: PowerDeviceKind;
+  name: string;
+  /** "75 kVA · 480 V → 208 V" and the like. */
+  rating: string;
+  /** The voltage it puts out (a transformer's secondary). */
+  voltage: string;
+  locationPath: string;
+  canView: boolean;
+}
+
+/** Nameplate details from panel schedules. */
+export interface PanelNameplate {
+  /** Short-circuit (AIC/SCCR) rating, in kA. */
+  aicKa: number | null;
+  /** Bus rating, which may be above the main breaker's. */
+  busAmps: number | null;
+  mounting: Mounting;
+  enclosure: string;
+  feederWire: string;
+  feederConduit: string;
 }
 
 export interface PanelDetail extends Omit<
@@ -274,6 +308,9 @@ export interface PanelDetail extends Omit<
   /** From the breaker feeding this panel up to the service. Empty when fed by the utility. */
   feedChain: FeedLink[];
   fedFromBreakerId: number | null;
+  /** The transformer, disconnect, UPS or service feeding it, instead of a breaker. */
+  fedFromDeviceId: number | null;
+  nameplate: PanelNameplate;
   /** Path of the public page ("/p/…") when the panel has one and public pages are allowed. */
   publicPath: string | null;
   /** Whether the viewer may turn the public page on or off (Manager or admin). */
@@ -295,6 +332,8 @@ export interface GeneratorSummary {
   kw: number | null;
   fuel: Fuel;
   voltage: string;
+  tankGallons: number | null;
+  runtimeHours: number | null;
   /** Panels it backs up, directly or through the panels it feeds. */
   panelCount: number;
   role: EffectiveRole;
@@ -325,6 +364,10 @@ export interface TransferSwitchDto {
   id: number;
   name: string;
   kind: AtsKind;
+  duty: AtsDuty;
+  transition: AtsTransition;
+  /** Order loads come back on: 1 first. */
+  priority: number | null;
   amps: number | null;
   generatorId: number | null;
   generatorName: string | null;
@@ -444,6 +487,7 @@ export interface SearchResponse {
   locations: { id: number; name: string; kind: LocationKind; path: string }[];
   panels: { id: number; name: string; path: string }[];
   generators: { id: number; name: string; path: string }[];
+  devices: { id: number; name: string; kind: PowerDeviceKind; rating: string; path: string }[];
   breakers: {
     breakerId: number;
     panelId: number;
@@ -543,7 +587,7 @@ export interface LogLines {
 
 // ---- Power flow (topology) ------------------------------------------------------------------
 
-export type TopologyKind = 'utility' | 'panel' | 'relay' | 'ats' | 'generator' | 'hidden';
+export type TopologyKind = 'utility' | 'panel' | 'relay' | 'ats' | 'generator' | 'hidden' | PowerDeviceKind;
 
 export interface TopologyNode {
   /** "p12" (panel), "a3" (transfer switch), "g2" (generator), "u" (utility), "h45" (out of access). */
@@ -578,4 +622,50 @@ export interface Topology {
   location: { id: number; name: string; path: string };
   nodes: TopologyNode[];
   edges: TopologyEdge[];
+}
+
+// ---- Power devices ----------------------------------------------------------------------
+
+export interface PowerDeviceSummary extends PowerDeviceShape {
+  id: number;
+  name: string;
+  locationId: number;
+  locationPath: string;
+  meter: string;
+  utility: string;
+  /** "75 kVA · 480 V → 208 V" and the like. */
+  rating: string;
+  /** Short text for what feeds it, e.g. "MSB · 1 + 3 + 5" or "T-1". */
+  fedFrom: string | null;
+  role: EffectiveRole;
+}
+
+/** What a device feeds: panels and other devices. */
+export interface DeviceLoad {
+  kind: 'panel' | 'device';
+  id: number;
+  name: string;
+  /** Panel voltage, or the device's rating. */
+  detail: string;
+  locationPath: string;
+}
+
+export interface PowerDeviceDetail extends PowerDeviceSummary {
+  manufacturer: string;
+  model: string;
+  notes: string;
+  updatedAt: string;
+  canEdit: boolean;
+  fedFromBreakerId: number | null;
+  fedFromDeviceId: number | null;
+  /** From the breaker or device feeding it up to the service. */
+  feedChain: FeedLink[];
+  loads: DeviceLoad[];
+  hiddenLoads: number;
+}
+
+/** What could feed a panel or device without making a loop. */
+export interface FeedOptions {
+  breakers: FeedCandidate[];
+  devices: { id: number; name: string; kind: PowerDeviceKind; rating: string; locationPath: string }[];
 }

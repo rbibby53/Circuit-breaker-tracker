@@ -167,6 +167,10 @@ export function locationRoutes(app: FastifyInstance, db: DB): void {
       n: number;
     };
     if (generators.n > 0) throw conflict(`Delete the generators in ${node.name} first.`);
+    const devices = db.prepare('SELECT COUNT(*) AS n FROM power_devices WHERE location_id = ?').get(id) as {
+      n: number;
+    };
+    if (devices.n > 0) throw conflict(`Delete the transformers and other equipment in ${node.name} first.`);
     const switches = db.prepare('SELECT COUNT(*) AS n FROM transfer_switches WHERE location_id = ?').get(id) as {
       n: number;
     };
