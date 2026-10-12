@@ -31,14 +31,28 @@ interface Props {
   onMove: (key: string, position: number, slot?: Slot) => void;
   /** Sub-panels each saved breaker feeds, by breaker id. */
   feeds: Map<number, string[]>;
+  /** Relay panels: the circuit each saved relay switches, by relay id. */
+  relaySources?: Map<number, string>;
   /** When set, breakers without this tag are dimmed. */
   highlightTag?: string | null;
 }
 
 const DRAG_TYPE = 'application/x-cbt-breaker';
 
-export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, onMove, feeds, highlightTag }: Props) {
+export function PanelGrid({
+  doc,
+  byId,
+  selectedKey,
+  readOnly,
+  onSelect,
+  onAdd,
+  onMove,
+  feeds,
+  relaySources,
+  highlightTag,
+}: Props) {
   const cols = columnsFor(doc);
+  const relay = doc.layout === 'relay';
   const rows = rowsFor(doc);
   const shapes = doc.breakers.map((b) => ({ key: b.key, position: b.position, slot: b.slot, poles: b.poles }));
   // Grid columns: left, bus bar, right (single-column panels: just one).
@@ -76,12 +90,22 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
           className={`pg-space${left ? '' : ' is-right'}`}
           style={{ gridColumn: gridCol(column), gridRow: row }}
           disabled={readOnly}
-          aria-label={readOnly ? `Space ${p}, empty` : `Add a breaker at space ${p}`}
+          aria-label={
+            relay
+              ? readOnly
+                ? `Relay ${p}, empty`
+                : `Add relay ${p}`
+              : readOnly
+                ? `Space ${p}, empty`
+                : `Add a breaker at space ${p}`
+          }
           onClick={() => onAdd(p, 'full')}
           {...dropProps(p)}
         >
           <span className="pg-num">{p}</span>
-          <span className="pg-space-text">{readOnly ? 'Space' : '+ Add breaker'}</span>
+          <span className="pg-space-text">
+            {readOnly ? (relay ? 'Empty' : 'Space') : relay ? '+ Add relay' : '+ Add breaker'}
+          </span>
         </button>,
       );
     } else if (free.A !== free.B) {
@@ -111,7 +135,9 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
     <div className="pg-frame">
       <div className="pg-inner">
         <div className="pg-main" aria-label="Main breaker">
-          {doc.mainType === 'lugs' ? (
+          {doc.layout === 'relay' ? (
+            <span className="pg-main-amps">{`${doc.controlSystem} relay panel`.trim().toUpperCase()}</span>
+          ) : doc.mainType === 'lugs' ? (
             <span className="pg-main-amps">MAIN LUGS</span>
           ) : (
             <>
@@ -158,7 +184,7 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
                   gridRow: `${row} / span ${b.poles}`,
                   alignSelf: tandem ? (b.slot === 'A' ? 'start' : 'end') : 'stretch',
                 }}
-                aria-label={`Circuit ${circuitLabel(doc, b)}${phases.length ? `, phase ${phases.join(' ')}` : ''}, ${b.device === 'surge' ? 'surge protector, ' : ''}${b.label || 'unlabelled'}, ${b.amps ? `${b.amps} amps` : 'no breaker'}${b.critical ? ', critical' : ''}${b.backup !== 'none' ? `, on ${b.backup}` : ''}`}
+                aria-label={`${relay ? 'Relay' : 'Circuit'} ${circuitLabel(doc, b)}${phases.length ? `, phase ${phases.join(' ')}` : ''}, ${b.device === 'surge' ? 'surge protector, ' : ''}${b.label || 'unlabelled'}, ${b.amps ? `${b.amps} amps` : 'no breaker'}${b.critical ? ', critical' : ''}${b.backup !== 'none' ? `, on ${b.backup}` : ''}`}
                 aria-pressed={selected}
                 draggable={!readOnly}
                 onDragStart={(e) => {
@@ -186,9 +212,12 @@ export function PanelGrid({ doc, byId, selectedKey, readOnly, onSelect, onAdd, o
                   </span>
                   {!tandem && (
                     <span className="pg-sub">
-                      {b.id && feeds.get(b.id)?.length && b.serves.length === 0
-                        ? `Feeds ${feeds.get(b.id)!.join(', ')}`
-                        : servesSummary(byId, b.serves, b.isSpare)}
+                      {relaySources
+                        ? [b.id ? relaySources.get(b.id) : undefined, b.control].filter(Boolean).join(' · ') ||
+                          servesSummary(byId, b.serves, b.isSpare)
+                        : b.id && feeds.get(b.id)?.length && b.serves.length === 0
+                          ? `Feeds ${feeds.get(b.id)!.join(', ')}`
+                          : servesSummary(byId, b.serves, b.isSpare)}
                     </span>
                   )}
                 </span>

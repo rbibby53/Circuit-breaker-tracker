@@ -48,7 +48,7 @@ export function Search() {
     setQ('');
   };
   const r = results.data;
-  const empty = r && !r.breakers.length && !r.locations.length && !r.panels.length;
+  const empty = r && !r.breakers.length && !r.locations.length && !r.panels.length && !r.generators.length;
   const show = open && debounced.length >= 2;
 
   return (
@@ -137,6 +137,23 @@ export function Search() {
                       <span className="search-main">
                         <span className="strong">{p.name}</span>
                         <span className="muted small block">{p.path}</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {r && r.generators.length > 0 && (
+            <section>
+              <h3>Generators</h3>
+              <ul>
+                {r.generators.map((g) => (
+                  <li key={g.id}>
+                    <Link to={`/generators/${g.id}`} onClick={done}>
+                      <span className="search-main">
+                        <span className="strong">{g.name}</span>
+                        <span className="muted small block">{g.path}</span>
                       </span>
                     </Link>
                   </li>

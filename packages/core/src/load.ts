@@ -41,12 +41,17 @@ const IMBALANCE_WARNING = 0.3;
 export function legOf(panel: PanelShape, position: number): string {
   const phase = phaseOf(panel, position);
   if (phase) return phase;
-  if (panel.layout === 'single') return 'L1';
+  if (panel.layout === 'single' || panel.layout === 'relay') return 'L1';
   return cellOf(panel, position).row % 2 === 1 ? 'L1' : 'L2';
 }
 
 export function panelLoad(panel: PanelShape, breakers: readonly LoadBreaker[]): PanelLoad {
-  const legNames = panel.layout === 'commercial' ? ['A', 'B', 'C'] : panel.layout === 'single' ? ['L1'] : ['L1', 'L2'];
+  const legNames =
+    panel.layout === 'commercial'
+      ? ['A', 'B', 'C']
+      : panel.layout === 'single' || panel.layout === 'relay'
+        ? ['L1']
+        : ['L1', 'L2'];
   const legs = new Map(legNames.map((leg) => [leg, { leg, amps: 0, circuits: 0 }]));
   const used = new Set<number>();
   let circuits = 0;

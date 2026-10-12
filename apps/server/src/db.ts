@@ -1,7 +1,7 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import Database from 'better-sqlite3';
-import { MIGRATIONS } from './migrations';
+import { FOREIGN_KEYS_OFF, MIGRATIONS } from './migrations';
 
 export type DB = Database.Database;
 
@@ -23,10 +23,21 @@ export function migrate(db: DB): void {
   for (const [i, sql] of MIGRATIONS.entries()) {
     const version = i + 1;
     if (version <= current) continue;
-    db.transaction(() => {
-      db.exec(sql);
-      db.prepare('UPDATE schema_version SET version = ?').run(version);
-    })();
+    // Foreign keys can only be switched off outside a transaction.
+    const keysOff = sql.trimStart().startsWith(FOREIGN_KEYS_OFF);
+    const keysWereOn = db.pragma('foreign_keys', { simple: true }) === 1;
+    if (keysOff) db.pragma('foreign_keys = OFF');
+    try {
+      db.transaction(() => {
+        db.exec(sql);
+        if (keysOff && (db.pragma('foreign_key_check') as unknown[]).length) {
+          throw new Error(`Database upgrade ${version} would break links between records.`);
+        }
+        db.prepare('UPDATE schema_version SET version = ?').run(version);
+      })();
+    } finally {
+      if (keysOff && keysWereOn) db.pragma('foreign_keys = ON');
+    }
     current = version;
   }
 }

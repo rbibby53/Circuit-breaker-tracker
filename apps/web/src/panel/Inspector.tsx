@@ -10,12 +10,16 @@ import {
   allowsTandem,
   circuitLabel,
   circuitVolts,
+  isRelayPanel,
   maxPoles,
   phasesOf,
   type BreakerDto,
+  type FeedCandidate,
   type Slot,
 } from '@cbt/core';
+import { useQuery } from '@tanstack/react-query';
 import { useState } from 'react';
+import { api } from '../api';
 import { Link } from 'react-router-dom';
 import { useConfirm } from '../components/ConfirmDialog';
 import type { TreeNode } from '../tree';
@@ -25,6 +29,7 @@ import { TagInput } from './TagInput';
 import { sizeOf, validStarts, type EditBreaker, type EditPanel, type Size } from './state';
 
 interface Props {
+  panelId: number;
   doc: EditPanel;
   breaker: EditBreaker;
   server: BreakerDto | undefined;
@@ -37,14 +42,28 @@ interface Props {
   onRemove: () => void;
 }
 
-export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPatch, onSize, onMove, onRemove }: Props) {
+export function Inspector({
+  panelId,
+  doc,
+  breaker: b,
+  server,
+  byId,
+  site,
+  readOnly,
+  onPatch,
+  onSize,
+  onMove,
+  onRemove,
+}: Props) {
   const [picking, setPicking] = useState(false);
   const confirm = useConfirm();
+  const relay = isRelayPanel(doc);
+  const thing = relay ? 'relay' : b.device === 'surge' ? 'surge protector' : 'breaker';
   const size = sizeOf(b);
   const groups = servesByFloor(byId, b.serves);
   const hidden = b.serves.filter((s) => s.hidden || !byId.has(s.locationId)).length;
   const feeds = server?.feeds ?? [];
-  const sizes: { value: Size; label: string; disabled?: string }[] = [
+  const allSizes: { value: Size; label: string; disabled?: string }[] = [
     { value: '1', label: '1-pole' },
     { value: '2', label: '2-pole' },
     {
@@ -58,10 +77,12 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
       disabled: allowsTandem(doc) ? undefined : 'Three-phase panelboards take no tandems',
     },
   ];
+  // Relays come in 1- and 2-pole.
+  const sizes = relay ? allSizes.slice(0, 2) : allSizes;
   const phases = phasesOf(doc, b);
   const volts = circuitVolts(doc.voltage, b.poles);
   const where = [
-    `Circuit ${circuitLabel(doc, b)}`,
+    `${relay ? 'Relay' : 'Circuit'} ${circuitLabel(doc, b)}`,
     phases.length ? `Phase ${phases.join(' ')}` : null,
     volts ? `${volts} V` : null,
   ]
@@ -70,17 +91,30 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
 
   if (readOnly) {
     return (
-      <aside className="inspector" aria-label="Breaker details">
+      <aside className="inspector" aria-label={relay ? 'Relay details' : 'Breaker details'}>
         <span className="eyebrow">{where}</span>
         <h2>{b.label || (b.device === 'surge' ? 'Surge protector' : 'Unlabelled')}</h2>
         <dl className="facts">
           <dt>Size</dt>
           <dd>{size === 'tandem' ? 'Tandem (half space)' : `${b.poles}-pole`}</dd>
-          <dt>Device</dt>
-          <dd>{DEVICE_LABELS[b.device]}</dd>
-          <dt>Amps</dt>
+          {relay ? (
+            <>
+              <dt>Fed by</dt>
+              <dd>
+                <SourceText source={server?.source ?? null} />
+              </dd>
+              <dt>Control</dt>
+              <dd>{b.control || 'Not set'}</dd>
+            </>
+          ) : (
+            <>
+              <dt>Device</dt>
+              <dd>{DEVICE_LABELS[b.device]}</dd>
+            </>
+          )}
+          <dt>{relay ? 'Rating' : 'Amps'}</dt>
           <dd>{b.device === 'surge' && b.amps === 0 ? 'No breakers (surge protection only)' : ampsLabel(b)}</dd>
-          {b.device === 'breaker' && (
+          {b.device === 'breaker' && !relay && (
             <>
               <dt>Type</dt>
               <dd>{PROTECTION_LABELS[b.protection]}</dd>
@@ -102,16 +136,17 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
           </dd>
         </dl>
         {feeds.length > 0 && <FeedsNote feeds={feeds} />}
+        {server && <SwitchedByNote breaker={server} />}
         {b.notes && <p className="notes">{b.notes}</p>}
       </aside>
     );
   }
 
   return (
-    <aside className="inspector" aria-label="Breaker details">
+    <aside className="inspector" aria-label={relay ? 'Relay details' : 'Breaker details'}>
       <div className="stack-sm">
         <span className="eyebrow">{where}</span>
-        <h2>{b.label || (b.device === 'surge' ? 'Surge protector' : 'New breaker')}</h2>
+        <h2>{b.label || (b.device === 'surge' ? 'Surge protector' : `New ${thing}`)}</h2>
       </div>
 
       <label className="field">
@@ -119,12 +154,32 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
         <input
           value={b.label}
           autoFocus={!b.label}
-          placeholder="What does it power?"
+          placeholder={relay ? 'What does it switch? e.g. Corridor lights' : 'What does it power?'}
           onChange={(e) => onPatch({ label: e.target.value }, `label:${b.key}`)}
         />
       </label>
 
-      <fieldset className="field">
+      {relay && (
+        <>
+          <RelaySourceField
+            panelId={panelId}
+            value={b.sourceBreakerId}
+            current={server?.source ?? null}
+            onChange={(sourceBreakerId) => onPatch({ sourceBreakerId })}
+          />
+          <label className="field">
+            <span className="field-label">Control</span>
+            <input
+              value={b.control}
+              maxLength={120}
+              placeholder="e.g. nLight zone 3 · schedule 6 am–10 pm, occupancy"
+              onChange={(e) => onPatch({ control: e.target.value }, `control:${b.key}`)}
+            />
+          </label>
+        </>
+      )}
+
+      <fieldset className="field" hidden={relay}>
         <legend className="field-label">Device</legend>
         <div className="segmented two">
           {DEVICES.map((d) => (
@@ -172,7 +227,7 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
 
       <div className="two-col">
         <label className="field">
-          <span className="field-label">Starts at space</span>
+          <span className="field-label">{relay ? 'Relay number' : 'Starts at space'}</span>
           <select value={b.position} onChange={(e) => onMove(Number(e.target.value))}>
             {validStarts(doc, b.key).map((p) => (
               <option key={p} value={p}>
@@ -196,7 +251,9 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
 
       <div className="two-col">
         <label className="field">
-          <span className="field-label">{b.device === 'surge' ? 'Built-in breakers (A)' : 'Amps'}</span>
+          <span className="field-label">
+            {b.device === 'surge' ? 'Built-in breakers (A)' : relay ? 'Rating (A)' : 'Amps'}
+          </span>
           <input
             type="number"
             min={b.device === 'surge' ? 0 : 1}
@@ -219,7 +276,7 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
             ))}
           </datalist>
         </label>
-        {b.device === 'breaker' ? (
+        {b.device === 'breaker' && !relay ? (
           <label className="field">
             <span className="field-label">Protection</span>
             <select
@@ -262,7 +319,9 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
             <input type="checkbox" checked={b.isSpare} onChange={(e) => onPatch({ isSpare: e.target.checked })} />
             <span>
               <span className="strong">Spare</span>
-              <span className="muted small block">A breaker is installed but nothing is connected.</span>
+              <span className="muted small block">
+                {relay ? 'A relay with nothing connected.' : 'A breaker is installed but nothing is connected.'}
+              </span>
             </span>
           </label>
         )}
@@ -305,13 +364,14 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
       </label>
 
       {feeds.length > 0 && <FeedsNote feeds={feeds} />}
+      {server && <SwitchedByNote breaker={server} />}
 
       <button
         type="button"
         className="btn btn-danger"
         onClick={async () => {
           const ok = await confirm({
-            title: `Remove ${b.label || 'this breaker'}?`,
+            title: `Remove ${b.label || `this ${thing}`}?`,
             message: feeds.length
               ? `It feeds ${feeds.map((f) => f.panelName).join(', ')}, which will be unlinked. You can undo this.`
               : 'You can undo this.',
@@ -321,7 +381,7 @@ export function Inspector({ doc, breaker: b, server, byId, site, readOnly, onPat
           if (ok) onRemove();
         }}
       >
-        {b.device === 'surge' ? 'Remove surge protector' : 'Remove breaker'}
+        {`Remove ${thing}`}
       </button>
     </aside>
   );
@@ -337,6 +397,74 @@ function FeedsNote({ feeds }: { feeds: BreakerDto['feeds'] }) {
           <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link>
         </span>
       ))}
+    </p>
+  );
+}
+
+/** "LP-1 · 7 Corridor lights (20 A)", linked when the person can open that panel. */
+function SourceText({ source }: { source: BreakerDto['source'] }) {
+  if (!source) return <>Not set</>;
+  const text = `${source.panelName} · ${source.circuit}${source.label ? ` ${source.label}` : ''} (${source.amps} A)`;
+  return source.canView ? <Link to={`/panels/${source.panelId}`}>{text}</Link> : <>{text}</>;
+}
+
+/** Pick the breaker whose circuit a relay switches, from breakers in breaker panels. */
+function RelaySourceField({
+  panelId,
+  value,
+  current,
+  onChange,
+}: {
+  panelId: number;
+  value: number | null;
+  current: BreakerDto['source'];
+  onChange: (id: number | null) => void;
+}) {
+  const candidates = useQuery({
+    queryKey: ['feed-candidates', panelId, 'relay'],
+    queryFn: () => api.get<FeedCandidate[]>(`/api/panels/${panelId}/feed-candidates?for=relay`),
+  });
+  const list = candidates.data ?? [];
+  // A feeding breaker the person cannot open is kept, and shown as it is.
+  const missing = value !== null && !list.some((c) => c.breakerId === value);
+  return (
+    <label className="field">
+      <span className="field-label">Fed by circuit</span>
+      <select value={value ?? ''} onChange={(e) => onChange(e.target.value ? Number(e.target.value) : null)}>
+        <option value="">Not set</option>
+        {missing && (
+          <option value={value}>
+            {current ? `${current.panelName} · ${current.circuit} ${current.label}` : 'A breaker outside your access'}
+          </option>
+        )}
+        {list.map((c) => (
+          <option key={c.breakerId} value={c.breakerId}>
+            {c.panelName} · {c.circuit} {c.label || 'Unlabelled'} ({c.amps} A)
+          </option>
+        ))}
+      </select>
+      <span className="muted small">The breaker whose circuit this relay switches.</span>
+    </label>
+  );
+}
+
+/** "Switched by RP-1 relay 5 (zone 3)" on a breaker whose circuit goes through relays. */
+function SwitchedByNote({ breaker }: { breaker: BreakerDto }) {
+  if (!breaker.switchedBy.length && !breaker.hiddenSwitchedBy) return null;
+  return (
+    <p className="feeds-note">
+      Switched by{' '}
+      {breaker.switchedBy.map((r, i) => (
+        <span key={`${r.panelId}-${r.relay}`}>
+          {i > 0 && ', '}
+          <Link to={`/panels/${r.panelId}`}>
+            {r.panelName} relay {r.relay}
+          </Link>
+          {r.control && ` (${r.control})`}
+        </span>
+      ))}
+      {breaker.hiddenSwitchedBy > 0 &&
+        `${breaker.switchedBy.length ? ' and ' : ''}${breaker.hiddenSwitchedBy} relay${breaker.hiddenSwitchedBy === 1 ? '' : 's'} outside your access`}
     </p>
   );
 }

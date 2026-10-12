@@ -1,17 +1,27 @@
 // Panel layout engine: where breakers sit, what they occupy, and whether a layout is valid.
 // The editor, thumbnails and the PDF all draw from these functions.
 
-export const PANEL_LAYOUTS = ['residential', 'commercial', 'single'] as const;
+export const PANEL_LAYOUTS = ['residential', 'commercial', 'single', 'relay'] as const;
 export type PanelLayout = (typeof PANEL_LAYOUTS)[number];
 
 /** Layouts that can be created today. Single column comes later. */
-export const AVAILABLE_LAYOUTS: readonly PanelLayout[] = ['residential', 'commercial'];
+export const AVAILABLE_LAYOUTS: readonly PanelLayout[] = ['residential', 'commercial', 'relay'];
 
 export const LAYOUT_LABELS: Record<PanelLayout, string> = {
   residential: 'Residential load center',
   commercial: 'Commercial panelboard',
   single: 'Single column',
+  relay: 'Lighting relay panel',
 };
+
+/**
+ * A lighting control relay panel (such as an Acuity nLight relay panel): one numbered column
+ * of relays. Each relay switches a branch circuit fed from a breaker in another panel.
+ */
+export const isRelayPanel = (panel: { layout: PanelLayout }) => panel.layout === 'relay';
+
+/** Lighting control systems offered as suggestions; any text is still accepted. */
+export const CONTROL_SYSTEMS = ['nLight', 'nLight AIR', 'Lutron', 'Wattstopper', 'Douglas', 'LC&D'];
 
 export const PROTECTIONS = ['standard', 'gfci', 'afci', 'dual'] as const;
 export type Protection = (typeof PROTECTIONS)[number];
@@ -49,6 +59,7 @@ export const VOLTAGE_PRESETS: Record<PanelLayout, string[]> = {
   residential: ['120/240 V split-phase', '120/208 V single-phase'],
   commercial: ['120/208 V 3-phase', '277/480 V 3-phase', '120/240 V 3-phase high-leg'],
   single: ['120/240 V split-phase', '120/208 V 3-phase', '277/480 V 3-phase'],
+  relay: ['277 V', '120 V', '120/277 V', '277/480 V 3-phase', '120/208 V 3-phase'],
 };
 
 /** What a new panel of each layout starts with. */
@@ -56,6 +67,7 @@ export const LAYOUT_DEFAULTS: Record<PanelLayout, { spaces: number; mainAmps: nu
   residential: { spaces: 24, mainAmps: 200, voltage: '120/240 V split-phase' },
   commercial: { spaces: 42, mainAmps: 225, voltage: '120/208 V 3-phase' },
   single: { spaces: 12, mainAmps: 100, voltage: '120/240 V split-phase' },
+  relay: { spaces: 16, mainAmps: 20, voltage: '277 V' },
 };
 
 export const COMMON_AMPS = [10, 15, 20, 25, 30, 35, 40, 45, 50, 60, 70, 80, 90, 100, 110, 125, 150, 175, 200];
@@ -78,7 +90,7 @@ export const MAX_SPACES = 84;
 
 /** Number of columns of spaces. */
 export function columnsFor(panel: PanelShape): number {
-  return panel.layout === 'single' ? 1 : 2;
+  return panel.layout === 'single' || panel.layout === 'relay' ? 1 : 2;
 }
 
 /** Number of rows of spaces. */

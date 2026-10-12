@@ -2401,3 +2401,17 @@ code {
   border-top: 1px solid var(--line);
   padding-top: 1rem;
 }
+
+/* Generator cards: a round G where panels show their thumbnail. */
+.gen-icon {
+  display: grid;
+  place-items: center;
+  width: 44px;
+  height: 44px;
+  flex: none;
+  border-radius: 50%;
+  background: var(--gen, #2e7d4f);
+  color: #fff;
+  font-weight: 700;
+  font-size: 1.1rem;
+}

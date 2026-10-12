@@ -14,6 +14,8 @@ import {
   type FeedLink,
   type MainType,
   type PanelDetail,
+  type PanelGenerator,
+  type RelaySource,
   type PanelLayout,
   type PanelSummary,
   type Protection,
@@ -36,6 +38,9 @@ export interface PanelRow {
   notes: string;
   fed_from_breaker_id: number | null;
   public_token: string | null;
+  generator_id: number | null;
+  transfer_switch: string;
+  control_system: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -55,7 +60,27 @@ export interface BreakerRow {
   is_spare: number;
   critical: number;
   backup: Backup;
+  /** Relays: the breaker whose circuit this relay switches. */
+  source_breaker_id: number | null;
+  control: string;
 }
+
+export interface GeneratorRow {
+  id: number;
+  location_id: number;
+  name: string;
+  kw: number | null;
+  fuel: PanelGenerator['fuel'];
+  voltage: string;
+  manufacturer: string;
+  model: string;
+  notes: string;
+  created_at: string;
+  updated_at: string;
+}
+
+export const getGenerator = (db: DB, id: number) =>
+  db.prepare('SELECT * FROM generators WHERE id = ?').get(id) as GeneratorRow | undefined;
 
 export interface ServesRow {
   breaker_id: number;
@@ -153,6 +178,32 @@ export function feedChain(db: DB, actor: Actor, access: AccessData, panel: Panel
   return out;
 }
 
+/**
+ * The generator backing a panel: the one set on it, or else on the nearest panel up its feed
+ * chain (a panel fed from an emergency panel is on that panel's generator too).
+ */
+export function generatorFor(
+  db: DB,
+  panel: PanelRow,
+): { generator: GeneratorRow; transferSwitch: string; via: PanelRow | null } | null {
+  let current: PanelRow | undefined = panel;
+  const seen = new Set<number>();
+  while (current && !seen.has(current.id) && seen.size < MAX_CHAIN) {
+    seen.add(current.id);
+    if (current.generator_id) {
+      const generator = getGenerator(db, current.generator_id);
+      if (generator) {
+        return { generator, transferSwitch: current.transfer_switch, via: current.id === panel.id ? null : current };
+      }
+    }
+    const feeder: BreakerRow | undefined = current.fed_from_breaker_id
+      ? getBreaker(db, current.fed_from_breaker_id)
+      : undefined;
+    current = feeder ? getPanel(db, feeder.panel_id) : undefined;
+  }
+  return null;
+}
+
 /** True when `candidatePanelId` is `panelId` itself or anywhere downstream of it. */
 export function isDownstream(db: DB, panelId: number, candidatePanelId: number): boolean {
   let current = getPanel(db, candidatePanelId);
@@ -185,6 +236,8 @@ export function panelSummary(db: DB, actor: Actor, access: AccessData, panel: Pa
     breakerCount: breakers.length,
     criticalCount: breakers.filter((b) => b.critical).length,
     fedFrom: feeder && feederPanel ? `${feederPanel.name} · ${circuitLabel(feederPanel, feeder)}` : null,
+    generatorName: generatorFor(db, panel)?.generator.name ?? null,
+    controlSystem: panel.control_system,
     role: effectiveRole(actor, access.node(panel.location_id)!, access.grants)!,
   };
 }
@@ -205,9 +258,49 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     .all(panel.id) as PanelRow[];
   const role = effectiveRole(actor, access.node(panel.location_id)!, access.grants)!;
 
+  // Relays in other panels that switch these breakers' circuits.
+  const ids = breakers.map((b) => b.id);
+  const relays = ids.length
+    ? (db
+        .prepare(
+          `SELECT r.*, p.name AS relay_panel_name, p.layout AS relay_panel_layout, p.spaces AS relay_panel_spaces,
+                  p.location_id AS relay_panel_location
+             FROM breakers r JOIN panels p ON p.id = r.panel_id
+            WHERE r.source_breaker_id IN (${ids.map(() => '?').join(',')})
+            ORDER BY p.name COLLATE NOCASE, r.position`,
+        )
+        .all(...ids) as (BreakerRow & {
+        relay_panel_name: string;
+        relay_panel_layout: PanelLayout;
+        relay_panel_spaces: number;
+        relay_panel_location: number;
+      })[])
+    : [];
+  const canSeeLocation = (locationId: number) => {
+    const node = access.node(locationId);
+    return !!node && canView(actor, node, access.grants);
+  };
+  // The breakers feeding this panel's relays, with their panels.
+  const sourceOf = (b: BreakerRow): RelaySource | null => {
+    const src = b.source_breaker_id ? getBreaker(db, b.source_breaker_id) : undefined;
+    const srcPanel = src ? getPanel(db, src.panel_id) : undefined;
+    if (!src || !srcPanel) return null;
+    return {
+      breakerId: src.id,
+      panelId: srcPanel.id,
+      panelName: srcPanel.name,
+      circuit: circuitLabel(srcPanel, src),
+      label: src.label,
+      amps: src.amps,
+      canView: canViewPanel(actor, access, srcPanel),
+    };
+  };
+
   const dto = (b: BreakerRow): BreakerDto => {
     const feeds = fedPanels.filter((p) => p.fed_from_breaker_id === b.id);
     const shown = feeds.filter((p) => canViewPanel(actor, access, p));
+    const switching = relays.filter((r) => r.source_breaker_id === b.id);
+    const switchingShown = switching.filter((r) => canSeeLocation(r.relay_panel_location));
     return {
       id: b.id,
       position: b.position,
@@ -237,8 +330,31 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
       tags: tags.filter((t) => t.breaker_id === b.id).map((t) => t.tag),
       feeds: shown.map((p) => ({ panelId: p.id, panelName: p.name })),
       hiddenFeeds: feeds.length - shown.length,
+      sourceBreakerId: b.source_breaker_id,
+      source: sourceOf(b),
+      control: b.control,
+      switchedBy: switchingShown.map((r) => ({
+        panelId: r.panel_id,
+        panelName: r.relay_panel_name,
+        relay: circuitLabel({ layout: r.relay_panel_layout, spaces: r.relay_panel_spaces }, r),
+        label: r.label,
+        control: r.control,
+      })),
+      hiddenSwitchedBy: switching.length - switchingShown.length,
     };
   };
+  const backing = generatorFor(db, panel);
+  const generator: PanelGenerator | null = backing
+    ? {
+        id: backing.generator.id,
+        name: backing.generator.name,
+        kw: backing.generator.kw,
+        fuel: backing.generator.fuel,
+        transferSwitch: backing.transferSwitch,
+        via: backing.via ? { panelId: backing.via.id, panelName: backing.via.name } : null,
+        canView: canSeeLocation(backing.generator.location_id),
+      }
+    : null;
 
   return {
     id: panel.id,
@@ -262,6 +378,10 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     fedFromBreakerId: panel.fed_from_breaker_id,
     publicPath: panel.public_token ? `/p/${panel.public_token}` : null,
     canShare: role === 'admin' || role === 'manager',
+    generatorId: panel.generator_id,
+    transferSwitch: panel.transfer_switch,
+    controlSystem: panel.control_system,
+    generator,
   };
 }
 
@@ -277,6 +397,9 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
     model: panel.model,
     notes: panel.notes,
     fedFromBreakerId: panel.fed_from_breaker_id,
+    generatorId: panel.generator_id ?? null,
+    transferSwitch: panel.transfer_switch ?? '',
+    controlSystem: panel.control_system ?? '',
     breakers: breakers
       .map((b) => ({
         id: b.id,
@@ -291,6 +414,8 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
         isSpare: !!b.is_spare,
         critical: !!b.critical,
         backup: b.backup,
+        sourceBreakerId: b.source_breaker_id ?? null,
+        control: b.control ?? '',
         serves: serves
           .filter((s) => s.breaker_id === b.id)
           .map((s) => `${s.location_id}:${s.note}`)
@@ -316,6 +441,9 @@ const PANEL_FIELDS: [keyof Snapshot, string][] = [
   ['model', 'model'],
   ['notes', 'notes'],
   ['fedFromBreakerId', 'fed from'],
+  ['generatorId', 'generator'],
+  ['transferSwitch', 'transfer switch'],
+  ['controlSystem', 'control system'],
 ];
 
 const BREAKER_FIELDS = [
@@ -332,6 +460,8 @@ const BREAKER_FIELDS = [
   ['backup', 'backup power'],
   ['serves', 'serves'],
   ['tags', 'tags'],
+  ['sourceBreakerId', 'fed by'],
+  ['control', 'control'],
 ] as const;
 
 /** Human-readable lines describing what changed between two snapshots. */
@@ -342,12 +472,13 @@ export function describeChanges(
   locationName: (id: number) => string,
 ): string[] {
   const lines: string[] = [];
+  const shown = (v: unknown) => (v === null || v === undefined || v === '' ? 'none' : String(v));
   for (const [k, label] of PANEL_FIELDS) {
     if (JSON.stringify(before[k]) !== JSON.stringify(after[k])) {
       lines.push(
-        k === 'notes' || k === 'fedFromBreakerId'
+        k === 'notes' || k === 'fedFromBreakerId' || k === 'generatorId'
           ? `Panel ${label} changed`
-          : `Panel ${label}: ${before[k] ?? 'none'} → ${after[k] ?? 'none'}`,
+          : `Panel ${label}: ${shown(before[k])} → ${shown(after[k])}`,
       );
     }
   }
@@ -374,6 +505,7 @@ export function describeChanges(
           `serves ${names(old.serves).join(', ') || 'nothing'} → ${names(b.serves).join(', ') || 'nothing'}`,
         );
       } else if (k === 'notes') changes.push('notes changed');
+      else if (k === 'sourceBreakerId') changes.push('feeding circuit changed');
       else if (k === 'tags') {
         const list = (t: string[] | undefined) => (t?.length ? t.join(', ') : 'none');
         changes.push(`tags ${list(old.tags)} → ${list(b.tags)}`);

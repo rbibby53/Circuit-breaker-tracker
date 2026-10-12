@@ -3,6 +3,9 @@ import {
   ampsLabel,
   breakerTags,
   circuitLabel,
+  columnsFor,
+  generatorRating,
+  isRelayPanel,
   panelDirectory,
   phaseOf,
   type BreakerDto,
@@ -17,6 +20,11 @@ type Breaker = BreakerDto & { key: string };
 /** What a breaker serves, in words. Locations the reader cannot see are counted, not named. */
 export function servesText(b: BreakerDto): string {
   const parts: string[] = [];
+  // Relays: the circuit they switch and what controls them.
+  if (b.source) parts.push(`Fed by ${b.source.panelName} ${b.source.circuit}`);
+  if (b.control) parts.push(b.control);
+  for (const r of b.switchedBy) parts.push(`Switched by ${r.panelName} relay ${r.relay}`);
+  if (b.hiddenSwitchedBy) parts.push(`Switched by ${b.hiddenSwitchedBy} relay${b.hiddenSwitchedBy === 1 ? '' : 's'}`);
   for (const f of b.feeds) parts.push(`Feeds ${f.panelName}`);
   if (b.hiddenFeeds) parts.push(`Feeds ${b.hiddenFeeds} other panel${b.hiddenFeeds === 1 ? '' : 's'}`);
   let hidden = 0;
@@ -33,21 +41,31 @@ export function servesText(b: BreakerDto): string {
 }
 
 function mainText(panel: PanelDetail): string | null {
+  if (isRelayPanel(panel)) return null; // relay panels have no main
   const kind = panel.mainType === 'lugs' ? 'lugs' : 'breaker';
   if (panel.mainAmps) return `${panel.mainAmps} A main ${kind}`;
   return panel.mainType === 'lugs' ? 'Main lugs' : null;
 }
 
 function facts(panel: PanelDetail, pdf: Pdf): string {
+  const relay = isRelayPanel(panel);
   return [
-    mainText(panel),
+    relay ? [panel.controlSystem, 'relay panel'].filter(Boolean).join(' ') : mainText(panel),
     panel.voltage,
-    `${panel.spaces} spaces`,
+    `${panel.spaces} ${relay ? 'relays' : 'spaces'}`,
     [panel.manufacturer, panel.model].filter(Boolean).join(' '),
     `Updated ${formatDate(panel.updatedAt, pdf.ctx)}`,
   ]
     .filter(Boolean)
     .join('  ·  ');
+}
+
+/** "On generator GEN-1 (250 kW diesel) through ATS-1", or through the panel feeding it. */
+export function generatorText(panel: PanelDetail): string | null {
+  const g = panel.generator;
+  if (!g) return null;
+  const how = g.via ? `through ${g.via.panelName}` : g.transferSwitch ? `through ${g.transferSwitch}` : '';
+  return `On generator ${g.name} (${generatorRating(g)})${how ? ` ${how}` : ''}`;
 }
 
 function fedText(panel: PanelDetail): string | null {
@@ -309,11 +327,13 @@ export function drawPanelSheet(pdf: Pdf, panel: PanelDetail): void {
   y = pdf.paragraph(facts(panel, pdf), pdf.left, y, textW, { font: 'body', size: 9 }, 2, 2);
   const fed = fedText(panel);
   if (fed) y = pdf.paragraph(fed, pdf.left, y + 1, textW, { font: 'body', size: 9, color: MUTED }, 2, 2);
+  const gen = generatorText(panel);
+  if (gen) y = pdf.paragraph(gen, pdf.left, y + 1, textW, { font: 'semi', size: 9 }, 2, 2);
   if (qrUrl) y = Math.max(y, pdf.top + qrSize + 14);
   y += 8;
 
   const keyRoom = 34;
-  const rows = Math.ceil(panel.spaces / (panel.layout === 'single' ? 1 : 2));
+  const rows = Math.ceil(panel.spaces / columnsFor(panel));
   const rowH = Math.min(34, (pdf.bottom - keyRoom - y) / rows);
   const info = drawSchedule(pdf, panel, pdf.left, y, pdf.contentWidth, rowH, {
     numW: 24,
@@ -396,7 +416,7 @@ export function drawDoorCard(pdf: Pdf, panel: PanelDetail): void {
 
   const maxH = Math.min(CARD_MAX_H, pdf.bottom - top);
   const keyRoom = 30;
-  const rows = Math.ceil(panel.spaces / (panel.layout === 'single' ? 1 : 2));
+  const rows = Math.ceil(panel.spaces / columnsFor(panel));
   const rowH = Math.min(20, (top + maxH - pad - keyRoom - y) / rows);
   const info = drawSchedule(pdf, panel, x + pad, y, inner, rowH, {
     numW: 17,

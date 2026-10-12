@@ -8,9 +8,9 @@ A self-hosted web app for recreating your electrical panels, labelling what ever
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
 
-> **Status: 1.0, stable.** Accounts with scoped access, Microsoft and Authentik sign-in, the panel editor for
-> residential load centers and commercial 3-phase panelboards, printing, logs and automatic
-> backups. Upgrades are automatic; see [Upgrading](#upgrading). What could come next is in
+> **Status: 1.1, stable.** Accounts with scoped access, Microsoft and Authentik sign-in, the
+> panel editor for residential load centers, commercial 3-phase panelboards and lighting relay
+> panels, standby generators, printing, logs and automatic backups. Upgrades are automatic; see [Upgrading](#upgrading). What could come next is in
 > [docs/PLAN.md](docs/PLAN.md).
 
 ![The panel editor with a tandem breaker selected](docs/screenshots/editor.png)
@@ -67,6 +67,14 @@ as a single Docker container with its data in one SQLite file.
   - **History** shows every change in plain words.
 - **Surge protectors** that install in breaker spaces, with or without breakers of their own.
   They are marked SPD in the panel, on PDFs and in CSV exports.
+- **Standby generators** for a site or building: size (kW), fuel, voltage, make and model.
+  Tie each panel to its generator (and transfer switch, e.g. ATS-1) under Panel settings.
+  Panels fed from a generator-backed panel are on the generator too. Panels, PDFs and CSV
+  exports say which generator backs them, and each generator lists every panel it backs up.
+- **Lighting relay panels**, such as Acuity **nLight** relay panels: a numbered column of 1-
+  and 2-pole relays. For each relay, record the breaker whose circuit it switches (in any
+  breaker panel), its control (nLight zone, channel, schedule, occupancy…) and the rooms it
+  lights. The breaker shows **Switched by RP-1 relay 5**, and search finds relays by zone.
 - **Panel summary:** circuits, spares and free spaces under each panel, and how evenly
   breaker ratings are spread across the legs (split-phase) or phases A/B/C (3-phase).
 - **Sub-panels:** set which breaker feeds a panel. Anyone who can see a panel also sees
@@ -145,7 +153,7 @@ Image tags:
 | -------- | ------------------------------------------------------------------ |
 | `latest` | The newest release. Use this unless you have a reason not to.      |
 | `1`      | The newest 1.x release: updates, but never a breaking 2.0.         |
-| `1.0.0`  | Exactly that release.                                              |
+| `1.1.0`  | Exactly that release.                                              |
 | `edge`   | The development build from `main`, between releases. May be rough. |
 
 The app listens on port **2757** by default (it spells "BRKR" on a phone keypad, and little
@@ -230,8 +238,8 @@ The container log (Unraid's log viewer, `docker logs`) has one readable line per
 container's time zone (`TZ`):
 
 ```
-2026-10-11 14:05:09 INFO  Circuit Breaker Tracker 1.0.0 starting · Node v24.21.0 · times in this log are America/Chicago
-2026-10-11 14:05:09 INFO  Database /data/breakers.db (1.2 MB, schema 8): 4 people, 31 locations, 6 panels, 212 breakers
+2026-10-11 14:05:09 INFO  Circuit Breaker Tracker 1.1.0 starting · Node v24.21.0 · times in this log are America/Chicago
+2026-10-11 14:05:09 INFO  Database /data/breakers.db (1.2 MB, schema 10): 4 people, 31 locations, 6 panels, 212 breakers
 2026-10-11 14:05:09 INFO  Sign-in: passwords, Authentik via auth.example.com (admin groups, 2 group access rules) · sessions last 30 days
 2026-10-11 14:06:41 INFO  Signed in: ryan (password and two-step code) from 192.168.1.20
 2026-10-11 14:07:02 INFO  ryan: Edited panel Main panel: Changed 14 label · Personal › Home › Basement › Utility room

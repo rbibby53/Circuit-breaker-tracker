@@ -1,6 +1,7 @@
 import {
   AVAILABLE_LAYOUTS,
   BACKUP_LABELS,
+  CONTROL_SYSTEMS,
   DEVICE_LABELS,
   LAYOUT_DEFAULTS,
   LAYOUT_LABELS,
@@ -21,7 +22,7 @@ import { ErrorNote, Field } from '../components/ui';
 import { usePanels } from '../queries';
 import type { TreeNode } from '../tree';
 
-function isInside(byId: Map<number, TreeNode>, locationId: number, ancestorId: number): boolean {
+export function isInside(byId: Map<number, TreeNode>, locationId: number, ancestorId: number): boolean {
   let n = byId.get(locationId);
   while (n) {
     if (n.id === ancestorId) return true;
@@ -64,13 +65,16 @@ export function PanelsHere({ node, byId }: { node: TreeNode; byId: Map<number, T
             <span className="stack-sm">
               <span className="card-title">{p.name}</span>
               <span className="small">
-                {p.voltage || LAYOUT_LABELS[p.layout]} ·{' '}
-                {p.mainType === 'lugs' ? 'main lugs' : `${p.mainAmps ?? '?'} A main`}
+                {p.layout === 'relay'
+                  ? `${p.controlSystem ? `${p.controlSystem} ` : ''}relay panel${p.voltage ? ` · ${p.voltage}` : ''}`
+                  : `${p.voltage || LAYOUT_LABELS[p.layout]} · ${p.mainType === 'lugs' ? 'main lugs' : `${p.mainAmps ?? '?'} A main`}`}
               </span>
               <span className="mono small muted">
-                {p.usedSpaces}/{p.spaces} spaces{p.criticalCount ? ` · ${p.criticalCount} critical` : ''}
+                {p.usedSpaces}/{p.spaces} {p.layout === 'relay' ? 'relays' : 'spaces'}
+                {p.criticalCount ? ` · ${p.criticalCount} critical` : ''}
               </span>
               {p.fedFrom && <span className="small muted">Fed from {p.fedFrom}</span>}
+              {p.generatorName && <span className="small muted">On generator {p.generatorName}</span>}
               {p.locationId !== node.id && <span className="small muted">In {byId.get(p.locationId)?.name}</span>}
             </span>
           </Link>
@@ -92,7 +96,9 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
     mainType: 'breaker' as 'breaker' | 'lugs',
     mainAmps: defaults?.mainAmps ?? 200,
     voltage: defaults?.voltage ?? '120/240 V split-phase',
+    controlSystem: 'nLight',
   });
+  const relay = layout === 'relay';
   // Admins set the defaults for homes in Settings; other layouts start from their own.
   const pickLayout = (l: PanelLayout) => {
     const d = l === 'residential' && defaults ? defaults : LAYOUT_DEFAULTS[l];
@@ -104,7 +110,9 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
       api.post<{ id: number }>(`/api/locations/${roomId}/panels`, {
         ...form,
         layout,
-        mainAmps: form.mainType === 'lugs' ? null : form.mainAmps,
+        mainType: relay ? 'lugs' : form.mainType,
+        mainAmps: relay || form.mainType === 'lugs' ? null : form.mainAmps,
+        controlSystem: relay ? form.controlSystem : '',
       }),
     onSuccess: async ({ id }) => {
       await qc.invalidateQueries({ queryKey: ['panels'] });
@@ -136,6 +144,8 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
               <span className="small muted">
                 {l === 'residential' && 'Two columns, odd left and even right. 1- and 2-pole, tandems.'}
                 {l === 'commercial' && 'Three-phase, rows on phases A, B and C. 1-, 2- and 3-pole, no tandems.'}
+                {l === 'relay' &&
+                  'Lighting control relays (nLight and others), numbered 1 up. Each relay switches a circuit from a breaker panel.'}
               </span>
             </label>
           );
@@ -146,11 +156,11 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
           <input
             required
             value={form.name}
-            placeholder="e.g. Main panel, Garage sub-panel"
+            placeholder={relay ? 'e.g. RP-1' : 'e.g. Main panel, Garage sub-panel'}
             onChange={(e) => setForm({ ...form, name: e.target.value })}
           />
         </Field>
-        <Field label="Spaces">
+        <Field label={relay ? 'Relays' : 'Spaces'}>
           <select value={form.spaces} onChange={(e) => setForm({ ...form, spaces: Number(e.target.value) })}>
             {spaceChoices(layout).map((n) => (
               <option key={n} value={n}>
@@ -159,16 +169,32 @@ export function AddPanelForm({ roomId, startOpen }: { roomId: number; startOpen:
             ))}
           </select>
         </Field>
-        <Field label="Main">
-          <select
-            value={form.mainType}
-            onChange={(e) => setForm({ ...form, mainType: e.target.value as 'breaker' | 'lugs' })}
-          >
-            <option value="breaker">Main breaker</option>
-            <option value="lugs">Main lugs only</option>
-          </select>
-        </Field>
-        {form.mainType === 'breaker' && (
+        {relay ? (
+          <Field label="Control system">
+            <input
+              value={form.controlSystem}
+              list="new-panel-control-systems"
+              maxLength={60}
+              onChange={(e) => setForm({ ...form, controlSystem: e.target.value })}
+            />
+            <datalist id="new-panel-control-systems">
+              {CONTROL_SYSTEMS.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </Field>
+        ) : (
+          <Field label="Main">
+            <select
+              value={form.mainType}
+              onChange={(e) => setForm({ ...form, mainType: e.target.value as 'breaker' | 'lugs' })}
+            >
+              <option value="breaker">Main breaker</option>
+              <option value="lugs">Main lugs only</option>
+            </select>
+          </Field>
+        )}
+        {!relay && form.mainType === 'breaker' && (
           <Field label="Main amps">
             <input
               type="number"

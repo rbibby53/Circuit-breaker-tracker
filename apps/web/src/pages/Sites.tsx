@@ -12,6 +12,7 @@ import { ErrorNote, Field } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { useLocations, usePanels } from '../queries';
 import { ancestry, buildTree, hiddenBuilding, shownChildren, type TreeNode } from '../tree';
+import { AddGeneratorForm, GeneratorsHere } from './Generators';
 import { AddPanelForm, PanelsHere, ServedBy } from './SitePanels';
 
 const plural = (kind: LocationKind, n: number) => `${n} ${KIND_LABELS[kind].toLowerCase()}${n === 1 ? '' : 's'}`;
@@ -260,6 +261,7 @@ function LocationView({
       {editing && <EditForm node={node} onDone={() => setEditing(false)} />}
 
       <PanelsHere node={node} byId={byId} />
+      <GeneratorsHere node={node} byId={byId} />
       {node.kind === 'room' && canEdit && (
         <AddPanelForm
           key={node.id}
@@ -268,8 +270,9 @@ function LocationView({
         />
       )}
       {node.kind !== 'room' && <ChildCards nodes={kids} onSelect={onSelect} />}
-      {canEdit && addKinds.length > 0 && (
+      {canEdit && (addKinds.length > 0 || node.kind !== 'company') && (
         <div className="add-actions">
+          {node.kind !== 'company' && <AddGeneratorForm key={`gen-${node.id}`} locationId={node.id} />}
           {addKinds.map((k) => (
             <AddForm
               key={`${node.id}-${k}`}

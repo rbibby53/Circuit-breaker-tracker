@@ -1,4 +1,11 @@
-import { LAYOUT_LABELS, type PanelDetail, type PanelHistoryItem, type SavePanelResponse, type Slot } from '@cbt/core';
+import {
+  LAYOUT_LABELS,
+  generatorRating,
+  type PanelDetail,
+  type PanelHistoryItem,
+  type SavePanelResponse,
+  type Slot,
+} from '@cbt/core';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
@@ -289,12 +296,16 @@ function Editor({
           <div>
             <h1>{doc.name}</h1>
             <p className="muted">
-              {LAYOUT_LABELS[doc.layout]}
-              {doc.voltage && ` · ${doc.voltage}`} · {doc.spaces} spaces ·{' '}
-              {doc.mainType === 'lugs' ? 'main lugs' : `${doc.mainAmps ?? '?'} A main`}
+              {doc.layout === 'relay' && doc.controlSystem
+                ? `${doc.controlSystem} relay panel`
+                : LAYOUT_LABELS[doc.layout]}
+              {doc.voltage && ` · ${doc.voltage}`} · {doc.spaces} {doc.layout === 'relay' ? 'relays' : 'spaces'}
+              {doc.layout !== 'relay' &&
+                (doc.mainType === 'lugs' ? ' · main lugs' : ` · ${doc.mainAmps ?? '?'} A main`)}
               {(doc.manufacturer || doc.model) && ` · ${[doc.manufacturer, doc.model].filter(Boolean).join(' ')}`}
             </p>
             <FeedLine panel={server} />
+            <GeneratorLine panel={server} />
           </div>
           <div className="toolbar">
             {!readOnly && <SaveBadge state={saveState} />}
@@ -393,8 +404,10 @@ function Editor({
 
       <div className="editor-body">
         <section className="editor-center" aria-label="Panel">
-          <Legend />
-          <LoadSummary panel={doc} breakers={doc.breakers} mainAmps={doc.mainType === 'lugs' ? null : doc.mainAmps} />
+          <Legend relay={doc.layout === 'relay'} />
+          {doc.layout !== 'relay' && (
+            <LoadSummary panel={doc} breakers={doc.breakers} mainAmps={doc.mainType === 'lugs' ? null : doc.mainAmps} />
+          )}
           <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
           <PanelGrid
             doc={doc}
@@ -408,6 +421,16 @@ function Editor({
               if (apply(r) && r.ok && 'key' in r && r.key) setSelected(r.key);
             }}
             onMove={(key, position, slot) => apply(moveBreaker(docRef.current, key, position, slot))}
+            relaySources={
+              doc.layout === 'relay'
+                ? new Map(
+                    server.breakers.map((b) => [
+                      b.id,
+                      b.source ? `${b.source.panelName} · ${b.source.circuit}` : 'Feed not set',
+                    ]),
+                  )
+                : undefined
+            }
             feeds={
               new Map(
                 server.breakers.map((b) => [
@@ -424,6 +447,7 @@ function Editor({
         {selectedBreaker ? (
           <Inspector
             key={selectedBreaker.key}
+            panelId={initial.id}
             doc={doc}
             breaker={selectedBreaker}
             server={serverBreaker}
@@ -469,8 +493,30 @@ function SaveBadge({ state }: { state: SaveState }) {
   );
 }
 
+/** "On generator GEN-1 (250 kW diesel) · ATS-1", or through the panel feeding it. */
+function GeneratorLine({ panel }: { panel: PanelDetail }) {
+  const g = panel.generator;
+  if (!g) return null;
+  const name = g.canView ? <Link to={`/generators/${g.id}`}>{g.name}</Link> : <strong>{g.name}</strong>;
+  return (
+    <p className="feed-line">
+      <span className="badge badge-gen">GEN</span> On generator {name} ({generatorRating(g)})
+      {g.via ? (
+        <>
+          {' '}
+          through <Link to={`/panels/${g.via.panelId}`}>{g.via.panelName}</Link>
+        </>
+      ) : (
+        g.transferSwitch && ` through ${g.transferSwitch}`
+      )}
+    </p>
+  );
+}
+
 function FeedLine({ panel }: { panel: PanelDetail }) {
   if (panel.feedChain.length === 0) {
+    // A relay panel's control power is optional detail.
+    if (panel.layout === 'relay') return null;
     return (
       <p className="feed-line">
         Fed from: {panel.mainType === 'lugs' ? 'not set yet (Panel settings → Fed from)' : 'the utility service'}
@@ -491,25 +537,30 @@ function FeedLine({ panel }: { panel: PanelDetail }) {
   );
 }
 
-function Legend() {
+function Legend({ relay }: { relay: boolean }) {
   return (
     <div className="legend">
-      <span>
-        <i className="sw" style={{ background: '#6B737A' }} />
-        Standard
-      </span>
-      <span>
-        <i className="sw" style={{ background: '#2F6FD6' }} />
-        GFCI
-      </span>
-      <span>
-        <i className="sw" style={{ background: '#F59E2A' }} />
-        AFCI
-      </span>
-      <span>
-        <i className="sw" style={{ background: '#C9B3FF' }} />
-        Dual function
-      </span>
+      {/* Relays have no GFCI/AFCI protection of their own. */}
+      {!relay && (
+        <>
+          <span>
+            <i className="sw" style={{ background: '#6B737A' }} />
+            Standard
+          </span>
+          <span>
+            <i className="sw" style={{ background: '#2F6FD6' }} />
+            GFCI
+          </span>
+          <span>
+            <i className="sw" style={{ background: '#F59E2A' }} />
+            AFCI
+          </span>
+          <span>
+            <i className="sw" style={{ background: '#C9B3FF' }} />
+            Dual function
+          </span>
+        </>
+      )}
       <span>
         <span className="badge badge-crit">CRIT</span> Critical
       </span>

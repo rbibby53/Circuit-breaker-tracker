@@ -308,7 +308,14 @@ breaker labels, Gravatar pictures, readable logs, automatic backups and signed-i
 
 ## After 1.0
 
+1.1 added standby generators (and the panels they back up), lighting relay panels such as
+nLight (each relay linked to the breaker it switches), and Authentik sign-in with access from
+single sign-on groups.
+
 Ideas, not promises:
+
+- **Generator exercise and transfer test log**, with run hours and the last test date.
+- **Relay panel import** from an nLight (SensorView) export, and relay schedules.
 
 - **Test and inspection log:** GFCI/AFCI test-button checks, surge protector indicator checks
   and thermal scans per breaker, with "last tested" dates and overdue reminders.

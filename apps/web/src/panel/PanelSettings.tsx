@@ -1,5 +1,6 @@
 import {
   AVAILABLE_LAYOUTS,
+  CONTROL_SYSTEMS,
   LAYOUT_DEFAULTS,
   LAYOUT_LABELS,
   VOLTAGE_PRESETS,
@@ -11,6 +12,7 @@ import {
 import { useQuery } from '@tanstack/react-query';
 import { api } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
+import { useGenerators } from '../queries';
 import { DuplicatePanel } from './DuplicatePanel';
 import { SharePanel } from './SharePanel';
 import type { EditPanel } from './state';
@@ -32,6 +34,11 @@ export function PanelSettings({
     queryFn: () => api.get<FeedCandidate[]>(`/api/panels/${server.id}/feed-candidates`),
   });
   const known = new Set((candidates.data ?? []).map((c) => c.breakerId));
+  const generators = useGenerators();
+  const relay = doc.layout === 'relay';
+  // A relay panel stays one, and a breaker panel cannot become one.
+  const layouts = AVAILABLE_LAYOUTS.filter((l) => (l === 'relay') === relay);
+  const inherited = server.generator?.via ? server.generator : null;
   const spaces = spaceChoices(doc.layout);
   if (!spaces.includes(doc.spaces)) spaces.push(doc.spaces);
 
@@ -59,8 +66,8 @@ export function PanelSettings({
         </label>
         <label className="field">
           <span className="field-label">Layout</span>
-          <select value={doc.layout} onChange={(e) => changeLayout(e.target.value as PanelLayout)}>
-            {AVAILABLE_LAYOUTS.map((l) => (
+          <select value={doc.layout} disabled={relay} onChange={(e) => changeLayout(e.target.value as PanelLayout)}>
+            {layouts.map((l) => (
               <option key={l} value={l}>
                 {LAYOUT_LABELS[l]}
               </option>
@@ -68,7 +75,7 @@ export function PanelSettings({
           </select>
         </label>
         <label className="field">
-          <span className="field-label">Spaces</span>
+          <span className="field-label">{relay ? 'Relays' : 'Spaces'}</span>
           <select value={doc.spaces} onChange={(e) => onChange({ spaces: Number(e.target.value) })}>
             {spaces.map((n) => (
               <option key={n} value={n}>
@@ -77,17 +84,35 @@ export function PanelSettings({
             ))}
           </select>
         </label>
-        <label className="field">
-          <span className="field-label">Main</span>
-          <select
-            value={doc.mainType}
-            onChange={(e) => onChange({ mainType: e.target.value as EditPanel['mainType'] })}
-          >
-            <option value="breaker">Main breaker</option>
-            <option value="lugs">Main lugs only (fed from elsewhere)</option>
-          </select>
-        </label>
-        {doc.mainType === 'breaker' && (
+        {relay ? (
+          <label className="field">
+            <span className="field-label">Control system</span>
+            <input
+              value={doc.controlSystem}
+              list="control-systems"
+              maxLength={60}
+              placeholder="e.g. nLight"
+              onChange={(e) => onChange({ controlSystem: e.target.value }, 'controlSystem')}
+            />
+            <datalist id="control-systems">
+              {CONTROL_SYSTEMS.map((c) => (
+                <option key={c} value={c} />
+              ))}
+            </datalist>
+          </label>
+        ) : (
+          <label className="field">
+            <span className="field-label">Main</span>
+            <select
+              value={doc.mainType}
+              onChange={(e) => onChange({ mainType: e.target.value as EditPanel['mainType'] })}
+            >
+              <option value="breaker">Main breaker</option>
+              <option value="lugs">Main lugs only (fed from elsewhere)</option>
+            </select>
+          </label>
+        )}
+        {!relay && doc.mainType === 'breaker' && (
           <label className="field">
             <span className="field-label">Main breaker amps</span>
             <input
@@ -124,12 +149,12 @@ export function PanelSettings({
           <input value={doc.model} onChange={(e) => onChange({ model: e.target.value }, 'model')} />
         </label>
         <label className="field span-2">
-          <span className="field-label">Fed from</span>
+          <span className="field-label">{relay ? 'Control power from' : 'Fed from'}</span>
           <select
             value={doc.fedFromBreakerId ?? ''}
             onChange={(e) => onChange({ fedFromBreakerId: e.target.value ? Number(e.target.value) : null })}
           >
-            <option value="">The utility service (this is a main panel)</option>
+            <option value="">{relay ? 'Not set' : 'The utility service (this is a main panel)'}</option>
             {doc.fedFromBreakerId !== null && !known.has(doc.fedFromBreakerId) && (
               <option value={doc.fedFromBreakerId}>
                 {server.feedChain[0]
@@ -148,6 +173,35 @@ export function PanelSettings({
             ))}
           </select>
         </label>
+        <label className="field">
+          <span className="field-label">Standby generator</span>
+          <select
+            value={doc.generatorId ?? ''}
+            onChange={(e) => onChange({ generatorId: e.target.value ? Number(e.target.value) : null })}
+          >
+            <option value="">
+              {inherited ? `None of its own (on ${inherited.name} through ${inherited.via!.panelName})` : 'None'}
+            </option>
+            {doc.generatorId !== null && !(generators.data ?? []).some((g) => g.id === doc.generatorId) && (
+              <option value={doc.generatorId}>{server.generator?.name ?? 'Current generator'}</option>
+            )}
+            {(generators.data ?? []).map((g) => (
+              <option key={g.id} value={g.id}>
+                {g.name} ({g.locationPath})
+              </option>
+            ))}
+          </select>
+        </label>
+        <label className="field">
+          <span className="field-label">Transfer switch</span>
+          <input
+            value={doc.transferSwitch}
+            disabled={doc.generatorId === null}
+            maxLength={40}
+            placeholder="e.g. ATS-1"
+            onChange={(e) => onChange({ transferSwitch: e.target.value }, 'transferSwitch')}
+          />
+        </label>
         <label className="field span-2">
           <span className="field-label">Notes</span>
           <textarea rows={2} value={doc.notes} onChange={(e) => onChange({ notes: e.target.value }, 'notes')} />
@@ -162,7 +216,7 @@ export function PanelSettings({
           onClick={async () => {
             const ok = await confirm({
               title: `Delete ${server.name}?`,
-              message: 'All its breakers and their labels go too. This cannot be undone.',
+              message: `All its ${relay ? 'relays' : 'breakers'} and their labels go too. This cannot be undone.`,
               confirmLabel: 'Delete panel',
               danger: true,
             });
