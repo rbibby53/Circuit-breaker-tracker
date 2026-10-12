@@ -4,6 +4,12 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.1.0 — 2026-10-12
+
+Standby generators, lighting relay panels such as nLight, and Authentik sign-in with access from
+single sign-on groups. Upgrading is automatic: the database is updated when the new image
+starts. Your daily backups are in `/data/backups`, or download one under Settings → Backup first.
+
 ### Added
 
 - **Standby generators.** Add a generator to a site or building (Add a generator on its page)

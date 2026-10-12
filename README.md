@@ -153,7 +153,7 @@ Image tags:
 | -------- | ------------------------------------------------------------------ |
 | `latest` | The newest release. Use this unless you have a reason not to.      |
 | `1`      | The newest 1.x release: updates, but never a breaking 2.0.         |
-| `1.0.0`  | Exactly that release.                                              |
+| `1.1.0`  | Exactly that release.                                              |
 | `edge`   | The development build from `main`, between releases. May be rough. |
 
 The app listens on port **2757** by default (it spells "BRKR" on a phone keypad, and little
@@ -238,8 +238,8 @@ The container log (Unraid's log viewer, `docker logs`) has one readable line per
 container's time zone (`TZ`):
 
 ```
-2026-10-11 14:05:09 INFO  Circuit Breaker Tracker 1.0.0 starting · Node v24.21.0 · times in this log are America/Chicago
-2026-10-11 14:05:09 INFO  Database /data/breakers.db (1.2 MB, schema 8): 4 people, 31 locations, 6 panels, 212 breakers
+2026-10-11 14:05:09 INFO  Circuit Breaker Tracker 1.1.0 starting · Node v24.21.0 · times in this log are America/Chicago
+2026-10-11 14:05:09 INFO  Database /data/breakers.db (1.2 MB, schema 10): 4 people, 31 locations, 6 panels, 212 breakers
 2026-10-11 14:05:09 INFO  Sign-in: passwords, Authentik via auth.example.com (admin groups, 2 group access rules) · sessions last 30 days
 2026-10-11 14:06:41 INFO  Signed in: ryan (password and two-step code) from 192.168.1.20
 2026-10-11 14:07:02 INFO  ryan: Edited panel Main panel: Changed 14 label · Personal › Home › Basement › Utility room
