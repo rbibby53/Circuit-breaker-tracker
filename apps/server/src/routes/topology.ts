@@ -132,7 +132,7 @@ export function topologyRoutes(app: FastifyInstance, db: DB): void {
           inScope: inside(t.location_id),
         });
         const g = t.generator_id ? getGenerator(db, t.generator_id) : undefined;
-        if (g) addEdge({ from: generatorNode(g), to: key, kind: 'emergency', label: 'Emergency' });
+        if (g) addEdge({ from: generatorNode(g), to: key, kind: 'emergency', label: '' });
       }
       return key;
     };
