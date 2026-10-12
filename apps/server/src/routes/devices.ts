@@ -8,6 +8,7 @@ import {
   circuitLabel,
   deviceRating,
   effectiveRole,
+  formatVa,
   isRelayPanel,
   powerDeviceInputSchema,
   type DeviceLoad,
@@ -19,6 +20,7 @@ import {
 } from '@cbt/core';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../audit';
+import { CAPACITY_WARNING, deviceVoltageWarnings, LoadWalk } from '../capacity';
 import { actorOf, requireAuth } from '../context';
 import { now, type DB } from '../db';
 import { badRequest, forbidden, idParam, notFound, parse } from '../errors';
@@ -138,6 +140,8 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
     const d = visibleDevice(actor, access, idParam((req.params as { id: string }).id));
     const base = summary(actor, access, d);
     const { panels, devices } = loadsOf(d);
+    const demandVa = new LoadWalk(db).device(d);
+    const ratio = (d.kind === 'transformer' || d.kind === 'ups') && d.kva ? demandVa / (d.kva * 1000) : null;
     const loads: DeviceLoad[] = [
       ...panels
         .filter((p) => canViewPanel(actor, access, p))
@@ -168,6 +172,14 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
       fedFromBreakerId: d.fed_from_breaker_id,
       fedFromDeviceId: d.fed_from_device_id,
       feedChain: chainLinks(actor, access, upstream(db, deviceFeed(d), { deviceId: d.id })),
+      demandVa,
+      ratio,
+      warnings: [
+        ...deviceVoltageWarnings(db, d),
+        ...(ratio !== null && ratio >= CAPACITY_WARNING
+          ? [`Its load is ${Math.round(ratio * 100)}% of its ${d.kva} kVA (${formatVa(demandVa)}).`]
+          : []),
+      ],
       loads,
       hiddenLoads: panels.length + devices.length - loads.length,
     };

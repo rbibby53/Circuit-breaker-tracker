@@ -387,4 +387,9 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE generators ADD COLUMN tank_gallons INTEGER;
   ALTER TABLE generators ADD COLUMN runtime_hours REAL;
   `,
+  `
+  -- Connected load per circuit (VA) and its demand factor (percent; unset means 100%).
+  ALTER TABLE breakers ADD COLUMN load_va REAL;
+  ALTER TABLE breakers ADD COLUMN demand_pct INTEGER;
+  `,
 ];

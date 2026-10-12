@@ -5,6 +5,8 @@ import {
   DEVICES,
   DEVICE_LABELS,
   ampsLabel,
+  formatVa,
+  vaFromText,
   PROTECTIONS,
   PROTECTION_LABELS,
   allowsTandem,
@@ -121,6 +123,15 @@ export function Inspector({
               <dd>{PROTECTION_LABELS[b.protection]}</dd>
             </>
           )}
+          {b.loadVa ? (
+            <>
+              <dt>Load</dt>
+              <dd>
+                {formatVa(b.loadVa)}
+                {b.demandPct !== null && b.demandPct !== 100 && ` at ${b.demandPct}% demand`}
+              </dd>
+            </>
+          ) : null}
           <dt>Flags</dt>
           <dd>
             {[b.critical && 'Critical', b.backup !== 'none' && `On ${BACKUP_LABELS[b.backup]}`, b.isSpare && 'Spare']
@@ -295,6 +306,7 @@ export function Inspector({
           <span />
         )}
       </div>
+      {!relay && !(b.device === 'surge' && b.amps === 0) && <LoadFields b={b} onPatch={onPatch} />}
 
       <fieldset className="flags">
         <legend className="field-label">Flags</legend>
@@ -471,5 +483,48 @@ function SwitchedByNote({ breaker }: { breaker: BreakerDto }) {
       {breaker.hiddenSwitchedBy > 0 &&
         `${breaker.switchedBy.length ? ' and ' : ''}${breaker.hiddenSwitchedBy} relay${breaker.hiddenSwitchedBy === 1 ? '' : 's'} outside your access`}
     </p>
+  );
+}
+
+/** Connected load and demand factor, with the VA from the notes offered when it is there. */
+function LoadFields({
+  b,
+  onPatch,
+}: {
+  b: EditBreaker;
+  onPatch: (patch: Partial<EditBreaker>, coalesce?: string) => void;
+}) {
+  const fromNotes = b.loadVa ? null : vaFromText(`${b.label} ${b.notes}`);
+  return (
+    <div className="two-col">
+      <label className="field">
+        <span className="field-label">Load (VA)</span>
+        <input
+          type="number"
+          min={0}
+          step="any"
+          value={b.loadVa ?? ''}
+          placeholder="Connected load"
+          onChange={(e) => onPatch({ loadVa: e.target.value ? Number(e.target.value) : null }, `load:${b.key}`)}
+        />
+        {fromNotes !== null && (
+          <button type="button" className="link-btn small" onClick={() => onPatch({ loadVa: fromNotes })}>
+            Use {formatVa(fromNotes)} from the notes
+          </button>
+        )}
+      </label>
+      <label className="field">
+        <span className="field-label">Demand %</span>
+        <input
+          type="number"
+          min={0}
+          max={200}
+          value={b.demandPct ?? ''}
+          placeholder="100"
+          disabled={!b.loadVa}
+          onChange={(e) => onPatch({ demandPct: e.target.value ? Number(e.target.value) : null }, `demand:${b.key}`)}
+        />
+      </label>
+    </div>
   );
 }

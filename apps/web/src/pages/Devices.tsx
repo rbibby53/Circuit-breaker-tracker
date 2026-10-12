@@ -6,6 +6,7 @@ import {
   POWER_DEVICE_LABELS,
   TRANSFORMER_KVA,
   atLeast,
+  formatVa,
   type FeedCandidate,
   type FeedOptions,
   type PowerDeviceDetail,
@@ -449,6 +450,22 @@ export function DevicePage() {
         </div>
       </div>
       <ErrorNote error={remove.error} />
+      {d.warnings.map((w) => (
+        <p key={w} className="load-warning small" role="note">
+          {w}
+        </p>
+      ))}
+      {(d.demandVa > 0 || d.ratio !== null) && (
+        <p className="small">
+          Load below it: <strong>{formatVa(d.demandVa)}</strong>
+          {d.ratio !== null && (
+            <>
+              {' '}
+              · <strong>{Math.round(d.ratio * 100)}%</strong> of its {d.kva} kVA
+            </>
+          )}
+        </p>
+      )}
 
       {form && (
         <form

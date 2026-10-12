@@ -173,6 +173,10 @@ export const breakerInputSchema = z
     sourceBreakerId: z.number().int().positive().nullable().default(null),
     /** Relays: what controls it, e.g. an nLight zone, channel or schedule. */
     control: optionalText(120),
+    /** Connected load in volt-amps, from the panel schedule. */
+    loadVa: z.number().min(0).max(100_000_000).nullable().default(null),
+    /** Demand factor in percent (unset means 100%). */
+    demandPct: z.number().int().min(0).max(200).nullable().default(null),
   })
   .refine((b) => b.amps > 0 || b.device === 'surge', {
     message: 'A breaker needs a rating of at least 1 A.',

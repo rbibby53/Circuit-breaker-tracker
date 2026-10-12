@@ -223,6 +223,9 @@ export interface BreakerDto {
   switchedBy: { panelId: number; panelName: string; relay: string; label: string; control: string }[];
   /** Relays switching this circuit in panels the viewer cannot see. */
   hiddenSwitchedBy: number;
+  /** Connected load (VA) and demand factor (%), when recorded. */
+  loadVa: number | null;
+  demandPct: number | null;
 }
 
 /** The breaker feeding a relay. Everyone who can see the relay sees this summary. */
@@ -293,6 +296,25 @@ export interface PanelNameplate {
   feederConduit: string;
 }
 
+/** One rating the load below a panel is checked against. */
+export interface CapacityLimit {
+  /** "Main breaker 225 A", "Feeder HA 1 + 3 + 5 (100 A)", "Transformer T-LDP1 (75 kVA)". */
+  label: string;
+  /** What that item carries: demand of everything below it. */
+  demandVa: number;
+  capacityVa: number;
+  /** demandVa over capacityVa, as a fraction. 0.8 and above is flagged. */
+  ratio: number;
+}
+
+export interface LoadCheck {
+  /** Demand of this panel's own circuits. */
+  demandVa: number;
+  /** This panel plus everything it feeds, through sub-panels and transformers. */
+  totalDemandVa: number;
+  limits: CapacityLimit[];
+}
+
 export interface PanelDetail extends Omit<
   PanelSummary,
   'usedSpaces' | 'breakerCount' | 'criticalCount' | 'fedFrom' | 'generatorName'
@@ -311,6 +333,10 @@ export interface PanelDetail extends Omit<
   /** The transformer, disconnect, UPS or service feeding it, instead of a breaker. */
   fedFromDeviceId: number | null;
   nameplate: PanelNameplate;
+  /** Demand below the panel against its main, feeder and transformer. */
+  loadCheck: LoadCheck;
+  /** Things that look wrong, e.g. a voltage that does not match the feed. */
+  warnings: string[];
   /** Path of the public page ("/p/…") when the panel has one and public pages are allowed. */
   publicPath: string | null;
   /** Whether the viewer may turn the public page on or off (Manager or admin). */
@@ -660,6 +686,10 @@ export interface PowerDeviceDetail extends PowerDeviceSummary {
   fedFromDeviceId: number | null;
   /** From the breaker or device feeding it up to the service. */
   feedChain: FeedLink[];
+  /** Demand of everything it feeds, and for a transformer or UPS how much of its kVA that is. */
+  demandVa: number;
+  ratio: number | null;
+  warnings: string[];
   loads: DeviceLoad[];
   hiddenLoads: number;
 }

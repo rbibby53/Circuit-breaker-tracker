@@ -41,6 +41,9 @@ export interface EditBreaker {
   sourceBreakerId: number | null;
   /** Relays: what controls it, e.g. an nLight zone. */
   control: string;
+  /** Connected load (VA) and demand factor (%), when recorded. */
+  loadVa: number | null;
+  demandPct: number | null;
 }
 
 export interface EditPanel {
@@ -103,6 +106,8 @@ export function fromDetail(p: PanelDetail): EditPanel {
       tags: b.tags,
       sourceBreakerId: b.sourceBreakerId,
       control: b.control,
+      loadVa: b.loadVa,
+      demandPct: b.demandPct,
     })),
   };
 }
@@ -134,6 +139,8 @@ export function toRequest(doc: EditPanel, version: number, baselineFeed: string,
     tags: b.tags,
     sourceBreakerId: b.sourceBreakerId,
     control: b.control,
+    loadVa: b.loadVa,
+    demandPct: b.demandPct,
   }));
   return {
     name: doc.name,
@@ -200,6 +207,8 @@ export function addBreaker(doc: EditPanel, position: number, slot: Slot = 'full'
     tags: [],
     sourceBreakerId: null,
     control: '',
+    loadVa: null,
+    demandPct: null,
   });
   return r.ok ? { ...r, key } : r;
 }

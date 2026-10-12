@@ -5,6 +5,7 @@ import {
   circuitLabel,
   columnsFor,
   generatorRating,
+  formatVa,
   isRelayPanel,
   nameplateText,
   panelDirectory,
@@ -39,6 +40,7 @@ export function servesText(b: BreakerDto): string {
     parts.push(s.note ? `${name} (${s.note})` : name);
   }
   if (hidden) parts.push(`${hidden} more not shown`);
+  if (b.loadVa) parts.push(formatVa(b.loadVa));
   return parts.join(', ');
 }
 
@@ -57,6 +59,7 @@ function facts(panel: PanelDetail, pdf: Pdf): string {
     `${panel.spaces} ${relay ? 'relays' : 'spaces'}`,
     [panel.manufacturer, panel.model].filter(Boolean).join(' '),
     nameplateText(panel.nameplate, panel.mainType === 'lugs' ? null : panel.mainAmps),
+    panel.loadCheck.demandVa ? `Demand ${formatVa(panel.loadCheck.demandVa)}` : '',
     `Updated ${formatDate(panel.updatedAt, pdf.ctx)}`,
   ]
     .filter(Boolean)

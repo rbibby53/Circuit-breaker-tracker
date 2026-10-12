@@ -32,6 +32,8 @@ export const BREAKER_COLUMNS = [
   'Poles',
   'Type',
   'Amps',
+  'Load (VA)',
+  'Demand %',
   'Label',
   'Protection',
   'Critical',
@@ -70,6 +72,8 @@ export function breakerRows(panel: PanelDetail): (string | number | boolean | nu
       isRelayPanel(panel) ? 'Relay' : DEVICE_LABELS[b.device],
       // A surge protector without breakers has no rating.
       b.amps === 0 ? '' : b.amps,
+      b.loadVa ?? '',
+      b.loadVa && b.demandPct !== null ? b.demandPct : '',
       b.label,
       PROTECTION_LABELS[b.protection],
       b.critical,

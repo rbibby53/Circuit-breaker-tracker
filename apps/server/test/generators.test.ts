@@ -592,3 +592,75 @@ describe('transformers and other equipment', () => {
     expect(map.nodes.find((n: any) => n.id === `a${ats.body.id}`).detail).toBe('Life safety');
   });
 });
+
+describe('connected load and capacity', () => {
+  it('adds up load below a panel and flags 80% of the main, feeder or transformer', async () => {
+    const c = await campus();
+    // LP-1 at 480 V feeds T-1 (75 kVA, 480 → 208 V) through DS-1; T-1 feeds LDP-1.
+    await save(c.admin, c.lp, null, { voltage: '277/480 V 3-phase' });
+    const lp = (await c.admin.get(`/api/panels/${c.lp}`)).body;
+    const feeder = (
+      await save(c.admin, c.lp, [
+        ...lp.breakers.map((b: any) => ({ ...b, clientKey: String(b.id), serves: [] })),
+        row('t1', 5, { poles: 3, amps: 125, label: 'T-1' }),
+      ])
+    ).body.idMap.t1;
+    const t1 = (
+      await c.admin.post('/api/power-devices', {
+        kind: 'transformer',
+        name: 'T-1',
+        locationId: c.elec,
+        kva: 75,
+        voltage: '480 V',
+        secondaryVoltage: '120/208 V',
+        fedFromBreakerId: feeder,
+      })
+    ).body.id;
+    const ldp = (
+      await c.admin.post(`/api/locations/${c.elec}/panels`, {
+        name: 'LDP-1',
+        layout: 'commercial',
+        spaces: 42,
+        mainAmps: 225,
+        voltage: '120/208 V 3-phase',
+      })
+    ).body.id;
+    const loads = [
+      row('a', 1, { poles: 3, amps: 60, loadVa: 30000 }),
+      row('b', 7, { poles: 3, amps: 60, loadVa: 40000, demandPct: 75 }),
+      row('spare', 13, { isSpare: true, loadVa: 99999 }),
+    ];
+    expect((await save(c.admin, ldp, loads, { fedFromDeviceId: t1 })).status).toBe(200);
+
+    const detail = (await c.admin.get(`/api/panels/${ldp}`)).body;
+    expect(detail.breakers[0]).toMatchObject({ loadVa: 30000, demandPct: null });
+    expect(detail.loadCheck.demandVa).toBe(60000);
+    const byLabel = Object.fromEntries(detail.loadCheck.limits.map((l: any) => [l.label, Math.round(l.ratio * 100)]));
+    expect(byLabel).toEqual({
+      'Main breaker 225 A': 74,
+      'Feeder LP-1 5 + 7 + 9 (125 A)': 58,
+      'Transformer T-1 (75 kVA)': 80,
+    });
+    expect(detail.warnings).toEqual(['Transformer T-1 (75 kVA) is at 80% (60 kVA of 75 kVA).']);
+    // LP-1 carries it too.
+    expect((await c.admin.get(`/api/panels/${c.lp}`)).body.loadCheck.totalDemandVa).toBe(60000);
+    expect((await c.admin.get(`/api/power-devices/${t1}`)).body).toMatchObject({ demandVa: 60000, ratio: 0.8 });
+    expect((await c.admin.raw(`/api/panels/${ldp}/csv`)).body.toString()).toContain(',60,30000,,');
+  });
+
+  it('warns when voltages do not line up along a feed', async () => {
+    const c = await campus();
+    await save(c.admin, c.em1, null, { voltage: '277/480 V 3-phase' });
+    await save(c.admin, c.em2, null, { voltage: '120/208 V 3-phase' });
+    expect((await c.admin.get(`/api/panels/${c.em2}`)).body.warnings).toEqual([
+      'Fed from EM-1 at 277/480 V 3-phase, but this panel is 120/208 V 3-phase with no transformer between. Check the voltages, or add the transformer and pick it under Fed from.',
+    ]);
+    await save(c.admin, c.em2, null, { voltage: '480 V' });
+    expect((await c.admin.get(`/api/panels/${c.em2}`)).body.warnings).toEqual([]);
+
+    await save(c.admin, c.lp, [row('x', 1, { poles: 3, amps: 30 })], { voltage: '120/240 V single-phase' });
+    expect((await c.admin.get(`/api/panels/${c.lp}`)).body.warnings).toEqual([
+      'Circuit 1 + 3 + 5 is 3-pole, but the panel is set to 120/240 V single-phase.',
+    ]);
+  });
+});

@@ -417,7 +417,24 @@ function Editor({
         <section className="editor-center" aria-label="Panel">
           <Legend relay={doc.layout === 'relay'} />
           {doc.layout !== 'relay' && (
-            <LoadSummary panel={doc} breakers={doc.breakers} mainAmps={doc.mainType === 'lugs' ? null : doc.mainAmps} />
+            <LoadSummary
+              panel={doc}
+              breakers={doc.breakers}
+              mainAmps={doc.mainType === 'lugs' ? null : doc.mainAmps}
+              check={server.loadCheck}
+              warnings={server.warnings}
+              onFillFromNotes={
+                readOnly
+                  ? undefined
+                  : (loads) =>
+                      commit({
+                        ...docRef.current,
+                        breakers: docRef.current.breakers.map((b) =>
+                          loads.has(b.key) ? { ...b, loadVa: loads.get(b.key)! } : b,
+                        ),
+                      })
+              }
+            />
           )}
           <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
           <PanelGrid

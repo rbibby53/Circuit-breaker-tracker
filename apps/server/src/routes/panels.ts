@@ -288,12 +288,13 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
 
       const update = db.prepare(
         `UPDATE breakers SET position = ?, slot = ?, poles = ?, amps = ?, protection = ?, label = ?, notes = ?,
-           is_spare = ?, critical = ?, backup = ?, device = ?, source_breaker_id = ?, control = ? WHERE id = ?`,
+           is_spare = ?, critical = ?, backup = ?, device = ?, source_breaker_id = ?, control = ?, load_va = ?,
+           demand_pct = ? WHERE id = ?`,
       );
       const insert = db.prepare(
         `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device,
-           source_breaker_id, control)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           source_breaker_id, control, load_va, demand_pct)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const clearServes = db.prepare('DELETE FROM breaker_serves WHERE breaker_id = ?');
       const addServe = db.prepare(
@@ -316,6 +317,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
           b.device,
           relay ? b.sourceBreakerId : null,
           relay ? b.control : '',
+          b.loadVa,
+          b.loadVa ? b.demandPct : null,
         ] as const;
         let id: number;
         if (b.id !== undefined) {
@@ -497,8 +500,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       const panelId = Number(r.lastInsertRowid);
       const insert = db.prepare(
         `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device,
-           source_breaker_id, control)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           source_breaker_id, control, load_va, demand_pct)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const addServe = db.prepare('INSERT INTO breaker_serves (breaker_id, location_id, note) VALUES (?, ?, ?)');
       for (const b of breakers) {
@@ -518,6 +521,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
             b.device,
             b.source_breaker_id,
             b.control,
+            b.load_va,
+            b.demand_pct,
           ).lastInsertRowid,
         );
         setTags(

@@ -2899,3 +2899,68 @@ code {
   color: var(--surface);
   box-shadow: none;
 }
+
+/* Panel summary: capacity against main, feeder and transformer. */
+.capacity {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-top: 8px;
+}
+.capacity h3 {
+  margin: 0;
+}
+.capacity-row {
+  display: grid;
+  grid-template-columns: minmax(140px, 260px) 1fr auto;
+  gap: 10px;
+  align-items: center;
+  font-size: 13px;
+}
+.capacity-bar {
+  position: relative;
+  height: 10px;
+  border-radius: 5px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.capacity-bar > span {
+  display: block;
+  height: 100%;
+  background: var(--ok);
+  border-radius: 5px;
+}
+.capacity-bar > i {
+  position: absolute;
+  top: 0;
+  bottom: 0;
+  width: 2px;
+  background: var(--ink-2);
+  opacity: 0.5;
+}
+.capacity-row.is-high .capacity-bar > span {
+  background: var(--gen);
+}
+.capacity-row.is-over .capacity-bar > span {
+  background: var(--danger);
+}
+.capacity-row.is-high .capacity-pct,
+.capacity-row.is-over .capacity-pct {
+  font-weight: 700;
+}
+.capacity-pct {
+  white-space: nowrap;
+}
+.load-fill {
+  margin: 4px 0 0;
+}
+@media (max-width: 640px) {
+  .capacity-row {
+    grid-template-columns: 1fr auto;
+  }
+  .capacity-bar {
+    grid-column: 1 / -1;
+    order: 3;
+  }
+}

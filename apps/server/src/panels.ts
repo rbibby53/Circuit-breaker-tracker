@@ -29,6 +29,7 @@ import {
   type Protection,
   type Slot,
 } from '@cbt/core';
+import { capacityWarnings, loadCheck, voltageWarnings } from './capacity';
 import type { DB } from './db';
 import type { AccessData } from './repo';
 
@@ -79,6 +80,8 @@ export interface BreakerRow {
   /** Relays: the breaker whose circuit this relay switches. */
   source_breaker_id: number | null;
   control: string;
+  load_va: number | null;
+  demand_pct: number | null;
 }
 
 export interface GeneratorRow {
@@ -499,8 +502,11 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
         control: r.control,
       })),
       hiddenSwitchedBy: switching.length - switchingShown.length,
+      loadVa: b.load_va,
+      demandPct: b.demand_pct,
     };
   };
+  const check = loadCheck(db, panel);
   const backing = generatorFor(db, panel);
   const generator: PanelGenerator | null = backing
     ? {
@@ -539,6 +545,8 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     fedFromBreakerId: panel.fed_from_breaker_id,
     fedFromDeviceId: panel.fed_from_device_id,
     nameplate: nameplateOf(panel),
+    loadCheck: check,
+    warnings: [...voltageWarnings(db, panel, breakers), ...capacityWarnings(check)],
     publicPath: panel.public_token ? `/p/${panel.public_token}` : null,
     canShare: role === 'admin' || role === 'manager',
     generatorId: panel.generator_id,
@@ -592,6 +600,8 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
         backup: b.backup,
         sourceBreakerId: b.source_breaker_id ?? null,
         control: b.control ?? '',
+        loadVa: b.load_va ?? null,
+        demandPct: b.demand_pct ?? null,
         serves: serves
           .filter((s) => s.breaker_id === b.id)
           .map((s) => `${s.location_id}:${s.note}`)
@@ -646,6 +656,8 @@ const BREAKER_FIELDS = [
   ['tags', 'tags'],
   ['sourceBreakerId', 'fed by'],
   ['control', 'control'],
+  ['loadVa', 'load (VA)'],
+  ['demandPct', 'demand %'],
 ] as const;
 
 /** Human-readable lines describing what changed between two snapshots. */
