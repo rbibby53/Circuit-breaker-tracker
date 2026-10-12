@@ -1054,9 +1054,6 @@ a:focus-visible {
 .segmented.two {
   grid-template-columns: repeat(2, minmax(0, 1fr));
 }
-.segmented.two {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
 .segmented.three {
   grid-template-columns: repeat(3, minmax(0, 1fr));
 }
@@ -2802,4 +2799,9 @@ code {
 .ps-flow {
   font-size: 13px;
   font-weight: 600;
+}
+
+/* A hint under a field, outside its label so it is not part of the field's name. */
+.field-note {
+  margin: -8px 0 0;
 }

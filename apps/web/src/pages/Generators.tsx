@@ -17,6 +17,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
+import { NodeIcon } from '../components/PowerIcon';
 import { ErrorNote, Field } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { useGenerators, useLocations } from '../queries';
@@ -35,7 +36,7 @@ export function GeneratorsHere({ node, byId }: { node: TreeNode; byId: Map<numbe
         {here.map((g) => (
           <Link key={g.id} to={`/generators/${g.id}`} className="card panel-card">
             <span className="gen-icon" aria-hidden="true">
-              G
+              <NodeIcon kind="generator" />
             </span>
             <span className="stack-sm">
               <span className="card-title">{g.name}</span>
@@ -223,44 +224,49 @@ export function GeneratorPage() {
               .join(' · ')}
           </p>
         </div>
-        {canEdit && !form && (
-          <div className="toolbar">
-            <button
-              type="button"
-              className="btn"
-              onClick={() =>
-                setForm({
-                  name: g.name,
-                  kw: g.kw,
-                  fuel: g.fuel,
-                  voltage: g.voltage,
-                  manufacturer: g.manufacturer,
-                  model: g.model,
-                  notes: g.notes,
-                })
-              }
-            >
-              Edit
-            </button>
-            <button
-              type="button"
-              className="btn btn-danger"
-              onClick={async () => {
-                const ok = await confirm({
-                  title: `Delete ${g.name}?`,
-                  message: direct.length
-                    ? `${direct.length === 1 ? '1 panel is' : `${direct.length} panels are`} linked to it and will be unlinked. Their breakers stay as they are.`
-                    : 'This cannot be undone.',
-                  confirmLabel: 'Delete generator',
-                  danger: true,
-                });
-                if (ok) remove.mutate();
-              }}
-            >
-              Delete
-            </button>
-          </div>
-        )}
+        <div className="toolbar">
+          <Link className="btn" to={`/power?loc=${g.locationId}&focus=g${g.id}`}>
+            Power flow
+          </Link>
+          {canEdit && !form && (
+            <>
+              <button
+                type="button"
+                className="btn"
+                onClick={() =>
+                  setForm({
+                    name: g.name,
+                    kw: g.kw,
+                    fuel: g.fuel,
+                    voltage: g.voltage,
+                    manufacturer: g.manufacturer,
+                    model: g.model,
+                    notes: g.notes,
+                  })
+                }
+              >
+                Edit
+              </button>
+              <button
+                type="button"
+                className="btn btn-danger"
+                onClick={async () => {
+                  const ok = await confirm({
+                    title: `Delete ${g.name}?`,
+                    message: direct.length
+                      ? `${direct.length === 1 ? '1 panel is' : `${direct.length} panels are`} linked to it and will be unlinked. Their breakers stay as they are.`
+                      : 'This cannot be undone.',
+                    confirmLabel: 'Delete generator',
+                    danger: true,
+                  });
+                  if (ok) remove.mutate();
+                }}
+              >
+                Delete
+              </button>
+            </>
+          )}
+        </div>
       </div>
       <ErrorNote error={remove.error} />
 

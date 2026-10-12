@@ -58,21 +58,21 @@ const clip = (s: string, n: number) => (s.length > n ? `${s.slice(0, n - 1)}…`
 
 export function PowerPage() {
   const [params, setParams] = useSearchParams();
-  const locationId = Number(params.get('loc')) || null;
+  const chosen = Number(params.get('loc')) || null;
   const focusId = params.get('focus');
   const locations = useLocations();
   const byId = useMemo(() => buildTree(locations.data ?? []).byId, [locations.data]);
+  // Sites and buildings you can pick from. With only one, it is picked for you.
+  const choices = (locations.data ?? []).filter(
+    (l) => (l.kind === 'site' || (l.kind === 'building' && !l.isDefaultBuilding)) && l.access !== 'breadcrumb',
+  );
+  const locationId = chosen ?? (choices.length === 1 ? choices[0]!.id : null);
   const topology = useQuery({
     queryKey: ['topology', locationId],
     queryFn: () => api.get<Topology>(`/api/locations/${locationId}/topology`),
     enabled: !!locationId,
   });
   useTitle(topology.data ? `Power flow · ${topology.data.location.name}` : 'Power flow');
-
-  // Sites and buildings you can pick from when none (or a room) is chosen.
-  const choices = (locations.data ?? []).filter(
-    (l) => (l.kind === 'site' || l.kind === 'building') && l.access !== 'breadcrumb',
-  );
 
   return (
     <main className="content stack-lg">

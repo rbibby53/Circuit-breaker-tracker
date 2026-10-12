@@ -177,6 +177,7 @@ export function PanelSettings({
         <label className="field span-2">
           <span className="field-label">Backup power</span>
           <select
+            aria-describedby="backup-power-hint"
             value={doc.atsId ? `ats:${doc.atsId}` : doc.generatorId ? `gen:${doc.generatorId}` : ''}
             onChange={(e) => {
               const [kind, id] = e.target.value.split(':');
@@ -215,10 +216,10 @@ export function PanelSettings({
               </optgroup>
             )}
           </select>
-          <span className="muted small">
-            Add transfer switches on the generator&apos;s page. The normal side stays the &quot;Fed from&quot; breaker.
-          </span>
         </label>
+        <p id="backup-power-hint" className="muted small span-2 field-note">
+          Add transfer switches on the generator&apos;s page. The normal side stays the &quot;Fed from&quot; breaker.
+        </p>
         <label className="field span-2">
           <span className="field-label">Notes</span>
           <textarea rows={2} value={doc.notes} onChange={(e) => onChange({ notes: e.target.value }, 'notes')} />
