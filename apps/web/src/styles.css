@@ -2395,3 +2395,9 @@ code {
 #about-h {
   scroll-margin-top: 16px;
 }
+
+/* Settings → Single sign-on: group access sits below the settings form. */
+.group-access {
+  border-top: 1px solid var(--line);
+  padding-top: 1rem;
+}

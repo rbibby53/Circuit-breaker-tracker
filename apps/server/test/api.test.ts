@@ -253,6 +253,7 @@ describe('single sign-on', () => {
     email: 'sup@ksu.example',
     name: 'Sup',
     preferredUsername: 'sup@ksu.example',
+    groups: null as string[] | null,
   };
 
   it('refuses an unknown identity without an invite', async () => {

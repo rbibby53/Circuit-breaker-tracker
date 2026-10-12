@@ -1,6 +1,7 @@
 import { createHash } from 'node:crypto';
 import {
   KIND_LABELS,
+  inGroup,
   pathIds,
   type GrantDto,
   type GrantLike,
@@ -26,6 +27,39 @@ export interface UserRow {
   totp_enabled_at: string | null;
   /** Last accepted time step, so a code cannot be used twice. */
   totp_last_step: number | null;
+  /** JSON array of their groups at their last single sign-on; null if they never used it. */
+  sso_groups: string | null;
+  sso_groups_at: string | null;
+  /** 1 when is_admin was set by an admin group, so leaving the group takes it away. */
+  admin_from_sso: number;
+}
+
+/** Access for everyone in a single sign-on group. */
+export interface GroupGrantRow {
+  id: number;
+  group_name: string;
+  location_id: number;
+  role: Role;
+  invite_limit: Role | null;
+  created_at: string;
+}
+
+/** A person's access through one of their groups, worked out from a GroupGrantRow. */
+export interface GroupGrant extends GrantLike {
+  id: number;
+  group: string;
+  mappingId: number;
+}
+
+/** Someone's groups from their last single sign-on, or null if they never used it. */
+export function ssoGroupsOf(u: Pick<UserRow, 'sso_groups'>): string[] | null {
+  if (u.sso_groups === null) return null;
+  try {
+    const v: unknown = JSON.parse(u.sso_groups);
+    return Array.isArray(v) ? v.filter((g): g is string => typeof g === 'string') : [];
+  } catch {
+    return [];
+  }
 }
 
 export interface LocationRow {
@@ -109,12 +143,45 @@ export function grantsForUser(db: DB, userId: number): GrantRow[] {
   return db.prepare('SELECT * FROM grants WHERE user_id = ?').all(userId) as GrantRow[];
 }
 
+export function allGroupGrants(db: DB): GroupGrantRow[] {
+  return db.prepare('SELECT * FROM sso_group_grants ORDER BY group_name COLLATE NOCASE').all() as GroupGrantRow[];
+}
+
+/**
+ * Everyone's access through their groups: one entry per person per group mapping they are in.
+ * Ids are negative so they never clash with grant ids.
+ */
+export function groupGrantsFor(
+  mappings: readonly GroupGrantRow[],
+  members: readonly { id: number; groups: readonly string[] }[],
+): GroupGrant[] {
+  const out: GroupGrant[] = [];
+  for (const m of mappings) {
+    for (const u of members) {
+      if (!inGroup(u.groups, m.group_name)) continue;
+      out.push({
+        id: -(m.id * 1_000_000 + u.id),
+        userId: u.id,
+        locationId: m.location_id,
+        role: m.role,
+        inviteLimit: m.invite_limit,
+        group: m.group_name,
+        mappingId: m.id,
+      });
+    }
+  }
+  return out;
+}
+
 /** Everything the access rules need, loaded once per request. */
 export class AccessData {
   readonly locations: LocationRow[];
   readonly byId: Map<number, LocationRow>;
   readonly nodes: Map<number, LocationNode>;
   readonly grantRows: GrantRow[];
+  /** Access people have through their single sign-on groups. */
+  readonly groupGrants: GroupGrant[];
+  /** Everything the access rules look at: grants and group access together. */
   readonly grants: GrantLike[];
 
   /** Automatic buildings of single-building sites: hidden in the UI and in path labels. */
@@ -125,7 +192,15 @@ export class AccessData {
     this.byId = new Map(this.locations.map((l) => [l.id, l]));
     this.nodes = new Map(this.locations.map((l) => [l.id, toNode(l)]));
     this.grantRows = allGrants(db);
-    this.grants = this.grantRows.map(toGrantLike);
+    const mappings = allGroupGrants(db);
+    const members = mappings.length
+      ? (db.prepare('SELECT id, sso_groups FROM users WHERE sso_groups IS NOT NULL').all() as UserRow[]).map((u) => ({
+          id: u.id,
+          groups: ssoGroupsOf(u) ?? [],
+        }))
+      : [];
+    this.groupGrants = groupGrantsFor(mappings, members);
+    this.grants = [...this.grantRows.map(toGrantLike), ...this.groupGrants];
     const buildingsBySite = new Map<number, LocationRow[]>();
     for (const l of this.locations) {
       if (l.kind === 'building' && l.parent_id !== null) {
@@ -164,6 +239,25 @@ export class AccessData {
       inviteLimit: g.invite_limit,
       createdAt: g.created_at,
       canManage,
+      group: null,
+    };
+  }
+
+  /** Access through a group, shown beside grants. It is changed in the identity provider. */
+  groupGrantDto(g: GroupGrant, user: UserRow): GrantDto {
+    const l = this.byId.get(g.locationId)!;
+    return {
+      id: g.id,
+      user: toSummary(user),
+      locationId: l.id,
+      locationName: l.name,
+      locationKind: l.kind,
+      locationPath: this.pathLabel(l.id),
+      role: g.role,
+      inviteLimit: g.inviteLimit,
+      createdAt: user.sso_groups_at ?? user.created_at,
+      canManage: false,
+      group: g.group,
     };
   }
 

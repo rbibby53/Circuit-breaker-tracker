@@ -218,7 +218,11 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                   <div className="cell-stack">
                     <span className="strong">{g.locationName}</span>
                     <span className="muted small">
-                      {g.inherited ? `Inherited from ${KIND_LABELS[g.locationKind].toLowerCase()}` : 'Granted here'}
+                      {g.group
+                        ? `From the ${g.group} group${g.inherited ? `, on the ${KIND_LABELS[g.locationKind].toLowerCase()}` : ''}`
+                        : g.inherited
+                          ? `Inherited from ${KIND_LABELS[g.locationKind].toLowerCase()}`
+                          : 'Granted here'}
                     </span>
                   </div>
                 </td>
@@ -269,6 +273,7 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
                 <button className="link-btn" onClick={() => onSelect(g.locationId)}>
                   {g.locationName}
                 </button>
+                {g.group && <span className="muted"> · {g.group} group</span>}
               </li>
             ))}
           </ul>
@@ -281,7 +286,7 @@ function LocationAccess({ locationId, onSelect }: { locationId: number; onSelect
           <AddExistingForm
             locationId={locationId}
             choices={choices}
-            existing={a.applies.filter((g) => !g.inherited).map((g) => g.user.id)}
+            existing={a.applies.filter((g) => !g.inherited && !g.group).map((g) => g.user.id)}
           />
           <PendingInvites locationId={locationId} />
         </>
@@ -385,7 +390,7 @@ export function InviteForm({
         </button>
       </div>
       <p className="muted small">
-        Applies to {locationName} and everything inside it. They can create a password or sign in with Microsoft.
+        Applies to {locationName} and everything inside it. They can create a password or use single sign-on.
       </p>
       <ErrorNote error={create.error} />
       {link && <LinkBox url={link.url} expiresAt={link.expiresAt} onClose={() => setLink(null)} />}

@@ -34,13 +34,14 @@ describe('startup config', () => {
   it('turns on single sign-on from the environment, with a default button label', () => {
     const c = runtime({
       PUBLIC_URL: 'https://b.example/',
-      OIDC_ISSUER: 'https://login.example/t/v2.0',
+      OIDC_ISSUER: 'https://login.microsoftonline.com/t/v2.0',
       OIDC_CLIENT_ID: 'id',
       OIDC_CLIENT_SECRET: 'secret',
       OIDC_LABEL: '',
     });
     expect(c.publicUrl).toBe('https://b.example');
     expect(c.oidc?.label).toBe('Sign in with Microsoft');
+    expect(c.oidc?.provider).toBe('Microsoft');
     expect(c.cookieSecure).toBe(true);
   });
 

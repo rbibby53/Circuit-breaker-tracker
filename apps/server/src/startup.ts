@@ -3,7 +3,7 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
-import { SETTING_DEFS } from '@cbt/core';
+import { SETTING_DEFS, parseGroupList } from '@cbt/core';
 import type { Config } from './config';
 import type { DB } from './db';
 
@@ -47,14 +47,24 @@ export function startupLines(db: DB, config: Config, env: NodeJS.ProcessEnv = pr
 
   const ways: string[] = [];
   ways.push(s.get('allowLocalLogin') ? 'passwords' : 'passwords (admins only)');
-  if (config.oidc) ways.push(`Microsoft / OIDC via ${new URL(config.oidc.issuer).host}`);
+  if (config.oidc) {
+    const groups = [
+      parseGroupList(s.get('oidcAdminGroups')).length ? 'admin groups' : '',
+      parseGroupList(s.get('oidcAllowedGroups')).length ? 'allowed groups' : '',
+      count(db, 'sso_group_grants') ? `${count(db, 'sso_group_grants')} group access rules` : '',
+    ].filter(Boolean);
+    ways.push(
+      `${config.oidc.provider === 'single sign-on' ? 'single sign-on' : config.oidc.provider} via ${new URL(config.oidc.issuer).host}` +
+        (groups.length ? ` (${groups.join(', ')})` : ''),
+    );
+  }
   info(`Sign-in: ${ways.join(', ')} · sessions last ${s.get('sessionDays')} days`);
   const ssoParts = [s.get('oidcIssuer'), s.get('oidcClientId'), s.get('oidcClientSecret')].filter(Boolean).length;
   if (!config.oidc && ssoParts > 0) {
     warn(
       ssoParts < 3
-        ? 'Microsoft sign-in is partly set up (it needs the issuer, client ID and client secret), so it is off.'
-        : 'Microsoft sign-in needs the public address to be set, so it is off.',
+        ? 'Single sign-on is partly set up (it needs the issuer, client ID and client secret), so it is off.'
+        : 'Single sign-on needs the public address to be set, so it is off.',
     );
   }
 

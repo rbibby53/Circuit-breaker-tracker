@@ -4,8 +4,27 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+### Added
+
+- **Authentik sign-in, and access from single sign-on groups.**
+  - Authentik works as a single sign-on provider. Paste the provider's issuer (the slash at the
+    end is kept), and the button reads **Sign in with Authentik**. Keycloak, Authelia and other
+    OIDC providers work too, and plain-http issuers on the local network are allowed.
+  - **Group access** under Settings → Single sign-on gives everyone in a group a role on a
+    location, like a grant. People and Access show it as "from the … group".
+  - **Admin groups** make members admins and take it away when they leave; admins made by hand
+    are never changed.
+  - **Only allow these groups** refuses single sign-on for anyone outside them.
+  - People whose groups give them access get an account on their first sign-in, without an
+    invite (**Create accounts from groups**, on by default).
+  - New settings for the **Groups claim** (nested claims such as `realm_access.roles` work) and
+    the **Scopes** to ask for. Groups are read from the ID token, or the user info if needed.
+  - People → Manage shows each person's groups as of their last sign-in.
+
 ### Changed
 
+- Single sign-on is no longer worded as Microsoft-only. The button text, when not set, comes
+  from the issuer: "Sign in with Microsoft", "Sign in with Authentik" or "Single sign-on".
 - Updated zod (request validation) to version 4. A few error messages for invalid input are
   worded differently, e.g. "name: Too small: expected string to have >=1 characters".
 

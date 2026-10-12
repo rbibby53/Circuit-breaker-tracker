@@ -16,12 +16,14 @@ export interface SettingDef {
   max?: number;
   maxLength?: number;
   options?: { value: string; label: string }[];
+  /** URL settings: keep a trailing slash (Authentik's issuer ends in one and must match exactly). */
+  keepTrailingSlash?: boolean;
 }
 
 export const SETTING_GROUPS = [
   { id: 'general', title: 'General' },
   { id: 'signin', title: 'Sign-in' },
-  { id: 'sso', title: 'Microsoft / single sign-on' },
+  { id: 'sso', title: 'Single sign-on' },
   { id: 'links', title: 'Invite and reset links' },
   { id: 'panels', title: 'New panel defaults' },
   { id: 'printing', title: 'Printing and QR codes' },
@@ -45,6 +47,11 @@ export interface Settings {
   oidcClientId: string;
   oidcClientSecret: string;
   oidcLabel: string;
+  oidcScopes: string;
+  oidcGroupsClaim: string;
+  oidcAdminGroups: string;
+  oidcAllowedGroups: string;
+  oidcCreateAccounts: boolean;
   inviteDays: number;
   resetHours: number;
   defaultSpaces: number;
@@ -79,7 +86,7 @@ export const SETTING_DEFS: SettingDef[] = [
     group: 'general',
     label: 'Public address',
     description:
-      'The address people use to reach this app, e.g. https://breakers.example.com or http://192.168.1.10:2757. Used in invite and reset links, and required for Microsoft sign-in.',
+      'The address people use to reach this app, e.g. https://breakers.example.com or http://192.168.1.10:2757. Used in invite and reset links, and required for single sign-on.',
     type: 'url',
     env: 'PUBLIC_URL',
     default: '',
@@ -99,7 +106,7 @@ export const SETTING_DEFS: SettingDef[] = [
     group: 'signin',
     label: 'Allow password sign-in',
     description:
-      'Turn off to make everyone except admins use Microsoft sign-in. Admins can always use their password, so you cannot lock yourself out.',
+      'Turn off to make everyone except admins use single sign-on. Admins can always use their password, so you cannot lock yourself out.',
     type: 'boolean',
     env: 'ALLOW_LOCAL_LOGIN',
     default: true,
@@ -119,16 +126,18 @@ export const SETTING_DEFS: SettingDef[] = [
     key: 'oidcIssuer',
     group: 'sso',
     label: 'Issuer URL',
-    description: 'For Microsoft Entra ID: https://login.microsoftonline.com/<directory-tenant-id>/v2.0',
+    description:
+      'Microsoft Entra ID: https://login.microsoftonline.com/<directory-tenant-id>/v2.0. Authentik: the provider’s OpenID Configuration Issuer, e.g. https://auth.example.com/application/o/<app-slug>/ (keep the slash at the end).',
     type: 'url',
     env: 'OIDC_ISSUER',
     default: '',
+    keepTrailingSlash: true,
   },
   {
     key: 'oidcClientId',
     group: 'sso',
     label: 'Client ID',
-    description: 'The application (client) ID of the app registration.',
+    description: 'The application (client) ID of the app registration, or the Client ID of the Authentik provider.',
     type: 'text',
     env: 'OIDC_CLIENT_ID',
     default: '',
@@ -138,7 +147,8 @@ export const SETTING_DEFS: SettingDef[] = [
     key: 'oidcClientSecret',
     group: 'sso',
     label: 'Client secret',
-    description: 'The secret value from Certificates & secrets. Stored in the database; never shown again.',
+    description:
+      'Microsoft: the secret value from Certificates & secrets. Authentik: the provider’s Client Secret. Stored in the database; never shown again.',
     type: 'secret',
     env: 'OIDC_CLIENT_SECRET',
     default: '',
@@ -148,11 +158,65 @@ export const SETTING_DEFS: SettingDef[] = [
     key: 'oidcLabel',
     group: 'sso',
     label: 'Button text',
-    description: 'Text on the sign-in button.',
+    description: 'Text on the sign-in button. Blank picks one from the issuer, e.g. “Sign in with Authentik”.',
     type: 'text',
     env: 'OIDC_LABEL',
-    default: 'Sign in with Microsoft',
+    default: '',
     maxLength: 60,
+  },
+  {
+    key: 'oidcScopes',
+    group: 'sso',
+    label: 'Scopes',
+    description:
+      'What to ask the provider for. Authentik and Microsoft send groups with the default; add “groups” for providers that need it, such as Authelia or Keycloak.',
+    type: 'text',
+    env: 'OIDC_SCOPES',
+    default: 'openid profile email',
+    maxLength: 200,
+  },
+  {
+    key: 'oidcGroupsClaim',
+    group: 'sso',
+    label: 'Groups claim',
+    description:
+      'The claim that lists someone’s groups: “groups” for Authentik, Microsoft and most others. Use dots for a nested claim, e.g. realm_access.roles.',
+    type: 'text',
+    env: 'OIDC_GROUPS_CLAIM',
+    default: 'groups',
+    maxLength: 100,
+  },
+  {
+    key: 'oidcAdminGroups',
+    group: 'sso',
+    label: 'Admin groups',
+    description:
+      'Members of these groups are admins, and stop being admins when they leave them. Separate several with commas. Admins made by hand are never changed. Blank: groups do not decide who is an admin.',
+    type: 'text',
+    env: 'OIDC_ADMIN_GROUPS',
+    default: '',
+    maxLength: 500,
+  },
+  {
+    key: 'oidcAllowedGroups',
+    group: 'sso',
+    label: 'Only allow these groups',
+    description:
+      'Single sign-on is refused for anyone not in at least one of these groups. Separate several with commas. Blank: anyone the provider signs in, as long as they have an account here.',
+    type: 'text',
+    env: 'OIDC_ALLOWED_GROUPS',
+    default: '',
+    maxLength: 500,
+  },
+  {
+    key: 'oidcCreateAccounts',
+    group: 'sso',
+    label: 'Create accounts from groups',
+    description:
+      'When someone signs in for the first time and their groups give them access (an admin group or a group under Group access below), make their account without needing an invite.',
+    type: 'boolean',
+    env: 'OIDC_CREATE_ACCOUNTS',
+    default: true,
   },
   {
     key: 'inviteDays',
@@ -376,7 +440,7 @@ export function parseSetting(
       if (u.protocol !== 'http:' && u.protocol !== 'https:') {
         return { ok: false, error: 'must start with http:// or https://' };
       }
-      return { ok: true, value: str.replace(/\/+$/, '') };
+      return { ok: true, value: def.keepTrailingSlash ? str : str.replace(/\/+$/, '') };
     }
     default: {
       if (typeof str !== 'string') return { ok: false, error: 'must be text' };

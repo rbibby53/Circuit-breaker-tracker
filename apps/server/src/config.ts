@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { ssoButtonLabel, ssoProviderName } from '@cbt/core';
 import type { SettingsStore } from './settings';
 
 // Replaced at build time by esbuild (see build.mjs); undefined when running from source.
@@ -22,7 +23,7 @@ export interface Config extends StartupConfig {
   readonly publicUrl: string | null;
   readonly cookieSecure: boolean;
   readonly sessionDays: number;
-  readonly oidc: { issuer: string; clientId: string; clientSecret: string; label: string } | null;
+  readonly oidc: { issuer: string; clientId: string; clientSecret: string; label: string; provider: string } | null;
 }
 
 /** A value, treating blank as unset (Unraid and compose files often pass empty strings). */
@@ -74,7 +75,13 @@ export function withSettings(startup: StartupConfig, settings: SettingsStore): C
       const clientId = settings.get('oidcClientId');
       const clientSecret = settings.get('oidcClientSecret');
       if (!issuer || !clientId || !clientSecret || !settings.get('publicUrl')) return null;
-      return { issuer, clientId, clientSecret, label: settings.get('oidcLabel') || 'Sign in with Microsoft' };
+      return {
+        issuer,
+        clientId,
+        clientSecret,
+        label: ssoButtonLabel(issuer, settings.get('oidcLabel')),
+        provider: ssoProviderName(issuer),
+      };
     },
   };
 }

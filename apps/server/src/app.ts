@@ -16,6 +16,7 @@ import { panelRoutes } from './routes/panels';
 import { pdfRoutes } from './routes/pdf';
 import { publicRoutes } from './routes/public';
 import { adminRoutes } from './routes/admin';
+import { ssoGroupRoutes } from './routes/ssoGroups';
 import { searchRoutes } from './routes/search';
 import { totpRoutes } from './routes/totp';
 import { loadAuth } from './sessions';
@@ -162,6 +163,7 @@ export async function buildApp(
   exportRoutes(app, db);
   publicRoutes(app, db, config);
   adminRoutes(app, db, config, backups, stream);
+  ssoGroupRoutes(app, db);
   searchRoutes(app, db);
   totpRoutes(app, db, config);
 

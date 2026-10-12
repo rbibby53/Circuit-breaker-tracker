@@ -214,4 +214,23 @@ export const MIGRATIONS: string[] = [
   -- Surge protectors install in breaker spaces. amps is 0 when one has no breakers of its own.
   ALTER TABLE breakers ADD COLUMN device TEXT NOT NULL DEFAULT 'breaker' CHECK (device IN ('breaker', 'surge'));
   `,
+  `
+  -- Single sign-on groups. A person's groups as of their last SSO sign-in (JSON array), and
+  -- whether their admin flag came from an admin group (so it can be taken away again).
+  ALTER TABLE users ADD COLUMN sso_groups TEXT;
+  ALTER TABLE users ADD COLUMN sso_groups_at TEXT;
+  ALTER TABLE users ADD COLUMN admin_from_sso INTEGER NOT NULL DEFAULT 0;
+
+  -- Access for everyone in a group, worked out when access is checked, beside their own grants.
+  CREATE TABLE sso_group_grants (
+    id           INTEGER PRIMARY KEY,
+    group_name   TEXT NOT NULL COLLATE NOCASE,
+    location_id  INTEGER NOT NULL REFERENCES locations (id) ON DELETE CASCADE,
+    role         TEXT NOT NULL CHECK (role IN ('viewer', 'editor', 'manager')),
+    invite_limit TEXT CHECK (invite_limit IS NULL OR invite_limit IN ('viewer', 'editor', 'manager')),
+    created_by   INTEGER REFERENCES users (id) ON DELETE SET NULL,
+    created_at   TEXT NOT NULL,
+    UNIQUE (group_name, location_id)
+  );
+  `,
 ];

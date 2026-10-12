@@ -172,7 +172,7 @@ export function TwoStepSettings({ me }: { me: MeResponse }) {
         <>
           <p>
             Off. Turn it on to ask for a code from an authenticator app on your phone whenever you sign in with your
-            password. Microsoft sign-in uses your organisation&apos;s own protection instead.
+            password. Single sign-on uses your identity provider&apos;s own protection instead.
           </p>
           <ErrorNote error={start.error} />
           <div>
