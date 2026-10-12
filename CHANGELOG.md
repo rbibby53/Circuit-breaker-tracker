@@ -4,6 +4,43 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.2.0 — 2026-10-12
+
+A map of how power flows through a site or building, and transfer switches as their own items.
+Upgrading is automatic. Transfer switch names typed in 1.1 become transfer switches.
+
+### Added
+
+- **Power flow map.** **Power** in the menu, or **Power flow** on a site, building, panel or
+  generator, draws where power comes from and where it goes:
+  - the utility service, each panel and the sub-panels it feeds (labelled with the feeding
+    circuit and its amps), transfer switches with their normal and generator sources,
+    generators, and the relay panels switching circuits in each panel;
+  - hover, tap or tab to anything to light up its whole path, from the source down to the last
+    relay panel, and click to open it;
+  - pan, zoom and fit, animated flow (off when your system asks for reduced motion), dark mode,
+    and a **List** view for phones and screen readers;
+  - badges for panels on backup power and for critical circuits;
+  - panels upstream that you cannot see are shown as locked boxes, so the path still makes
+    sense without showing what is in them.
+- **Transfer switches.** Add automatic (ATS) or manual (MTS) transfer switches on a
+  generator's page, with their rating and where they are. Put a panel on one under **Panel
+  settings → Backup power**; that list also offers a generator directly. Generator pages list
+  each switch and the panels on it, and a panel's history records changes.
+- **Power path on panels.** The panel header shows a strip from the utility through each panel
+  feeding it, with the circuit it is on, then the generator backing it up and a link to the
+  map centred on the panel.
+
+### Changed
+
+- Generator cards show a generator icon. The Backup power hint is read as a description by
+  screen readers, not as part of the field's name.
+
+### Upgrading
+
+- Transfer switch names typed under Panel settings in 1.1 become transfer switches (one per
+  name and generator, in the first panel's room), and those panels are put on them.
+
 ## 1.1.0 — 2026-10-12
 
 Standby generators, lighting relay panels such as nLight, and Authentik sign-in with access from

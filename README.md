@@ -8,12 +8,15 @@ A self-hosted web app for recreating your electrical panels, labelling what ever
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
 
-> **Status: 1.1, stable.** Accounts with scoped access, Microsoft and Authentik sign-in, the
+> **Status: 1.2, stable.** Accounts with scoped access, Microsoft and Authentik sign-in, the
 > panel editor for residential load centers, commercial 3-phase panelboards and lighting relay
-> panels, standby generators, printing, logs and automatic backups. Upgrades are automatic; see [Upgrading](#upgrading). What could come next is in
+> panels, standby generators and transfer switches, a power flow map, printing, logs and
+> automatic backups. Upgrades are automatic; see [Upgrading](#upgrading). What could come next is in
 > [docs/PLAN.md](docs/PLAN.md).
 
 ![The panel editor with a tandem breaker selected](docs/screenshots/editor.png)
+
+![The power flow map of a building: the utility, panels and sub-panels, a transfer switch with its generator, and a relay panel](docs/screenshots/power-flow.png)
 
 ## What works today
 
@@ -68,9 +71,19 @@ as a single Docker container with its data in one SQLite file.
 - **Surge protectors** that install in breaker spaces, with or without breakers of their own.
   They are marked SPD in the panel, on PDFs and in CSV exports.
 - **Standby generators** for a site or building: size (kW), fuel, voltage, make and model.
-  Tie each panel to its generator (and transfer switch, e.g. ATS-1) under Panel settings.
   Panels fed from a generator-backed panel are on the generator too. Panels, PDFs and CSV
   exports say which generator backs them, and each generator lists every panel it backs up.
+- **Transfer switches** (automatic or manual) on each generator's page, with their rating and
+  where they are. Put a panel on one under **Panel settings → Backup power**: its normal side
+  is the panel's Fed from breaker, its emergency side the generator.
+- **Power flow map** (**Power** in the menu, or **Power flow** on a site, building, panel or
+  generator), in the spirit of a network topology view. It draws the utility, every panel and
+  the sub-panels it feeds, transfer switches with their normal and generator sources, and the
+  relay panels switching circuits. Hover or tap anything to light up its whole path, click to
+  open it, pan and zoom, and switch to a list on a phone or with a screen reader. Panels
+  upstream that you cannot see are shown as locked boxes, so the path still makes sense.
+- **Power path on every panel:** a strip from the utility through each panel feeding it, with
+  the circuit it is on, and the generator backing it up.
 - **Lighting relay panels**, such as Acuity **nLight** relay panels: a numbered column of 1-
   and 2-pole relays. For each relay, record the breaker whose circuit it switches (in any
   breaker panel), its control (nLight zone, channel, schedule, occupancy…) and the rooms it
@@ -107,14 +120,14 @@ as a single Docker container with its data in one SQLite file.
 
 ## Screenshots
 
-|                                                                                                   |                                                                |
-| ------------------------------------------------------------------------------------------------- | -------------------------------------------------------------- |
-| ![Dark mode](docs/screenshots/dark-editor.png)                                                    | ![Search from the header](docs/screenshots/search.png)         |
-| Dark mode follows your system, or pick one under Account. Leg balance shows the load on each leg. | Press <kbd>/</kbd> to search rooms, panels, breakers and tags. |
-| ![Users and access](docs/screenshots/access.png)                                                  | ![Settings](docs/screenshots/settings.png)                     |
-| Grant access on any location; managers only invite within their scope.                            | Admins configure the app in Settings instead of Docker.        |
-| ![Activity](docs/screenshots/activity.png)                                                        |                                                                |
-| Every change, newest first, linked to where it happened. Filter by person, change or place.       |                                                                |
+|                                                                                                   |                                                                          |
+| ------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------------ |
+| ![Dark mode](docs/screenshots/dark-editor.png)                                                    | ![Search from the header](docs/screenshots/search.png)                   |
+| Dark mode follows your system, or pick one under Account. Leg balance shows the load on each leg. | Press <kbd>/</kbd> to search rooms, panels, breakers and tags.           |
+| ![Users and access](docs/screenshots/access.png)                                                  | ![Settings](docs/screenshots/settings.png)                               |
+| Grant access on any location; managers only invite within their scope.                            | Admins configure the app in Settings instead of Docker.                  |
+| ![Activity](docs/screenshots/activity.png)                                                        | ![The power flow map in dark mode](docs/screenshots/power-flow-dark.png) |
+| Every change, newest first, linked to where it happened. Filter by person, change or place.       | The power flow map: hover anything to light up its whole path.           |
 
 <p align="center"><img src="docs/screenshots/phone-editor.png" alt="The panel editor on a phone" width="300"></p>
 
