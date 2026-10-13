@@ -29,6 +29,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { Link } from 'react-router-dom';
 import { useConfirm } from '../components/ConfirmDialog';
+import { ImpactButton } from '../components/Impact';
 import { formatDate } from '../components/ui';
 import type { TreeNode } from '../tree';
 import { servesByFloor } from './serves';
@@ -176,6 +177,7 @@ export function Inspector({
         {server && <EquipmentNote breaker={server} />}
         {server && <SwitchedByNote breaker={server} />}
         {b.notes && <p className="notes">{b.notes}</p>}
+        {server && !relay && !b.isSpare && <ImpactButton query={`breaker=${server.id}`} />}
       </aside>
     );
   }
@@ -447,6 +449,7 @@ export function Inspector({
       {(feeds.length > 0 || feedsDevices.length > 0) && <FeedsNote feeds={feeds} devices={feedsDevices} />}
       {server && <EquipmentNote breaker={server} />}
       {server && <SwitchedByNote breaker={server} />}
+      {server && !relay && !b.isSpare && <ImpactButton query={`breaker=${server.id}`} />}
 
       <button
         type="button"

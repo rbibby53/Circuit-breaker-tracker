@@ -22,6 +22,7 @@ import { topologyRoutes } from './routes/topology';
 import { deviceRoutes } from './routes/devices';
 import { equipmentRoutes } from './routes/equipment';
 import { verifyRoutes } from './routes/verify';
+import { impactRoutes } from './routes/impact';
 import { searchRoutes } from './routes/search';
 import { totpRoutes } from './routes/totp';
 import { loadAuth } from './sessions';
@@ -169,6 +170,7 @@ export async function buildApp(
   deviceRoutes(app, db);
   equipmentRoutes(app, db);
   verifyRoutes(app, db);
+  impactRoutes(app, db);
   pdfRoutes(app, db, config);
   exportRoutes(app, db);
   publicRoutes(app, db, config);

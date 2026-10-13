@@ -915,3 +915,103 @@ describe('field verification', () => {
     ).toBe(400);
   });
 });
+
+describe('shutdown impact', () => {
+  it('lists every panel, device, relay, piece of equipment and room that loses power', async () => {
+    const c = await campus();
+    // LP-1: corridor lights (1, serving the corridor), lab lights (3, critical), a feeder to EM-1 (5)
+    // and one to a disconnect for AHU-1 (11). EM-1 feeds EM-2, which is on ATS-1 and GEN-1.
+    const lp = await save(c.admin, c.lp, [
+      row('corridor', 1, { label: 'Corridor lights', serves: [{ locationId: c.corridor }] }),
+      row('lab', 3, { label: 'Lab lights', critical: true }),
+      row('em1', 5, { poles: 3, amps: 100, label: 'EM-1' }),
+      row('ahu', 11, { poles: 3, amps: 30, label: 'AHU-1' }),
+      row('spare', 17, { isSpare: true, label: '' }),
+    ]);
+    expect(lp.status).toBe(200);
+    const ids = lp.body.idMap;
+    expect((await save(c.admin, c.em1, null, { fedFromBreakerId: ids.em1 })).status).toBe(200);
+    const ats = await c.admin.post('/api/transfer-switches', {
+      name: 'ATS-1',
+      kind: 'automatic',
+      generatorId: c.gen,
+      locationId: c.elec,
+    });
+    expect((await save(c.admin, c.em2, [row('x', 1, { label: 'Exit signs' })], { atsId: ats.body.id })).status).toBe(
+      200,
+    );
+    const ds = (
+      await c.admin.post('/api/power-devices', {
+        kind: 'disconnect',
+        name: 'DS-AHU1',
+        locationId: c.elec,
+        fedFromBreakerId: ids.ahu,
+      })
+    ).body.id;
+    expect(
+      (await c.admin.post('/api/equipment', { tag: 'AHU-1', locationId: c.elec, fedFromDeviceId: ds })).status,
+    ).toBe(200);
+    const rp = (
+      await c.admin.post(`/api/locations/${c.elec}/panels`, {
+        name: 'RP-1',
+        layout: 'relay',
+        spaces: 8,
+        voltage: '277 V',
+      })
+    ).body.id;
+    expect((await save(c.admin, rp, [row('r1', 1, { label: 'Corridor', sourceBreakerId: ids.corridor })])).status).toBe(
+      200,
+    );
+
+    // One breaker: the relay it feeds and the room both relay and breaker serve.
+    const one = (await c.admin.get(`/api/impact?breaker=${ids.corridor}`)).body;
+    expect(one).toMatchObject({
+      title: 'LP-1 circuit 1 (Corridor lights)',
+      circuits: 1,
+      panels: [],
+      relays: [{ panelId: rp, panelName: 'RP-1', relay: '1', label: 'Corridor' }],
+      rooms: [{ id: c.corridor, name: 'Corridor' }],
+      hidden: 0,
+    });
+
+    // The feeder to EM-1: EM-1 goes dark; EM-2 moves to the generator, so its circuits keep power.
+    const feeder = (await c.admin.get(`/api/impact?breaker=${ids.em1}`)).body;
+    expect(feeder.circuits).toBe(2);
+    expect(feeder.panels).toEqual([
+      expect.objectContaining({ id: c.em1, circuits: 1, backup: null }),
+      expect.objectContaining({ id: c.em2, circuits: 1, backup: expect.stringMatching(/^Moves to GEN-1 .*ATS-1$/) }),
+    ]);
+
+    // The whole of LP-1: every circuit below it, the disconnect and AHU-1; spares don't count.
+    const panel = (await c.admin.get(`/api/impact?panel=${c.lp}`)).body;
+    expect(panel).toMatchObject({ title: 'Panel LP-1', circuits: 5 });
+    expect(panel.panels.map((p: any) => p.name)).toEqual(['LP-1', 'EM-1', 'EM-2']);
+    expect(panel.devices).toEqual([expect.objectContaining({ id: ds, name: 'DS-AHU1', kind: 'disconnect' })]);
+    expect(panel.equipment).toEqual([expect.objectContaining({ tag: 'AHU-1' })]);
+    expect(panel.critical).toEqual([
+      { panelId: c.lp, panelName: 'LP-1', circuit: '3', label: 'Lab lights', backup: null },
+    ]);
+    expect(panel.relays).toHaveLength(1);
+
+    // Opening the disconnect takes out AHU-1 only.
+    const device = (await c.admin.get(`/api/impact?device=${ds}`)).body;
+    expect(device).toMatchObject({ title: 'DS-AHU1', circuits: 0, equipment: [{ tag: 'AHU-1' }] });
+
+    // A UPS carries what it feeds on battery.
+    const ups = (
+      await c.admin.post('/api/power-devices', {
+        kind: 'ups',
+        name: 'UPS-1',
+        locationId: c.elec,
+        fedFromBreakerId: ids.lab,
+      })
+    ).body.id;
+    const lab = (await c.admin.get(`/api/impact?breaker=${ids.lab}`)).body;
+    expect(lab.devices).toEqual([expect.objectContaining({ id: ups, backup: 'Runs on battery' })]);
+
+    // Someone in Science Hall only sees what is theirs; outsiders get nothing.
+    const outsider = await invite(app, c.admin, c.other, 'viewer', 'outsider');
+    expect((await outsider.get(`/api/impact?panel=${c.lp}`)).status).toBe(404);
+    expect((await c.admin.get('/api/impact')).status).toBe(400);
+  });
+});

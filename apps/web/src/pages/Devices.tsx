@@ -18,6 +18,7 @@ import { useState, type FormEvent } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { api } from '../api';
 import { useConfirm } from '../components/ConfirmDialog';
+import { ImpactButton } from '../components/Impact';
 import { NodeIcon } from '../components/PowerIcon';
 import { ErrorNote, Field } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
@@ -414,6 +415,7 @@ export function DevicePage() {
           <Link className="btn" to={`/power?loc=${d.locationId}&focus=d${d.id}`}>
             Power flow
           </Link>
+          {d.kind !== 'service' && <ImpactButton query={`device=${d.id}`} />}
           {canEdit && !form && (
             <>
               <button

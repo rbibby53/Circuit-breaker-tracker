@@ -19,6 +19,7 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError, errorMessage } from '../api';
 import { useCurrentUser } from '../auth';
 import { NodeIcon } from '../components/PowerIcon';
+import { ImpactButton } from '../components/Impact';
 import { PANEL_PRINT_STYLES, PrintButton } from '../components/PrintDialog';
 import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
@@ -398,6 +399,7 @@ function Editor({
             <button type="button" className="btn" aria-expanded={showHistory} onClick={() => setShowHistory((v) => !v)}>
               History
             </button>
+            <ImpactButton query={`panel=${initial.id}`} label="Shutdown impact" />
             <PrintButton
               endpoint={`/api/panels/${initial.id}/pdf`}
               csv={`/api/panels/${initial.id}/csv`}

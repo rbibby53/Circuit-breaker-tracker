@@ -780,3 +780,30 @@ export interface ProgressReport {
   /** Panels under it, least verified first. */
   panels: { id: number; name: string; path: string; circuits: number; verified: number; wrong: number }[];
 }
+
+// ---- Shutdown impact ----------------------------------------------------------------------
+
+/** What loses power when a breaker opens, a panel's main is shut off, or a device is opened. */
+export interface ImpactReport {
+  /** "LP-1A circuit 5 + 7 + 9 (Water heater WH-1)", "Panel HA", "T-LDP1". */
+  title: string;
+  /** Circuits that go dark, counting every downstream panel's circuits. */
+  circuits: number;
+  panels: {
+    id: number;
+    name: string;
+    path: string;
+    circuits: number;
+    /** Set when it is on a transfer switch or generator: it moves to the generator instead. */
+    backup: string | null;
+  }[];
+  devices: { id: number; name: string; kind: PowerDeviceKind; path: string; backup: string | null }[];
+  equipment: { id: number; tag: string; kind: string; path: string }[];
+  /** Relay circuits that lose power because the circuit they switch does. */
+  relays: { panelId: number; panelName: string; relay: string; label: string }[];
+  /** Critical circuits that go dark; `backup` when the circuit has its own UPS or generator. */
+  critical: { panelId: number; panelName: string; circuit: string; label: string; backup: string | null }[];
+  rooms: { id: number; name: string; path: string }[];
+  /** Panels and items downstream the viewer cannot see. */
+  hidden: number;
+}

@@ -3171,3 +3171,43 @@ code {
     white-space: normal;
   }
 }
+
+/* Shutdown impact */
+.impact-dialog {
+  width: min(620px, calc(100vw - 32px));
+}
+.impact-lead {
+  font-size: 16px;
+}
+.impact-body {
+  display: grid;
+  gap: 14px;
+  max-height: min(60vh, 560px);
+  overflow-y: auto;
+}
+.impact-section ul {
+  list-style: none;
+  margin: 6px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 4px;
+}
+.impact-section li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.impact-critical {
+  border-left: 3px solid var(--danger);
+  padding-left: 10px;
+}
+.impact-backup {
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--ok);
+  background: var(--surface-2);
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 1px 8px;
+}
