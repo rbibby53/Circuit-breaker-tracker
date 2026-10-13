@@ -4,6 +4,83 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.3.0 — 2026-10-13
+
+The biggest release yet, from a list gathered from several people documenting large campuses:
+transformers and switchboards, connected load and capacity, an equipment register, field work
+on a phone (offline too), shutdown impact and spreadsheet import. Upgrading is automatic: the
+database is updated when the new image starts. Your daily backups are in `/data/backups`, or
+download one under Settings → Backup first.
+
+### Added
+
+- **Transformers, disconnects, UPSs and the utility service** as items of their own, under
+  **Transformers and disconnects** on a site or building page:
+  - transformers with kVA and primary and secondary voltage; fused or non-fused disconnects
+    with amps and fuse size; UPSs with kVA and runtime; the utility service with its meter;
+  - each is fed from a breaker or from another of them, and panels can be fed from them;
+  - the power path, power flow map, PDFs, CSV, public page and search show the step, e.g.
+    HA 480 V → T-LDP1 (75 kVA · 480 V → 120/208 V) → LP-1A.
+- **Switchboards and motor control centers.** New layouts that list units numbered 1, 2A,
+  2B… (up to 200), each with frame, trip, poles, feeder wire and conduit; MCC buckets add the
+  starter size, motor HP and control type. They print as a unit list.
+- **Panels with sections.** Up to 6 sections in one panel (**Panel settings → Sections**),
+  each numbered from 1 and optionally fed through lugs, for double-tub panels and more than
+  84 spaces. Circuits read "S2 · 1 + 3 + 5", and each section prints as its own table.
+- **Panel nameplate:** AIC/SCCR, bus rating separate from the main, mounting, enclosure, and
+  feeder wire and conduit.
+- **Transfer switch duty** (emergency, legally required or optional standby; NEC
+  700/701/702), transition type and priority. **Generators** record fuel tank size and
+  runtime, and list the switches they serve.
+- **Connected load.** Each breaker records its load in VA and an optional demand factor;
+  when labels or notes already say "1200 VA" or "1.5 kVA", the panel offers to **Fill them
+  in**. Each panel shows load per phase in VA and amps, the imbalance, and connected and
+  demand totals.
+- **Capacity check.** Demand below each panel, through sub-panels and transformers, against
+  the main or bus, the feeder breaker and the nearest transformer or UPS. 80% and over is
+  flagged.
+- **Voltage warnings** for a feed at another voltage with no transformer between, transformer
+  voltages that don't match, 3-pole breakers on single-phase panels, and equipment rated for
+  another voltage.
+- **Equipment register** (**Equipment** in the menu): AHU-1, EF-2, RTU-3… with type, HP,
+  voltage, room and the breaker or disconnect feeding it. Searching a tag shows what feeds it.
+- **Room links from labels.** Building and site pages suggest which room a breaker serves
+  when its label names a room number, to accept in bulk.
+- **Field verification.** Mark circuits verified or wrong, recording who and when; filter the
+  panel by check; see progress by site, building and panel.
+- **Select several** breakers to set amps, poles, tags or the field check at once, or move a
+  range of them.
+- **Shutdown impact.** **What loses power?** on a breaker, panel, transformer or disconnect
+  lists everything downstream: panels, equipment, relays, rooms and critical circuits. Panels on
+  their own transfer switch and loads on a UPS show as staying up. Copy it as text.
+- **Import from a spreadsheet** (**Import from a spreadsheet** on a location, or in Panel
+  settings): paste cells or choose a CSV, match the columns, and review each panel's new,
+  changed and removed circuits and any problems by row before saving. Understands "1,3,5",
+  "20/1", kVA, tandems, sections and switchboard units, and matches rooms by name or number.
+  Blank cells leave existing values alone. This app's own CSV export reads straight back in.
+- **Field mode** (**Field mode** on a panel or location): big type, one circuit per row, with
+  **Matches** and **Doesn't match** buttons, for walking a panel with a phone.
+  - **Save for offline** keeps a building's panels on the phone so field mode opens without
+    signal; checks and reports made offline are sent when the connection returns.
+- **Discrepancy reports** from field mode or, without signing in, from a panel's public page.
+  Open reports show on the panel, on the new **Reports** page and as a count in the menu, and
+  editors resolve them with a note.
+- **QR door stickers:** a 2-inch square per panel (Avery 22806 on Letter, 51 mm on A4), for
+  one panel or every panel in a place.
+- **Nested single sign-on groups.** Groups sent as paths (Keycloak's `/Facilities/Electricians`)
+  count for the groups above them. The README shows how to send nested groups from Authentik.
+
+### Changed
+
+- QR codes on printouts open field mode when the panel has no public page (they opened the
+  editor). Codes already printed keep working.
+- The app installs a small service worker for offline use. Signing out clears what it kept.
+
+### Upgrading
+
+- Six database updates run on start (new tables for devices, equipment and reports, and new
+  panel and breaker columns). Panels keep their layout and numbering.
+
 ## 1.2.0 — 2026-10-12
 
 A map of how power flows through a site or building, and transfer switches as their own items.

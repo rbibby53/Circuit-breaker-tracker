@@ -315,16 +315,26 @@ single sign-on groups.
 1.2 added transfer switches as their own items, a power flow map for each site and building,
 and the power path on each panel.
 
+1.3, from a list gathered from several people working through large campus schedules, added:
+transformers, disconnects, UPSs and the utility service in the feed chain; switchboard and MCC
+layouts and panels with sections; panel nameplate, transfer switch duty and generator fuel
+details; connected load, demand, phase balance, capacity checks and voltage warnings; an
+equipment register; room links suggested from labels; field verification with progress and
+bulk edit; shutdown impact; spreadsheet import with a review step; and field mode on a phone
+that works offline, with discrepancy reports and QR door stickers. Nested single sign-on
+groups count for the groups above them.
+
 Ideas, not promises:
 
 - **Generator exercise and transfer test log**, with run hours and the last test date.
 - **Relay panel import** from an nLight (SensorView) export, and relay schedules.
-- **Power flow extras:** print the map as a one-line diagram, show what loses power when a
-  breaker or panel is shut off, and transformers as their own items.
+- **Power flow extras:** print the map as a one-line diagram.
+- **Excel workbooks** imported directly (one sheet per panel), rather than saved as CSV first.
+- **Email or chat notices** when a discrepancy report comes in.
 
 - **Test and inspection log:** GFCI/AFCI test-button checks, surge protector indicator checks
   and thermal scans per breaker, with "last tested" dates and overdue reminders.
 - **Photos** on panels and breakers (the open panel, the door label, nameplates).
-- **Import from a spreadsheet** (the CSV export's columns) with a preview of what changes.
 - **DIN-rail layouts** for European and Australian boards, and quad breakers.
-- **Load calculations** beyond the current breaker-rating balance.
+- **Load calculations** to NEC Article 220 (dwelling and commercial demand factors by load type),
+  beyond the per-circuit demand factor.
