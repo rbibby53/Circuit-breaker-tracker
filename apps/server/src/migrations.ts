@@ -485,4 +485,24 @@ export const MIGRATIONS: string[] = [
   ALTER TABLE breakers ADD COLUMN verified_by TEXT NOT NULL DEFAULT '';
   ALTER TABLE breakers ADD COLUMN verified_at TEXT;
   `,
+  `
+  -- Discrepancy reports: "this doesn't match", from field mode or a panel's public page.
+  CREATE TABLE reports (
+    id          INTEGER PRIMARY KEY,
+    panel_id    INTEGER NOT NULL REFERENCES panels (id) ON DELETE CASCADE,
+    breaker_id  INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    circuit     TEXT NOT NULL DEFAULT '',
+    message     TEXT NOT NULL,
+    reporter    TEXT NOT NULL DEFAULT '',
+    user_id     INTEGER REFERENCES users (id) ON DELETE SET NULL,
+    source      TEXT NOT NULL CHECK (source IN ('app', 'public')),
+    client_id   TEXT UNIQUE,
+    status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+    resolution  TEXT NOT NULL DEFAULT '',
+    resolved_by TEXT NOT NULL DEFAULT '',
+    resolved_at TEXT,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX reports_panel ON reports (panel_id, status);
+  `,
 ];

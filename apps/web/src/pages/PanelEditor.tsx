@@ -20,6 +20,7 @@ import { api, ApiError, errorMessage } from '../api';
 import { useCurrentUser } from '../auth';
 import { NodeIcon } from '../components/PowerIcon';
 import { ImpactButton } from '../components/Impact';
+import { PanelReports } from '../components/Reports';
 import { PANEL_PRINT_STYLES, PrintButton } from '../components/PrintDialog';
 import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
@@ -399,6 +400,9 @@ function Editor({
             <button type="button" className="btn" aria-expanded={showHistory} onClick={() => setShowHistory((v) => !v)}>
               History
             </button>
+            <Link className="btn" to={`/panels/${initial.id}/field`}>
+              Field mode
+            </Link>
             <ImpactButton query={`panel=${initial.id}`} label="Shutdown impact" />
             <PrintButton
               endpoint={`/api/panels/${initial.id}/pdf`}
@@ -431,6 +435,7 @@ function Editor({
         )}
       </div>
 
+      <PanelReports panelId={initial.id} count={initial.openReports} />
       {saveState === 'conflict' && (
         <div className="banner banner-warn" role="alert">
           <span>Someone else saved this panel while you were editing. Your last change was not saved.</span>

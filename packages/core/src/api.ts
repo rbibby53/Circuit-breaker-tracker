@@ -363,6 +363,8 @@ export interface PanelDetail extends Omit<
   /** The transfer switch the panel is on, if any. */
   atsId: number | null;
   generator: PanelGenerator | null;
+  /** Discrepancy reports not yet resolved. */
+  openReports: number;
 }
 
 // ---- Generators -------------------------------------------------------------------------
@@ -806,4 +808,23 @@ export interface ImpactReport {
   rooms: { id: number; name: string; path: string }[];
   /** Panels and items downstream the viewer cannot see. */
   hidden: number;
+}
+
+export interface ReportDto {
+  id: number;
+  panelId: number;
+  panelName: string;
+  locationPath: string;
+  breakerId: number | null;
+  /** As it read when reported, e.g. "5 + 7 Lab lights". */
+  circuit: string;
+  message: string;
+  reporter: string;
+  source: 'app' | 'public';
+  status: 'open' | 'resolved';
+  resolution: string;
+  resolvedBy: string;
+  resolvedAt: string | null;
+  createdAt: string;
+  canResolve: boolean;
 }

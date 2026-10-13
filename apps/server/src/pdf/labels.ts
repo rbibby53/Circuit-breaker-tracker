@@ -11,7 +11,7 @@ import {
   type PaperSize,
   type PanelDetail,
 } from '@cbt/core';
-import { FAINT, INK, MUTED, Pdf, RULE, type Font } from './document';
+import { FAINT, INK, MUTED, Pdf, RULE, panelQrUrl, type Font } from './document';
 
 const PT_PER_IN = 72;
 const PT_PER_MM = 72 / 25.4;
@@ -214,5 +214,93 @@ export function drawLabelStrips(pdf: Pdf, panel: PanelDetail, pitch: StripPitch)
       pdf.hline(x, x + STRIP_WIDTH, y + h, RULE, 0.4);
       y += h;
     }
+  }
+}
+
+/**
+ * Square stickers for panel doors: Avery 22806 on US Letter (12 per sheet, 2" squares) and
+ * 51 mm squares, 3 × 5, on A4.
+ */
+export const QR_SHEETS: Record<PaperSize, SheetLayout> = {
+  letter: {
+    name: 'Avery 22806',
+    columns: 3,
+    rows: 4,
+    width: 2 * PT_PER_IN,
+    height: 2 * PT_PER_IN,
+    left: 0.625 * PT_PER_IN,
+    top: 0.625 * PT_PER_IN,
+    pitchX: 2.625 * PT_PER_IN,
+    pitchY: 2.5833 * PT_PER_IN,
+  },
+  a4: {
+    name: '51 mm square labels',
+    columns: 3,
+    rows: 5,
+    width: 51 * PT_PER_MM,
+    height: 51 * PT_PER_MM,
+    left: 18.5 * PT_PER_MM,
+    top: 11 * PT_PER_MM,
+    pitchX: 61 * PT_PER_MM,
+    pitchY: 56 * PT_PER_MM,
+  },
+};
+
+/** One door sticker: the panel's name, a QR code to its page (or field mode), and what scanning does. */
+function drawQrLabel(pdf: Pdf, panel: PanelDetail, x: number, y: number, w: number, h: number) {
+  const pad = w * 0.07;
+  const nameStyle = { font: 'semi' as Font, size: Math.min(13, w * 0.1), color: INK };
+  pdf.line(panel.name, x + pad, y + pad, { ...nameStyle, width: w - pad * 2 });
+  const room = panel.locationPath.split(' › ').slice(-2).join(' › ');
+  const smallStyle = { font: 'body' as Font, size: Math.min(6.5, w * 0.05), color: MUTED };
+  const nameH = pdf.lineHeight(nameStyle);
+  pdf.line(room, x + pad, y + pad + nameH, { ...smallStyle, width: w - pad * 2 });
+  const top = y + pad + nameH + pdf.lineHeight(smallStyle) + 4;
+  const footH = pdf.lineHeight(smallStyle) * 2 + 2;
+  const size = Math.min(w - pad * 2, y + h - pad - footH - top - 4);
+  const url = panelQrUrl(pdf.ctx, panel);
+  if (url) pdf.qr(url, x + (w - size) / 2, top, size);
+  else {
+    pdf.paragraph(pdf.ctx.qrHint ?? 'QR codes are turned off in Settings.', x + pad, top, w - pad * 2, {
+      ...smallStyle,
+      color: FAINT,
+    });
+  }
+  const foot =
+    url && panel.publicPath
+      ? 'Scan for the circuit list, or to report a problem'
+      : 'Scan to check circuits or report a problem';
+  pdf.paragraph(foot, x + pad, y + h - pad - footH, w - pad * 2, smallStyle, 1, 2);
+}
+
+/** A sheet of door stickers, one per panel, in the order given. `skip` leaves the first ones blank. */
+export function drawQrLabels(pdf: Pdf, paper: PaperSize, panels: PanelDetail[], skip: number): void {
+  const layout = QR_SHEETS[paper];
+  const perSheet = layout.columns * layout.rows;
+  let slot = skip % perSheet;
+  pdf.addPage(null);
+  for (const panel of panels) {
+    if (slot === perSheet) {
+      pdf.addPage(null);
+      slot = 0;
+    }
+    const col = slot % layout.columns;
+    const row = Math.floor(slot / layout.columns);
+    drawQrLabel(
+      pdf,
+      panel,
+      layout.left + col * layout.pitchX,
+      layout.top + row * layout.pitchY,
+      layout.width,
+      layout.height,
+    );
+    slot++;
+  }
+  if (panels.length === 0) {
+    pdf.paragraph('There are no panels here yet.', pdf.left, pdf.top, pdf.contentWidth, {
+      font: 'body',
+      size: 11,
+      color: MUTED,
+    });
   }
 }

@@ -7,6 +7,8 @@ import { useLocations } from '../queries';
 import { Logo } from './Logo';
 import { Search } from './Search';
 import { Avatar } from './Avatar';
+import { useOpenReports } from './Reports';
+import { clearOfflineData } from '../lib/offline';
 
 export function Layout() {
   const me = useCurrentUser();
@@ -23,6 +25,7 @@ export function Layout() {
   const logout = useMutation({
     mutationFn: () => api.post('/api/auth/logout'),
     onSuccess: () => {
+      clearOfflineData();
       qc.clear();
       navigate('/login');
     },
@@ -31,6 +34,7 @@ export function Layout() {
   // Access, People and Activity are for admins and managers only; hide them from everyone else.
   const locations = useLocations();
   const config = useAuthConfig();
+  const openReports = useOpenReports().data?.length ?? 0;
   const manages = me.user.isAdmin || (locations.data ?? []).some((l) => l.role === 'manager');
   const appName = config.data?.appName ?? 'Circuit Breaker Tracker';
 
@@ -50,6 +54,11 @@ export function Layout() {
           </NavLink>
           <NavLink to="/power">Power</NavLink>
           <NavLink to="/equipment">Equipment</NavLink>
+          {openReports > 0 && (
+            <NavLink to="/reports" aria-label={`Reports, ${openReports} open`}>
+              Reports <span className="nav-count">{openReports}</span>
+            </NavLink>
+          )}
           {manages && (
             <>
               <NavLink to="/access">Access</NavLink>

@@ -353,3 +353,32 @@ export const verifyBreakersSchema = z.object({
     .min(1)
     .max(1000),
 });
+
+/** "This doesn't match": a report from field mode about a circuit (or the panel as a whole). */
+export const reportInputSchema = z.object({
+  breakerId: z.number().int().positive().nullable().default(null),
+  message: z.string().trim().min(1, 'Say what does not match.').max(1000),
+  /** Set by field mode so a report sent again after being offline is only recorded once. */
+  clientId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{8,64}$/)
+    .optional(),
+  /** Also mark the circuit wrong (Editor access needed). */
+  markWrong: z.boolean().default(false),
+});
+
+/** A report from a panel's public page: the circuit by its place in the panel, and an optional name. */
+export const publicReportSchema = z.object({
+  section: z.number().int().min(1).max(MAX_SECTIONS).nullable().default(null),
+  position: z.number().int().min(1).max(MAX_UNITS).nullable().default(null),
+  slot: z.enum(SLOTS).default('full'),
+  message: z.string().trim().min(1, 'Say what does not match.').max(1000),
+  name: optionalText(80),
+  /** Left empty by people; filled in by form-filling bots. */
+  website: z.string().max(200).default(''),
+});
+
+export const resolveReportSchema = z.object({
+  status: z.enum(['open', 'resolved']),
+  resolution: optionalText(1000),
+});

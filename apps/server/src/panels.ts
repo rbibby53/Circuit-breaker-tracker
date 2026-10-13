@@ -633,6 +633,11 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
       ...equipmentVoltageWarnings(panel, breakers, equipment),
       ...capacityWarnings(check),
     ],
+    openReports: (
+      db.prepare("SELECT COUNT(*) AS n FROM reports WHERE panel_id = ? AND status = 'open'").get(panel.id) as {
+        n: number;
+      }
+    ).n,
     publicPath: panel.public_token ? `/p/${panel.public_token}` : null,
     canShare: role === 'admin' || role === 'manager',
     generatorId: panel.generator_id,

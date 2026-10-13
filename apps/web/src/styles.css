@@ -1697,7 +1697,7 @@ a:focus-visible {
 }
 .search {
   position: relative;
-  flex: 1 1 240px;
+  flex: 1 1 160px;
   max-width: 420px;
 }
 .search input {
@@ -2146,6 +2146,12 @@ code {
 .public-amps {
   font-weight: 700;
   white-space: nowrap;
+}
+.public-side {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-end;
+  gap: 4px;
 }
 
 .share-url {
@@ -3307,4 +3313,212 @@ code {
 .import-results {
   margin: 0;
   padding-left: 18px;
+}
+
+/* Discrepancy reports */
+.nav-count {
+  display: inline-block;
+  min-width: 18px;
+  padding: 0 5px;
+  margin-left: 2px;
+  border-radius: 999px;
+  background: var(--danger);
+  color: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  line-height: 18px;
+  text-align: center;
+}
+.report-banner {
+  display: block;
+}
+.report-list {
+  list-style: none;
+  margin: 8px 0 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.report {
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface);
+  color: var(--ink);
+  padding: 10px 12px;
+  display: grid;
+  gap: 4px;
+}
+.report.is-resolved {
+  opacity: 0.75;
+}
+.report-head {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+.report-message {
+  margin: 0;
+  white-space: pre-wrap;
+}
+.report .link-btn {
+  justify-self: start;
+}
+.report-resolve {
+  display: flex;
+  gap: 8px;
+  flex-wrap: wrap;
+}
+.report-resolve input {
+  flex: 1 1 200px;
+}
+
+/* Field mode: big type and big targets, for a phone in one hand at a panel */
+.field-page {
+  max-width: 720px;
+  font-size: 18px;
+}
+.field-head {
+  display: grid;
+  gap: 6px;
+  margin-bottom: 12px;
+}
+.field-head h1 {
+  font-size: 30px;
+}
+.field-progress {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  gap: 10px;
+  align-items: center;
+}
+.field-sync {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 12px;
+  margin-bottom: 12px;
+  border-radius: 8px;
+  border: 1px solid var(--line);
+  background: var(--surface-2);
+  font-size: 15px;
+}
+.field-sync.is-offline {
+  border-color: var(--ink);
+  font-weight: 600;
+}
+.field-sync.is-failed {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.field-notice {
+  padding: 8px 12px;
+  border-radius: 8px;
+  background: var(--surface-2);
+  font-size: 15px;
+}
+.field-list,
+.field-panels {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 10px;
+}
+.field-item {
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  padding: 12px;
+  display: grid;
+  gap: 10px;
+}
+.field-item.is-verified {
+  border-color: var(--ok);
+}
+.field-item.is-wrong {
+  border-color: var(--danger);
+}
+.field-item.is-spare {
+  opacity: 0.6;
+}
+.field-main {
+  display: grid;
+  grid-template-columns: auto minmax(0, 1fr) auto;
+  gap: 12px;
+  align-items: start;
+}
+.field-circuit {
+  font-size: 24px;
+  font-weight: 700;
+  min-width: 2.2em;
+}
+.field-text {
+  display: grid;
+  gap: 2px;
+}
+.field-label-text {
+  font-size: 20px;
+  font-weight: 700;
+  line-height: 1.25;
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  align-items: center;
+}
+.field-rooms {
+  font-size: 15px;
+  color: var(--muted);
+}
+.field-amps {
+  font-size: 18px;
+  font-weight: 700;
+  white-space: nowrap;
+}
+.field-status {
+  margin: 0;
+  font-weight: 600;
+}
+.field-item.is-verified .field-status {
+  color: var(--ok);
+}
+.field-item.is-wrong .field-status {
+  color: var(--danger);
+}
+.field-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.field-big-btn {
+  min-height: 52px;
+  font-size: 17px;
+}
+.field-yes.is-on {
+  background: var(--ok);
+  border-color: var(--ok);
+  color: var(--surface);
+}
+.field-no.is-on {
+  border-color: var(--danger);
+  color: var(--danger);
+}
+.field-report {
+  display: grid;
+  gap: 8px;
+}
+.field-foot {
+  margin-top: 16px;
+}
+.field-panel-link {
+  display: grid;
+  gap: 2px;
+  padding: 14px;
+  border: 2px solid var(--line);
+  border-radius: 10px;
+  background: var(--surface);
+  color: var(--ink);
+  text-decoration: none;
 }

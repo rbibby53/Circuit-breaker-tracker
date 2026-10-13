@@ -236,6 +236,11 @@ function LocationView({
               Power flow
             </Link>
           )}
+          {!crumbOnly && node.kind !== 'company' && (
+            <Link className="btn" to={`/field?loc=${node.id}`}>
+              Field mode
+            </Link>
+          )}
           {canRename && !editing && (
             <button className="btn" onClick={() => setEditing(true)}>
               Rename

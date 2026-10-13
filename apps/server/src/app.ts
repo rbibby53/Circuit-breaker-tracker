@@ -23,6 +23,7 @@ import { deviceRoutes } from './routes/devices';
 import { equipmentRoutes } from './routes/equipment';
 import { verifyRoutes } from './routes/verify';
 import { impactRoutes } from './routes/impact';
+import { reportRoutes } from './routes/reports';
 import { searchRoutes } from './routes/search';
 import { totpRoutes } from './routes/totp';
 import { loadAuth } from './sessions';
@@ -171,6 +172,7 @@ export async function buildApp(
   equipmentRoutes(app, db);
   verifyRoutes(app, db);
   impactRoutes(app, db);
+  reportRoutes(app, db, config);
   pdfRoutes(app, db, config);
   exportRoutes(app, db);
   publicRoutes(app, db, config);
