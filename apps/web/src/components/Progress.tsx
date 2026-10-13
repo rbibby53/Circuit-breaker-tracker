@@ -52,7 +52,8 @@ export function VerifyProgressCard({ locationId, name }: { locationId: number; n
       <div className="row space-between">
         <h2 className="h-caps">Field verification</h2>
         <span className="small muted">
-          {r.total.panelsDone} of {r.total.panels} panels fully checked
+          {r.total.panelsDone} of {r.total.panels} panels fully checked ·{' '}
+          <Link to={`/verification?loc=${locationId}`}>Who verified what</Link>
         </span>
       </div>
       <Bar p={r.total} label={name} />

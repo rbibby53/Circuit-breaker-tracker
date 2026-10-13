@@ -5,6 +5,7 @@ import {
   isRelayPanel,
   isSurgeOnly,
   type BreakerDto,
+  type MeterSummary,
   type PanelDetail,
   type VerifyStatus,
 } from '@cbt/core';
@@ -13,6 +14,7 @@ import { useMemo, useState } from 'react';
 import { Link, useParams, useSearchParams } from 'react-router-dom';
 import { api, errorMessage } from '../api';
 import { useCurrentUser } from '../auth';
+import { NodeIcon } from '../components/PowerIcon';
 import { ErrorNote, formatDate } from '../components/ui';
 import { newClientId, sendOrQueue, useOutbox } from '../lib/outbox';
 import { useTitle } from '../lib/useTitle';
@@ -73,10 +75,22 @@ export function FieldPanelPage() {
   useTitle(panel.data ? `${panel.data.name} · Field mode` : 'Field mode');
   const [local, setLocal] = useState(() => new Map<number, VerifyStatus>());
   const [onlyLeft, setOnlyLeft] = useState(false);
-  const [reporting, setReporting] = useState<number | 'panel' | null>(null);
+  // A breaker id, 'panel', or a meter (as `m<id>`) being reported, or null.
+  const [reporting, setReporting] = useState<number | 'panel' | `m${number}` | null>(null);
+  const [meterLocal, setMeterLocal] = useState(() => new Map<number, VerifyStatus>());
   const [message, setMessage] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Meter checks still waiting on this phone.
+  const meterWaiting = useMemo(() => {
+    const m = new Map<number, VerifyStatus>();
+    for (const item of outbox.items) {
+      const hit = /^\/api\/meters\/(\d+)\/verify$/.exec(item.url);
+      if (item.panelId === panelId && hit) m.set(Number(hit[1]), (item.body as { status: VerifyStatus }).status);
+    }
+    return m;
+  }, [outbox.items, panelId]);
 
   // Checks still waiting on this phone count as made.
   const waiting = useMemo(() => {
@@ -140,10 +154,58 @@ export function FieldPanelPage() {
     }
   };
 
+  const meterStatus = (m: MeterSummary): VerifyStatus =>
+    meterLocal.get(m.id) ?? meterWaiting.get(m.id) ?? m.verifyStatus;
+
+  const checkMeter = async (m: MeterSummary, status: VerifyStatus) => {
+    setError(null);
+    setMeterLocal((x) => new Map(x).set(m.id, status));
+    try {
+      const how = await sendOrQueue({
+        userId: me.realUser.id,
+        url: `/api/meters/${m.id}/verify`,
+        body: { status },
+        panelId: p.id,
+        label: `Meter ${m.name} ${status === 'verified' ? 'checked' : status === 'wrong' ? 'marked wrong' : 'unchecked'}`,
+      });
+      if (how === 'sent') void qc.invalidateQueries({ queryKey: ['field-panel', p.id] });
+    } catch (e) {
+      setMeterLocal((x) => {
+        const next = new Map(x);
+        next.delete(m.id);
+        return next;
+      });
+      setError(errorMessage(e));
+    }
+  };
+
   const report = async () => {
-    const b = typeof reporting === 'number' ? p.breakers.find((x) => x.id === reporting) : undefined;
+    const meter =
+      typeof reporting === 'string' && reporting.startsWith('m')
+        ? p.meters.find((x) => `m${x.id}` === reporting)
+        : undefined;
+    const b =
+      typeof reporting === 'number'
+        ? p.breakers.find((x) => x.id === reporting)
+        : meter?.breakerId
+          ? p.breakers.find((x) => x.id === meter.breakerId)
+          : undefined;
     setError(null);
     try {
+      if (meter) {
+        const how = await sendOrQueue({
+          userId: me.realUser.id,
+          url: `/api/panels/${p.id}/reports`,
+          body: { breakerId: b?.id ?? null, message: `Meter ${meter.name}: ${message}`, clientId: newClientId() },
+          panelId: p.id,
+          label: `Report on meter ${meter.name}`,
+        });
+        if (canCheck) await checkMeter(meter, 'wrong');
+        setNotice(how === 'sent' ? 'Report sent.' : QUEUED);
+        setReporting(null);
+        setMessage('');
+        return;
+      }
       const how = await sendOrQueue({
         userId: me.realUser.id,
         url: `/api/panels/${p.id}/reports`,
@@ -245,6 +307,71 @@ export function FieldPanelPage() {
         </p>
       )}
 
+      {p.meters.length > 0 && (
+        <section className="stack-sm" aria-label="Meters">
+          <h2 className="h-caps">Meters</h2>
+          <ol className="field-list">
+            {p.meters.map((m) => {
+              const status = meterStatus(m);
+              return (
+                <li
+                  key={`m${m.id}`}
+                  className={`field-item${status ? ` is-${status}` : ''}`}
+                  aria-label={`Meter ${m.name}${status ? `, ${status === 'verified' ? 'checked' : 'wrong'}` : ''}`}
+                >
+                  <div className="field-main">
+                    <NodeIcon kind="meter" size={28} />
+                    <div className="field-text">
+                      <span className="field-label-text">{m.name}</span>
+                      <span className="field-rooms">
+                        {[m.meterNumber && `#${m.meterNumber}`, m.measures].filter(Boolean).join(' · ')}
+                      </span>
+                    </div>
+                  </div>
+                  {status && (
+                    <p className="field-status small">
+                      {status === 'verified' ? '✓ Matches' : '✗ Does not match'}
+                      {meterLocal.has(m.id) || meterWaiting.has(m.id)
+                        ? ' · just now'
+                        : m.verifiedBy
+                          ? ` · ${m.verifiedBy}, ${formatDate(m.verifiedAt)}`
+                          : ''}
+                    </p>
+                  )}
+                  {reporting === `m${m.id}` ? (
+                    reportForm
+                  ) : (
+                    <div className="field-actions">
+                      {canCheck && (
+                        <button
+                          type="button"
+                          className={`btn field-big-btn field-yes${status === 'verified' ? ' is-on' : ''}`}
+                          aria-pressed={status === 'verified'}
+                          onClick={() => void checkMeter(m, status === 'verified' ? '' : 'verified')}
+                        >
+                          ✓ Matches
+                        </button>
+                      )}
+                      <button
+                        type="button"
+                        className={`btn field-big-btn field-no${status === 'wrong' ? ' is-on' : ''}`}
+                        onClick={() => {
+                          setNotice(null);
+                          setMessage('');
+                          setReporting(`m${m.id}`);
+                        }}
+                      >
+                        ✗ Doesn't match
+                      </button>
+                    </div>
+                  )}
+                </li>
+              );
+            })}
+          </ol>
+          <h2 className="h-caps">Circuits</h2>
+        </section>
+      )}
       <ol className="field-list" aria-label="Circuits">
         {shown.map((b) => {
           const status = statusOf(b);

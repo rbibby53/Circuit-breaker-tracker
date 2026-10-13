@@ -2,11 +2,13 @@
 // and a page for each with what feeds it and what it feeds.
 
 import {
+  POWER_DEVICE_HINTS,
   POWER_DEVICE_KINDS,
   POWER_DEVICE_LABELS,
   TRANSFORMER_KVA,
   atLeast,
   formatVa,
+  type CampusFeed,
   type FeedCandidate,
   type FeedOptions,
   type PowerDeviceDetail,
@@ -25,6 +27,7 @@ import { useTitle } from '../lib/useTitle';
 import { useLocations, usePowerDevices } from '../queries';
 import { ancestry, buildTree, type TreeNode } from '../tree';
 import { useSwitchPlaces } from './Generators';
+import { MetersOn } from './Meters';
 import { isInside } from './SitePanels';
 
 /** Transformers and other equipment at or inside a location, as cards. */
@@ -62,8 +65,9 @@ const blank = (kind: PowerDeviceKind, locationId: number): PowerDeviceInput => (
   name: '',
   locationId,
   kva: null,
-  voltage: kind === 'transformer' ? '480 V' : '',
+  voltage: kind === 'transformer' ? '480 V' : kind === 'switch' ? '12.47 kV' : '',
   secondaryVoltage: kind === 'transformer' ? '120/208 V' : '',
+  fedWay: '',
   amps: null,
   fused: false,
   fuseAmps: null,
@@ -80,6 +84,7 @@ const PLACEHOLDERS: Record<PowerDeviceKind, string> = {
   disconnect: 'e.g. DS-AHU1',
   ups: 'e.g. UPS-1',
   service: 'e.g. Service 1',
+  switch: 'e.g. SC-2',
 };
 
 const num = (v: string) => (v ? Number(v) : null);
@@ -115,7 +120,7 @@ function DeviceFields({ form, setForm }: { form: PowerDeviceInput; setForm: (f: 
           </datalist>
         </Field>
       )}
-      {(form.kind === 'disconnect' || form.kind === 'service') && (
+      {(form.kind === 'disconnect' || form.kind === 'service' || form.kind === 'switch') && (
         <Field label="Amps">
           <input type="number" min={1} value={form.amps ?? ''} onChange={(e) => set({ amps: num(e.target.value) })} />
         </Field>
@@ -185,17 +190,24 @@ function DeviceFields({ form, setForm }: { form: PowerDeviceInput; setForm: (f: 
   );
 }
 
-/** "Fed from": a breaker in a breaker panel, or another device. Not shown for a utility service. */
+/**
+ * "Fed from": a breaker in a breaker panel, or another device, and (with `onWay`) which way of
+ * that device, e.g. a switching cube's "Way 3". Not shown for a utility service.
+ */
 export function FeedField({
   value,
   options,
   current,
   onChange,
+  way,
+  onWay,
 }: {
   value: { breakerId: number | null; deviceId: number | null };
   options: FeedOptions | undefined;
   current: string | null;
   onChange: (v: { breakerId: number | null; deviceId: number | null }) => void;
+  way?: string;
+  onWay?: (way: string) => void;
 }) {
   const byPanel = new Map<number, FeedCandidate[]>();
   for (const c of options?.breakers ?? []) byPanel.set(c.panelId, [...(byPanel.get(c.panelId) ?? []), c]);
@@ -204,36 +216,43 @@ export function FeedField({
     (value.deviceId && options?.devices.some((d) => d.id === value.deviceId));
   const selected = value.deviceId ? `d:${value.deviceId}` : value.breakerId ? `b:${value.breakerId}` : '';
   return (
-    <Field label="Fed from">
-      <select
-        value={selected}
-        onChange={(e) => {
-          const [kind, id] = e.target.value.split(':');
-          onChange({ breakerId: kind === 'b' ? Number(id) : null, deviceId: kind === 'd' ? Number(id) : null });
-        }}
-      >
-        <option value="">Not set</option>
-        {selected && !known && <option value={selected}>{current ?? 'Current feed'}</option>}
-        {(options?.devices ?? []).length > 0 && (
-          <optgroup label="Transformers, disconnects and UPSs">
-            {options!.devices.map((d) => (
-              <option key={d.id} value={`d:${d.id}`}>
-                {d.name} · {POWER_DEVICE_LABELS[d.kind]} ({d.locationPath})
-              </option>
-            ))}
-          </optgroup>
-        )}
-        {[...byPanel.entries()].map(([panelId, list]) => (
-          <optgroup key={panelId} label={`${list[0]!.panelName} (${list[0]!.locationPath})`}>
-            {list.map((c) => (
-              <option key={c.breakerId} value={`b:${c.breakerId}`}>
-                {c.circuit} {c.label || 'Unlabelled'} ({c.amps}A)
-              </option>
-            ))}
-          </optgroup>
-        ))}
-      </select>
-    </Field>
+    <>
+      <Field label="Fed from">
+        <select
+          value={selected}
+          onChange={(e) => {
+            const [kind, id] = e.target.value.split(':');
+            onChange({ breakerId: kind === 'b' ? Number(id) : null, deviceId: kind === 'd' ? Number(id) : null });
+          }}
+        >
+          <option value="">Not set</option>
+          {selected && !known && <option value={selected}>{current ?? 'Current feed'}</option>}
+          {(options?.devices ?? []).length > 0 && (
+            <optgroup label="Switching cubes, transformers and disconnects">
+              {options!.devices.map((d) => (
+                <option key={d.id} value={`d:${d.id}`}>
+                  {d.name} · {POWER_DEVICE_LABELS[d.kind]} ({d.locationPath})
+                </option>
+              ))}
+            </optgroup>
+          )}
+          {[...byPanel.entries()].map(([panelId, list]) => (
+            <optgroup key={panelId} label={`${list[0]!.panelName} (${list[0]!.locationPath})`}>
+              {list.map((c) => (
+                <option key={c.breakerId} value={`b:${c.breakerId}`}>
+                  {c.circuit} {c.label || 'Unlabelled'} ({c.amps}A)
+                </option>
+              ))}
+            </optgroup>
+          ))}
+        </select>
+      </Field>
+      {onWay && value.deviceId !== null && (
+        <Field label="Way or position">
+          <input value={way ?? ''} maxLength={20} placeholder="e.g. Way 3" onChange={(e) => onWay(e.target.value)} />
+        </Field>
+      )}
+    </>
   );
 }
 
@@ -256,14 +275,14 @@ export function AddDeviceForm({ locationId }: { locationId: number }) {
   if (!form) {
     return (
       <button type="button" className="btn" onClick={() => setForm(blank('transformer', locationId))}>
-        + Add a transformer or disconnect
+        + Add a transformer, switching cube or disconnect
       </button>
     );
   }
   return (
     <form className="panel stack" onSubmit={submit} aria-label="Add equipment">
       <h2 className="h-caps">Add equipment</h2>
-      <div className="segmented four" role="group" aria-label="Kind">
+      <div className="segmented five" role="group" aria-label="Kind">
         {POWER_DEVICE_KINDS.map((k) => (
           <button
             key={k}
@@ -276,9 +295,10 @@ export function AddDeviceForm({ locationId }: { locationId: number }) {
         ))}
       </div>
       <p className="muted small">
+        {POWER_DEVICE_HINTS[form.kind]}{' '}
         {form.kind === 'service'
-          ? 'Where power comes in from the utility, with its meter. Feed the main switchboard from it.'
-          : 'Set what feeds it on its page, then pick it under Fed from in the panels it feeds.'}
+          ? 'Feed the main switchboard from it.'
+          : 'Set what feeds it on its page, then pick it under Fed from in what it feeds.'}
       </p>
       <div className="form-row">
         <DeviceFields form={form} setForm={setForm} />
@@ -387,6 +407,7 @@ export function DevicePage() {
                         <NodeIcon kind={f.deviceKind} size={16} />
                         {f.canView ? <Link to={`/devices/${f.deviceId}`}>{f.name}</Link> : <strong>{f.name}</strong>}
                         {f.rating && <span className="ps-ckt">{f.rating}</span>}
+                        {f.way && <span className="ps-ckt">{f.way}</span>}
                       </li>
                     ) : (
                       <li key={f.breakerId} className="ps-chip">
@@ -501,6 +522,8 @@ export function DevicePage() {
                 options={options.data}
                 current={d.fedFrom}
                 onChange={(feed) => setForm({ ...form, feed })}
+                way={form.fedWay ?? ''}
+                onWay={(fedWay) => setForm({ ...form, fedWay })}
               />
             )}
             <Field label="Manufacturer">
@@ -530,6 +553,35 @@ export function DevicePage() {
       )}
       {!form && d.notes && <p className="notes">{d.notes}</p>}
 
+      {(d.kind === 'switch' || d.buildings.length > 0) && (
+        <section className="panel stack" aria-labelledby="dev-buildings-h">
+          <h2 id="dev-buildings-h" className="h-caps">
+            Buildings fed
+          </h2>
+          {d.buildings.length === 0 ? (
+            <p className="muted">
+              None yet. Feed a building&apos;s transformer or main switchboard from <strong>{d.name}</strong> (under{' '}
+              <strong>Fed from</strong>), with the way it comes off.
+            </p>
+          ) : (
+            <ul className="access-list">
+              {d.buildings.map((b) => (
+                <li key={`${b.locationId}:${b.way}`}>
+                  <span className="cell-stack">
+                    <Link className="strong" to={`/?loc=${b.locationId}`}>
+                      {b.name}
+                    </Link>
+                    <span className="muted small">
+                      {[b.way, `through ${b.via}`, b.path].filter(Boolean).join(' · ')}
+                    </span>
+                  </span>
+                </li>
+              ))}
+            </ul>
+          )}
+        </section>
+      )}
+      <MetersOn meters={d.meters} add={{ deviceId: d.id, locationId: d.locationId }} canAdd={canEdit} />
       <section className="panel stack" aria-labelledby="dev-loads-h">
         <h2 id="dev-loads-h" className="h-caps">
           What it feeds
@@ -555,5 +607,44 @@ export function DevicePage() {
         )}
       </section>
     </main>
+  );
+}
+
+/** A building's place on a campus grid: the switching cubes it ties back to, by way. */
+export function CampusFeedCard({ locationId }: { locationId: number }) {
+  const feed = useQuery({
+    queryKey: ['campus-feed', locationId],
+    queryFn: () => api.get<CampusFeed>(`/api/locations/${locationId}/campus-feed`),
+  });
+  const cubes = feed.data?.cubes ?? [];
+  if (cubes.length === 0) return null;
+  return (
+    <section className="panel stack-sm campus-feed" aria-label="Campus feed">
+      <h2 className="h-caps">Campus feed</h2>
+      <ul className="access-list">
+        {cubes.map((c) => (
+          <li key={`${c.id}:${c.way}`}>
+            <span className={`gen-icon device-icon dev-switch`} aria-hidden="true">
+              <NodeIcon kind="switch" />
+            </span>
+            <span className="cell-stack">
+              <span>
+                {c.canView ? (
+                  <Link className="strong" to={`/devices/${c.id}`}>
+                    {c.name}
+                  </Link>
+                ) : (
+                  <strong>{c.name}</strong>
+                )}
+                {c.way && <span className="mono"> · {c.way}</span>}
+              </span>
+              <span className="muted small">
+                Into {c.via} · cube in {c.path}
+              </span>
+            </span>
+          </li>
+        ))}
+      </ul>
+    </section>
   );
 }

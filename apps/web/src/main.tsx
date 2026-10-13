@@ -80,6 +80,22 @@ const FieldIndexPage = lazyPage(
   () => import('./pages/Field'),
   (m) => m.FieldIndexPage,
 );
+const MetersListPage = lazyPage(
+  () => import('./pages/Meters'),
+  (m) => m.MetersListPage,
+);
+const NewMeterPage = lazyPage(
+  () => import('./pages/Meters'),
+  (m) => m.NewMeterPage,
+);
+const MeterPage = lazyPage(
+  () => import('./pages/Meters'),
+  (m) => m.MeterPage,
+);
+const VerificationPage = lazyPage(
+  () => import('./pages/Verification'),
+  (m) => m.VerificationPage,
+);
 const PowerPage = lazyPage(
   () => import('./pages/Power'),
   (m) => m.PowerPage,
@@ -176,6 +192,10 @@ createRoot(document.getElementById('root')!).render(
                 <Route path="/equipment" element={<EquipmentListPage />} />
                 <Route path="/equipment/:id" element={<EquipmentPage />} />
                 <Route path="/import" element={<ImportPage />} />
+                <Route path="/meters" element={<MetersListPage />} />
+                <Route path="/meters/new" element={<NewMeterPage />} />
+                <Route path="/meters/:id" element={<MeterPage />} />
+                <Route path="/verification" element={<VerificationPage />} />
                 <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/access" element={<AccessPage />} />
                 <Route path="/users" element={<UsersPage />} />

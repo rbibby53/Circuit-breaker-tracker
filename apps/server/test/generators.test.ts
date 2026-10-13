@@ -1015,3 +1015,149 @@ describe('shutdown impact', () => {
     expect((await c.admin.get('/api/impact')).status).toBe(400);
   });
 });
+
+describe('campus grid', () => {
+  it('ties buildings back to switching cubes through their ways', async () => {
+    const c = await campus();
+    const etc = await createLocation(c.admin, c.site, 'building', 'ETC');
+    const etcFloor = await createLocation(c.admin, etc, 'floor', 'Basement');
+    const etcRoom = await createLocation(c.admin, etcFloor, 'room', 'Main electrical');
+    const cube = await c.admin.post('/api/power-devices', {
+      kind: 'switch',
+      name: 'SC-2',
+      locationId: c.site,
+      voltage: '12.47 kV',
+      amps: 600,
+    });
+    expect(cube.status).toBe(200);
+    // Science Hall: cube way 3 → transformer → EM-1. ETC: way 1 → its switchboard directly.
+    const t = await c.admin.post('/api/power-devices', {
+      kind: 'transformer',
+      name: 'T-SH',
+      locationId: c.elec,
+      kva: 1500,
+      voltage: '12.47 kV',
+      secondaryVoltage: '277/480 V',
+      fedFromDeviceId: cube.body.id,
+      fedWay: 'Way 3',
+    });
+    expect((await save(c.admin, c.em1, null, { fedFromDeviceId: t.body.id, voltage: '277/480 V' })).status).toBe(200);
+    const msb = (
+      await c.admin.post(`/api/locations/${etcRoom}/panels`, { name: 'MSB-ETC', layout: 'switchboard', spaces: 6 })
+    ).body.id;
+    expect((await save(c.admin, msb, [], { fedFromDeviceId: cube.body.id, fedWay: 'Way 1' })).status).toBe(200);
+
+    // The cube lists both buildings, by way and what they come in through.
+    const detail = (await c.admin.get(`/api/power-devices/${cube.body.id}`)).body;
+    expect(detail).toMatchObject({ kind: 'switch', rating: '12.47 kV · 600 A' });
+    expect(detail.buildings).toEqual([
+      expect.objectContaining({ name: 'ETC', way: 'Way 1', via: 'MSB-ETC' }),
+      expect.objectContaining({ name: 'Science Hall', way: 'Way 3', via: expect.stringMatching(/^T-SH \(1500 kVA/) }),
+    ]);
+    // Each building knows which cube it ties back to.
+    expect((await c.admin.get(`/api/locations/${c.hall}/campus-feed`)).body.cubes).toEqual([
+      expect.objectContaining({ id: cube.body.id, name: 'SC-2', way: 'Way 3', canView: true }),
+    ]);
+    expect((await c.admin.get(`/api/locations/${etc}/campus-feed`)).body.cubes).toEqual([
+      expect.objectContaining({ name: 'SC-2', way: 'Way 1', via: 'MSB-ETC' }),
+    ]);
+    // The feed chain names the way; the 12.47 kV primary matches the cube.
+    const em1 = (await c.admin.get(`/api/panels/${c.em1}`)).body;
+    expect(em1.feedChain.map((l: any) => [l.name ?? l.panelName, l.way ?? null])).toEqual([
+      ['T-SH', ''],
+      ['SC-2', 'Way 3'],
+    ]);
+    expect((await c.admin.get(`/api/power-devices/${t.body.id}`)).body.warnings).toEqual([]);
+    expect(em1.fedWay).toBe('');
+    expect((await c.admin.get(`/api/panels/${msb}`)).body.fedWay).toBe('Way 1');
+    // A way changes in the panel's history.
+    await save(c.admin, msb, [], { fedWay: 'Way 2' });
+    const hist = (await c.admin.get(`/api/panels/${msb}/history`)).body;
+    expect(JSON.stringify(hist[0])).toContain('feed way');
+  });
+});
+
+describe('meters', () => {
+  it('measure a breaker, a panel main or a device, are searchable, and are checked in the field', async () => {
+    const c = await campus();
+    const onBreaker = await c.admin.post('/api/meters', {
+      name: 'M-LAB',
+      locationId: c.elec,
+      meterNumber: '44817',
+      ctRatio: '100:5',
+      protocol: 'modbus-tcp',
+      address: '10.1.4.20 unit 3',
+      breakerId: c.labBreaker,
+    });
+    expect(onBreaker.status).toBe(200);
+    const onMain = await c.admin.post('/api/meters', {
+      name: 'M-LP1',
+      locationId: c.elec,
+      panelId: c.lp,
+      multiplier: 40,
+    });
+    expect(onMain.status).toBe(200);
+    expect(
+      (await c.admin.post('/api/meters', { name: 'X', locationId: c.elec, panelId: c.lp, breakerId: c.labBreaker }))
+        .status,
+    ).toBe(400);
+
+    const lp = (await c.admin.get(`/api/panels/${c.lp}`)).body;
+    expect(lp.meters).toEqual([
+      expect.objectContaining({ name: 'M-LP1', measures: 'LP-1 main', breakerId: null }),
+      expect.objectContaining({ name: 'M-LAB', measures: 'LP-1 · 3 (Lab lights)', breakerId: c.labBreaker }),
+    ]);
+    expect((await c.admin.get(`/api/meters/${onBreaker.body.id}`)).body).toMatchObject({
+      meterNumber: '44817',
+      protocol: 'modbus-tcp',
+      breakerPanelId: c.lp,
+      canEdit: true,
+    });
+    expect((await c.admin.get('/api/search?q=44817')).body.meters).toEqual([
+      expect.objectContaining({ name: 'M-LAB', measures: 'LP-1 · 3 (Lab lights)' }),
+    ]);
+
+    // Checked in the field, with who and when; viewers cannot.
+    const checked = await c.admin.post(`/api/meters/${onBreaker.body.id}/verify`, { status: 'verified' });
+    expect(checked.body).toMatchObject({ verifyStatus: 'verified', verifiedBy: expect.any(String) });
+    const viewer = await invite(app, c.admin, c.hall, 'viewer', 'viewer');
+    expect((await viewer.post(`/api/meters/${onMain.body.id}/verify`, { status: 'verified' })).status).toBe(403);
+    expect((await viewer.get(`/api/meters/${onBreaker.body.id}`)).body.canEdit).toBe(false);
+
+    // A location with meters cannot be deleted.
+    expect((await c.admin.del(`/api/locations/${c.elec}`)).status).toBe(409);
+  });
+});
+
+describe('who verified what', () => {
+  it('lists every check with who and when, per person and filtered', async () => {
+    const c = await campus();
+    expect(
+      (
+        await c.admin.post(`/api/panels/${c.lp}/verify`, {
+          breakers: [
+            { breakerId: c.corridorBreaker, status: 'verified' },
+            { breakerId: c.labBreaker, status: 'wrong' },
+          ],
+        })
+      ).status,
+    ).toBe(200);
+    const meter = (await c.admin.post('/api/meters', { name: 'M-1', locationId: c.elec, panelId: c.lp })).body.id;
+    await c.admin.post(`/api/meters/${meter}/verify`, { status: 'verified' });
+
+    const log = (await c.admin.get(`/api/verifications?loc=${c.hall}`)).body;
+    expect(log.total).toBe(3);
+    expect(log.people).toEqual([expect.objectContaining({ verified: 2, wrong: 1 })]);
+    const name = log.people[0].name;
+    expect(log.items[0]).toMatchObject({ kind: 'meter', what: 'Meter M-1', panelName: 'LP-1', by: name });
+    expect(log.items.map((i: any) => i.what).sort()).toEqual(['Circuit 1', 'Circuit 3', 'Meter M-1']);
+    expect((await c.admin.get('/api/verifications?status=wrong')).body.items).toEqual([
+      expect.objectContaining({ what: 'Circuit 3', label: 'Lab lights', status: 'wrong' }),
+    ]);
+    expect((await c.admin.get(`/api/verifications?by=${encodeURIComponent('Nobody')}`)).body.items).toEqual([]);
+    // Outsiders see nothing.
+    const outsider = await invite(app, c.admin, c.other, 'editor', 'outsider');
+    expect((await outsider.get('/api/verifications')).body.total).toBe(0);
+    expect((await outsider.get(`/api/verifications?loc=${c.hall}`)).status).toBe(404);
+  });
+});

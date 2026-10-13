@@ -38,6 +38,7 @@ const KIND_NAMES: Record<TopologyKind, string> = {
   disconnect: 'Disconnect',
   ups: 'UPS',
   service: 'Utility service',
+  switch: 'Switching cube',
 };
 
 const EDGE_NAMES: Record<TopologyEdge['kind'], string> = {

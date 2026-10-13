@@ -33,6 +33,7 @@ import {
   type Slot,
 } from '@cbt/core';
 import { capacityWarnings, equipmentVoltageWarnings, loadCheck, voltageWarnings } from './capacity';
+import { panelMeters } from './meters';
 import type { DB } from './db';
 import type { AccessData } from './repo';
 
@@ -63,6 +64,8 @@ export interface PanelRow {
   feeder_conduit: string;
   /** JSON list of the sections after the first. */
   sections: string;
+  /** Which way of the device feeding it, e.g. "Way 3". */
+  fed_way: string;
   version: number;
   created_at: string;
   updated_at: string;
@@ -168,6 +171,8 @@ export interface DeviceRow {
   fed_from_device_id: number | null;
   created_at: string;
   updated_at: string;
+  /** Which way of the device feeding it, e.g. "Way 3". */
+  fed_way: string;
 }
 
 /** An item in the equipment register (AHU-1, EF-2…). */
@@ -351,9 +356,12 @@ export function siteOf(access: AccessData, locationId: number): number | null {
 }
 
 /** Feed-chain links for the steps above a panel or device, as the viewer may see them. */
-export function chainLinks(actor: Actor, access: AccessData, steps: UpStep[]): FeedLink[] {
-  return steps.map((s): FeedLink => {
+export function chainLinks(actor: Actor, access: AccessData, steps: UpStep[], startWay = ''): FeedLink[] {
+  return steps.map((s, i): FeedLink => {
     if (s.kind === 'device') {
+      // The way it feeds the next thing down: the start, a device, or the panel of a breaker.
+      const below = i === 0 ? null : steps[i - 1]!;
+      const way = !below ? startWay : below.kind === 'device' ? below.device.fed_way : below.panel.fed_way;
       const node = access.node(s.device.location_id);
       return {
         kind: 'device',
@@ -368,6 +376,7 @@ export function chainLinks(actor: Actor, access: AccessData, steps: UpStep[]): F
         }),
         locationPath: access.pathLabel(s.device.location_id),
         canView: !!node && canView(actor, node, access.grants),
+        way,
       };
     }
     return {
@@ -390,7 +399,7 @@ export function chainLinks(actor: Actor, access: AccessData, steps: UpStep[]): F
  * this summary, even for upstream panels they cannot open.
  */
 export function feedChain(db: DB, actor: Actor, access: AccessData, panel: PanelRow): FeedLink[] {
-  return chainLinks(actor, access, upstream(db, panelFeed(panel), { panelId: panel.id }));
+  return chainLinks(actor, access, upstream(db, panelFeed(panel), { panelId: panel.id }), panel.fed_way);
 }
 
 /**
@@ -627,6 +636,8 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
     fedFromDeviceId: panel.fed_from_device_id,
     nameplate: nameplateOf(panel),
     sections: sectionsOfRow(panel),
+    fedWay: panel.fed_way,
+    meters: panelMeters(db, panel.id),
     loadCheck: check,
     warnings: [
       ...voltageWarnings(db, panel, breakers),
@@ -674,6 +685,7 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
     controlSystem: panel.control_system ?? '',
     atsId: panel.ats_id ?? null,
     fedFromDeviceId: panel.fed_from_device_id ?? null,
+    fedWay: panel.fed_way ?? '',
     ...nameplateOf(panel),
     sections: sectionsOfRow(panel)
       .map((x) => `${x.name} (${x.spaces}${x.throughLugs ? ', through lugs' : ''})`)
@@ -734,6 +746,7 @@ const PANEL_FIELDS: [keyof Snapshot, string][] = [
   ['controlSystem', 'control system'],
   ['atsId', 'transfer switch'],
   ['fedFromDeviceId', 'fed from'],
+  ['fedWay', 'feed way'],
   ['aicKa', 'AIC rating (kA)'],
   ['busAmps', 'bus rating'],
   ['mounting', 'mounting'],

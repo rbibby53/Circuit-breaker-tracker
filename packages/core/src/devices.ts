@@ -1,8 +1,10 @@
 // Power devices between a breaker and what it feeds, and the details panels and transfer switches
 // carry on their schedules. A transformer is where 480 V becomes 208 V; a disconnect or UPS sits in
-// line; the utility service (with its meter) is where power comes in.
+// line; the utility service (with its meter) is where power comes in. Campuses that run their own
+// grid distribute medium voltage through switching cubes (pad-mounted MV switchgear) to each
+// building's transformer.
 
-export const POWER_DEVICE_KINDS = ['transformer', 'disconnect', 'ups', 'service'] as const;
+export const POWER_DEVICE_KINDS = ['transformer', 'disconnect', 'ups', 'service', 'switch'] as const;
 export type PowerDeviceKind = (typeof POWER_DEVICE_KINDS)[number];
 
 export const POWER_DEVICE_LABELS: Record<PowerDeviceKind, string> = {
@@ -10,6 +12,17 @@ export const POWER_DEVICE_LABELS: Record<PowerDeviceKind, string> = {
   disconnect: 'Disconnect',
   ups: 'UPS',
   service: 'Utility service',
+  switch: 'Switching cube',
+};
+
+/** What each kind is, for the kind picker. */
+export const POWER_DEVICE_HINTS: Record<PowerDeviceKind, string> = {
+  transformer: 'Steps voltage down (or up), e.g. 480 V to 120/208 V, or 12.47 kV to 480 V at a building.',
+  disconnect: 'A switch, fused or not, ahead of equipment or a panel.',
+  ups: 'Battery backup that panels or equipment sit behind.',
+  service: 'Where power comes in from the utility, with its meter.',
+  switch:
+    'Medium-voltage switchgear on a campus grid, such as a pad-mounted switching cube, feeding building transformers through its ways.',
 };
 
 /** Plural headings and the add button on location pages. */
@@ -18,6 +31,7 @@ export const POWER_DEVICE_PLURALS: Record<PowerDeviceKind, string> = {
   disconnect: 'Disconnects',
   ups: 'UPS units',
   service: 'Utility services',
+  switch: 'Switching cubes',
 };
 
 /** Common kVA sizes for dry-type transformers, offered as suggestions. */
@@ -59,6 +73,8 @@ export function deviceRating(d: PowerDeviceShape): string {
         .join(' · ');
     case 'service':
       return [d.amps ? `${d.amps} A` : '', d.voltage, d.meter ? `meter ${d.meter}` : ''].filter(Boolean).join(' · ');
+    case 'switch':
+      return [d.voltage, d.amps ? `${d.amps} A` : ''].filter(Boolean).join(' · ');
   }
 }
 

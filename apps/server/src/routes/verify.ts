@@ -10,7 +10,10 @@ import {
   isSurgeOnly,
   pathIds,
   verifyBreakersSchema,
+  circuitLabel,
   type ProgressReport,
+  type VerificationItem,
+  type VerificationLog,
   type VerifyProgress,
 } from '@cbt/core';
 import type { FastifyInstance } from 'fastify';
@@ -19,6 +22,7 @@ import { now, type DB } from '../db';
 import { badRequest, forbidden, idParam, notFound, parse } from '../errors';
 import { changePanel } from '../panelChange';
 import { allPanels, breakersOf, canViewPanel, getPanel, type BreakerRow } from '../panels';
+import type { MeterRow } from '../meters';
 import { AccessData } from '../repo';
 
 /** Circuits worth checking: not spares, not surge protectors without breakers. */
@@ -121,6 +125,89 @@ export function verifyRoutes(app: FastifyInstance, db: DB): void {
       total,
       parts: [...parts.values()].sort((a, b) => a.path.localeCompare(b.path)),
       panels,
+    };
+  });
+
+  /**
+   * Who checked what: every circuit and meter marked verified or wrong, newest first, at and
+   * under a location (or everywhere the person can see), with a count per person.
+   */
+  app.get('/api/verifications', async (req): Promise<VerificationLog> => {
+    const actor = actorOf(requireAuth(req));
+    const access = new AccessData(db);
+    const q = req.query as { loc?: string; by?: string; status?: string; limit?: string };
+    const loc = q.loc ? idParam(q.loc) : null;
+    if (loc !== null) {
+      const node = access.node(loc);
+      if (!node || !canView(actor, node, access.grants)) throw notFound();
+    }
+    const inside = (locationId: number) => {
+      const node = access.node(locationId);
+      return !!node && (loc === null || node.id === loc || isWithin(node, loc));
+    };
+    const all: VerificationItem[] = [];
+    const panels = new Map(allPanels(db).map((p) => [p.id, p]));
+    for (const p of panels.values()) {
+      if (!inside(p.location_id) || !canViewPanel(actor, access, p)) continue;
+      for (const b of breakersOf(db, p.id)) {
+        if (!b.verify_status) continue;
+        all.push({
+          kind: 'breaker',
+          id: b.id,
+          status: b.verify_status,
+          by: b.verified_by,
+          at: b.verified_at,
+          panelId: p.id,
+          panelName: p.name,
+          what: `${isRelayPanel(p) ? 'Relay' : 'Circuit'} ${circuitLabel(p, b)}`,
+          label: b.label,
+          path: access.pathLabel(p.location_id),
+        });
+      }
+    }
+    for (const m of db.prepare("SELECT * FROM meters WHERE verify_status != ''").all() as MeterRow[]) {
+      const node = access.node(m.location_id);
+      if (!inside(m.location_id) || !node || !canView(actor, node, access.grants)) continue;
+      const breakerPanel = m.breaker_id
+        ? (
+            db.prepare('SELECT panel_id FROM breakers WHERE id = ?').get(m.breaker_id) as
+              { panel_id: number } | undefined
+          )?.panel_id
+        : undefined;
+      const panel = panels.get(m.panel_id ?? breakerPanel ?? -1);
+      all.push({
+        kind: 'meter',
+        id: m.id,
+        status: m.verify_status as VerificationItem['status'],
+        by: m.verified_by,
+        at: m.verified_at,
+        panelId: panel && canViewPanel(actor, access, panel) ? panel.id : null,
+        panelName: panel?.name ?? '',
+        what: `Meter ${m.name}`,
+        label: m.meter_number ? `#${m.meter_number}` : '',
+        path: access.pathLabel(m.location_id),
+      });
+    }
+    const people = new Map<string, VerificationLog['people'][number]>();
+    for (const i of all) {
+      const name = i.by || 'Unknown';
+      const p = people.get(name) ?? { name, verified: 0, wrong: 0, last: null };
+      if (i.status === 'verified') p.verified++;
+      else p.wrong++;
+      if (i.at && (!p.last || i.at > p.last)) p.last = i.at;
+      people.set(name, p);
+    }
+    const shown = all
+      .filter((i) => !q.by || (i.by || 'Unknown') === q.by)
+      .filter((i) => !q.status || i.status === q.status)
+      .sort((a, b) => (b.at ?? '').localeCompare(a.at ?? ''));
+    const limit = Math.min(2000, Math.max(1, Number(q.limit) || 500));
+    return {
+      people: [...people.values()].sort(
+        (a, b) => b.verified + b.wrong - (a.verified + a.wrong) || a.name.localeCompare(b.name),
+      ),
+      items: shown.slice(0, limit),
+      total: shown.length,
     };
   });
 }

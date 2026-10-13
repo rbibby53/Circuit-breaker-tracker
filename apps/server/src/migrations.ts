@@ -505,4 +505,77 @@ export const MIGRATIONS: string[] = [
   );
   CREATE INDEX reports_panel ON reports (panel_id, status);
   `,
+  `
+  ${FOREIGN_KEYS_OFF}
+  -- Campus grids: switching cubes join transformers, disconnects, UPSs and services. Device kinds
+  -- are checked by the app from now on, so the table is rebuilt once without that CHECK, same rows.
+  CREATE TABLE power_devices_new (
+    id                  INTEGER PRIMARY KEY,
+    location_id         INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    kind                TEXT NOT NULL,
+    name                TEXT NOT NULL,
+    kva                 REAL,
+    voltage             TEXT NOT NULL DEFAULT '',
+    secondary_voltage   TEXT NOT NULL DEFAULT '',
+    amps                INTEGER,
+    fused               INTEGER NOT NULL DEFAULT 0,
+    fuse_amps           INTEGER,
+    runtime_minutes     INTEGER,
+    meter               TEXT NOT NULL DEFAULT '',
+    utility             TEXT NOT NULL DEFAULT '',
+    manufacturer        TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT '',
+    fed_from_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    fed_from_device_id  INTEGER REFERENCES power_devices (id) ON DELETE SET NULL,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    fed_way             TEXT NOT NULL DEFAULT ''
+  );
+  INSERT INTO power_devices_new (id, location_id, kind, name, kva, voltage, secondary_voltage, amps, fused, fuse_amps,
+                                 runtime_minutes, meter, utility, manufacturer, model, notes, fed_from_breaker_id,
+                                 fed_from_device_id, created_at, updated_at)
+    SELECT id, location_id, kind, name, kva, voltage, secondary_voltage, amps, fused, fuse_amps,
+           runtime_minutes, meter, utility, manufacturer, model, notes, fed_from_breaker_id,
+           fed_from_device_id, created_at, updated_at
+    FROM power_devices;
+  DROP TABLE power_devices;
+  ALTER TABLE power_devices_new RENAME TO power_devices;
+  CREATE INDEX power_devices_location ON power_devices (location_id);
+  CREATE INDEX power_devices_fed_breaker ON power_devices (fed_from_breaker_id);
+  CREATE INDEX power_devices_fed_device ON power_devices (fed_from_device_id);
+
+  -- Which way (position) of a switching cube or other device feeds a panel.
+  ALTER TABLE panels ADD COLUMN fed_way TEXT NOT NULL DEFAULT '';
+
+  -- Meters, on a breaker's circuit, a panel's main or a device.
+  CREATE TABLE meters (
+    id           INTEGER PRIMARY KEY,
+    location_id  INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    name         TEXT NOT NULL,
+    meter_number TEXT NOT NULL DEFAULT '',
+    manufacturer TEXT NOT NULL DEFAULT '',
+    model        TEXT NOT NULL DEFAULT '',
+    serial       TEXT NOT NULL DEFAULT '',
+    ct_ratio     TEXT NOT NULL DEFAULT '',
+    pt_ratio     TEXT NOT NULL DEFAULT '',
+    multiplier   REAL,
+    protocol     TEXT NOT NULL DEFAULT '',
+    address      TEXT NOT NULL DEFAULT '',
+    notes        TEXT NOT NULL DEFAULT '',
+    panel_id     INTEGER REFERENCES panels (id) ON DELETE SET NULL,
+    breaker_id   INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    device_id    INTEGER REFERENCES power_devices (id) ON DELETE SET NULL,
+    -- Field check, as for breakers: checked and right, or wrong; by whom and when.
+    verify_status TEXT NOT NULL DEFAULT '' CHECK (verify_status IN ('', 'verified', 'wrong')),
+    verified_by  TEXT NOT NULL DEFAULT '',
+    verified_at  TEXT,
+    created_at   TEXT NOT NULL,
+    updated_at   TEXT NOT NULL
+  );
+  CREATE INDEX meters_location ON meters (location_id);
+  CREATE INDEX meters_panel ON meters (panel_id);
+  CREATE INDEX meters_breaker ON meters (breaker_id);
+  CREATE INDEX meters_device ON meters (device_id);
+  `,
 ];

@@ -264,6 +264,11 @@ export function EquipmentListPage() {
           <h1>Equipment</h1>
           <p className="muted">Air handlers, fans, pumps and the rest, with what feeds each.</p>
         </div>
+        <div className="toolbar">
+          <Link className="btn" to="/meters">
+            Meters
+          </Link>
+        </div>
       </div>
       <label className="field equipment-filter">
         <span className="field-label">Find</span>

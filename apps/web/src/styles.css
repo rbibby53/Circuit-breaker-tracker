@@ -26,6 +26,7 @@
   --flow: #2f6fdb;
   --xfmr: #2563eb;
   --disc: #57534e;
+  --cube: #0f766e;
   --ups: #16a34a;
   --radius: 6px;
   --font: 'Archivo Variable', 'Archivo', 'Helvetica Neue', Arial, sans-serif;
@@ -59,6 +60,8 @@
     --flow: #7fb0ff;
     --xfmr: #7fb0ff;
     --disc: #c3c8cc;
+    --cube: #5eead4;
+    --cube: #5eead4;
     --ups: #6ee7a0;
     color-scheme: dark;
   }
@@ -89,6 +92,7 @@
   --flow: #7fb0ff;
   --xfmr: #7fb0ff;
   --disc: #c3c8cc;
+  --cube: #5eead4;
   --ups: #6ee7a0;
   color-scheme: dark;
 }
@@ -2840,6 +2844,24 @@ code {
 .pf-service .pf-stripe {
   fill: var(--ink);
 }
+.pf-switch .pf-stripe,
+.pf-switch .pf-icon {
+  fill: var(--cube);
+  color: var(--cube);
+}
+.pf-switch .pf-icon {
+  fill: none;
+}
+.pf-list li.pf-switch .pf-list-icon,
+.ps-switch svg {
+  color: var(--cube);
+}
+.ps-switch {
+  border-color: var(--cube);
+}
+.device-icon.dev-switch {
+  background: var(--cube);
+}
 .pf-transformer .pf-icon,
 .pf-disconnect .pf-icon,
 .pf-ups .pf-icon,
@@ -3521,4 +3543,43 @@ code {
   background: var(--surface);
   color: var(--ink);
   text-decoration: none;
+}
+.segmented.five {
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+}
+@media (max-width: 640px) {
+  .segmented.five {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
+  }
+}
+
+/* Meters */
+.panel-meters {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 4px 6px;
+  margin: 6px 0 0;
+}
+.panel-meters-add {
+  margin-left: 8px;
+}
+.meter-chips {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 6px;
+}
+.meter-chips li {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+.device-icon.dev-meter {
+  background: var(--ink);
+}
+.campus-feed li {
+  justify-content: flex-start;
 }
