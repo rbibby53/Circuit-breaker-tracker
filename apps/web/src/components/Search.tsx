@@ -1,4 +1,4 @@
-import type { SearchResponse } from '@cbt/core';
+import { POWER_DEVICE_LABELS, type SearchResponse } from '@cbt/core';
 import { useQuery } from '@tanstack/react-query';
 import { useEffect, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
@@ -48,7 +48,14 @@ export function Search() {
     setQ('');
   };
   const r = results.data;
-  const empty = r && !r.breakers.length && !r.locations.length && !r.panels.length && !r.generators.length;
+  const empty =
+    r &&
+    !r.breakers.length &&
+    !r.locations.length &&
+    !r.panels.length &&
+    !r.generators.length &&
+    !r.devices.length &&
+    !r.equipment.length;
   const show = open && debounced.length >= 2;
 
   return (
@@ -154,6 +161,48 @@ export function Search() {
                       <span className="search-main">
                         <span className="strong">{g.name}</span>
                         <span className="muted small block">{g.path}</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {r && r.equipment.length > 0 && (
+            <section>
+              <h3>Equipment</h3>
+              <ul>
+                {r.equipment.map((e) => (
+                  <li key={e.id}>
+                    <Link to={`/equipment/${e.id}`} onClick={done}>
+                      <span className="search-main">
+                        <span className="strong">{e.tag}</span>{' '}
+                        <span className="muted small">{[e.kind, e.description].filter(Boolean).join(' · ')}</span>
+                        <span className="small block">
+                          {e.fedFrom ? `Fed from ${e.fedFrom}` : 'Feed not set'}
+                          <span className="muted"> · {e.path}</span>
+                        </span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
+          {r && r.devices.length > 0 && (
+            <section>
+              <h3>Transformers and disconnects</h3>
+              <ul>
+                {r.devices.map((d) => (
+                  <li key={d.id}>
+                    <Link to={`/devices/${d.id}`} onClick={done}>
+                      <span className="search-main">
+                        <span className="strong">{d.name}</span>{' '}
+                        <span className="muted small">
+                          {POWER_DEVICE_LABELS[d.kind]}
+                          {d.rating && ` · ${d.rating}`}
+                        </span>
+                        <span className="muted small block">{d.path}</span>
                       </span>
                     </Link>
                   </li>

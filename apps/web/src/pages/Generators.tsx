@@ -1,11 +1,18 @@
 import {
+  ATS_DUTIES,
+  ATS_DUTY_LABELS,
+  ATS_DUTY_SHORT,
   ATS_KINDS,
   ATS_KIND_LABELS,
+  ATS_TRANSITIONS,
+  ATS_TRANSITION_LABELS,
   FUELS,
   FUEL_LABELS,
   atLeast,
   generatorRating,
+  type AtsDuty,
   type AtsKind,
+  type AtsTransition,
   type Fuel,
   type GeneratorDetail,
   type GeneratorInput,
@@ -64,6 +71,8 @@ const blank: GeneratorInput = {
   manufacturer: '',
   model: '',
   notes: '',
+  tankGallons: null,
+  runtimeHours: null,
 };
 
 /** Name, size, fuel and the rest of a generator, for adding or editing one. */
@@ -102,6 +111,23 @@ function GeneratorFields({ form, setForm }: { form: GeneratorInput; setForm: (f:
           maxLength={40}
           placeholder="e.g. 277/480 V 3-phase"
           onChange={(e) => setForm({ ...form, voltage: e.target.value })}
+        />
+      </Field>
+      <Field label="Fuel tank (gallons)">
+        <input
+          type="number"
+          min={1}
+          value={form.tankGallons ?? ''}
+          onChange={(e) => setForm({ ...form, tankGallons: e.target.value ? Number(e.target.value) : null })}
+        />
+      </Field>
+      <Field label="Runtime at load (hours)">
+        <input
+          type="number"
+          min={0.1}
+          step={0.1}
+          value={form.runtimeHours ?? ''}
+          onChange={(e) => setForm({ ...form, runtimeHours: e.target.value ? Number(e.target.value) : null })}
         />
       </Field>
     </>
@@ -219,7 +245,13 @@ export function GeneratorPage() {
           <span className="eyebrow">Standby generator</span>
           <h1>{g.name}</h1>
           <p className="muted">
-            {[generatorRating(g), g.voltage, [g.manufacturer, g.model].filter(Boolean).join(' ')]
+            {[
+              generatorRating(g),
+              g.voltage,
+              g.tankGallons ? `${g.tankGallons} gal tank` : '',
+              g.runtimeHours ? `${g.runtimeHours} h at load` : '',
+              [g.manufacturer, g.model].filter(Boolean).join(' '),
+            ]
               .filter(Boolean)
               .join(' · ')}
           </p>
@@ -242,6 +274,8 @@ export function GeneratorPage() {
                     manufacturer: g.manufacturer,
                     model: g.model,
                     notes: g.notes,
+                    tankGallons: g.tankGallons,
+                    runtimeHours: g.runtimeHours,
                   })
                 }
               >
@@ -351,7 +385,8 @@ export function GeneratorPage() {
 }
 
 /** Places a transfer switch can go: anywhere the person can edit, below company level. */
-function useSwitchPlaces() {
+/** Places the person can edit (not companies or hidden buildings), labelled with their path. */
+export function useSwitchPlaces() {
   const locations = useLocations();
   const { byId } = buildTree(locations.data ?? []);
   return [...byId.values()]
@@ -417,9 +452,19 @@ function TransferSwitches({
               <span className="cell-stack">
                 <span className="strong">
                   <span className="badge badge-ats">ATS</span> {t.name}
+                  {t.duty && <span className={`badge badge-duty duty-${t.duty}`}>{ATS_DUTY_SHORT[t.duty]}</span>}
                 </span>
                 <span className="muted small">
-                  {[ATS_KIND_LABELS[t.kind], t.amps ? `${t.amps} A` : null, t.locationPath].filter(Boolean).join(' · ')}
+                  {[
+                    ATS_KIND_LABELS[t.kind],
+                    t.duty ? ATS_DUTY_LABELS[t.duty] : null,
+                    t.transition ? ATS_TRANSITION_LABELS[t.transition] : null,
+                    t.priority ? `priority ${t.priority}` : null,
+                    t.amps ? `${t.amps} A` : null,
+                    t.locationPath,
+                  ]
+                    .filter(Boolean)
+                    .join(' · ')}
                 </span>
                 <span className="small">
                   {t.panels.length
@@ -480,6 +525,9 @@ function SwitchForm({
   const [form, setForm] = useState<TransferSwitchInput>({
     name: existing?.name ?? '',
     kind: existing?.kind ?? 'automatic',
+    duty: existing?.duty ?? '',
+    transition: existing?.transition ?? '',
+    priority: existing?.priority ?? null,
     amps: existing?.amps ?? null,
     generatorId: existing ? existing.generatorId : generator.id,
     locationId: existing?.locationId ?? generator.locationId,
@@ -517,6 +565,37 @@ function SwitchForm({
               </option>
             ))}
           </select>
+        </Field>
+        <Field label="Duty">
+          <select value={form.duty} onChange={(e) => setForm({ ...form, duty: e.target.value as AtsDuty })}>
+            {ATS_DUTIES.map((d) => (
+              <option key={d} value={d}>
+                {ATS_DUTY_LABELS[d]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Transition">
+          <select
+            value={form.transition}
+            onChange={(e) => setForm({ ...form, transition: e.target.value as AtsTransition })}
+          >
+            {ATS_TRANSITIONS.map((d) => (
+              <option key={d} value={d}>
+                {ATS_TRANSITION_LABELS[d]}
+              </option>
+            ))}
+          </select>
+        </Field>
+        <Field label="Priority">
+          <input
+            type="number"
+            min={1}
+            max={99}
+            value={form.priority ?? ''}
+            placeholder="1 = first"
+            onChange={(e) => setForm({ ...form, priority: e.target.value ? Number(e.target.value) : null })}
+          />
         </Field>
         <Field label="Amps">
           <input

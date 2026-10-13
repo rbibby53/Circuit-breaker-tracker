@@ -1,10 +1,11 @@
 // Response shapes shared by the server and the web app.
 import type { LocationKind } from './locations';
 import type { PaperSize, SettingKey, SettingValue } from './settings';
-import type { Backup, Device, MainType, PanelLayout, Protection, Slot } from './panel';
+import type { Backup, Device, MainType, PanelLayout, PanelSection, Protection, Slot, VerifyStatus } from './panel';
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
 import type { AtsKind, Fuel } from './generator';
+import type { AtsDuty, AtsTransition, Mounting, PowerDeviceKind, PowerDeviceShape } from './devices';
 
 export interface UserSummary {
   id: number;
@@ -209,6 +210,10 @@ export interface BreakerDto {
   tags: string[];
   /** Panels this breaker feeds, when the viewer can see them. */
   feeds: { panelId: number; panelName: string }[];
+  /** Transformers, disconnects and UPSs it feeds, when the viewer can see them. */
+  feedsDevices: { deviceId: number; name: string; kind: PowerDeviceKind }[];
+  /** Equipment (AHU-1, EF-2…) on this circuit, directly or through a disconnect. */
+  equipment: { id: number; tag: string; kind: string }[];
   /** Sub-panels it feeds that the viewer cannot see. */
   hiddenFeeds: number;
   /** Relays: the breaker whose circuit this relay switches. */
@@ -220,6 +225,22 @@ export interface BreakerDto {
   switchedBy: { panelId: number; panelName: string; relay: string; label: string; control: string }[];
   /** Relays switching this circuit in panels the viewer cannot see. */
   hiddenSwitchedBy: number;
+  /** Connected load (VA) and demand factor (%), when recorded. */
+  loadVa: number | null;
+  demandPct: number | null;
+  /** Which section of the panel, from 1. */
+  section: number;
+  /** Switchboards and MCCs. */
+  unit: string;
+  frameAmps: number | null;
+  wire: string;
+  conduit: string;
+  starter: string;
+  hp: number | null;
+  /** Field check: who checked it and when. */
+  verifyStatus: VerifyStatus;
+  verifiedBy: string;
+  verifiedAt: string | null;
 }
 
 /** The breaker feeding a relay. Everyone who can see the relay sees this summary. */
@@ -241,13 +262,16 @@ export interface PanelGenerator {
   fuel: Fuel;
   /** The transfer switch's name, or '' when the panel is linked to the generator directly. */
   transferSwitch: string;
-  ats: { id: number; name: string; kind: AtsKind } | null;
+  ats: { id: number; name: string; kind: AtsKind; duty: AtsDuty } | null;
   via: { panelId: number; panelName: string } | null;
   canView: boolean;
 }
 
-/** One step up the feed chain: the breaker feeding a panel, and the panel it sits in. */
-export interface FeedLink {
+/** One step up the feed chain: a breaker and the panel it sits in, or a device in between. */
+export type FeedLink = PanelFeedLink | DeviceFeedLink;
+
+export interface PanelFeedLink {
+  kind: 'panel';
   panelId: number;
   panelName: string;
   locationPath: string;
@@ -257,6 +281,53 @@ export interface FeedLink {
   amps: number;
   /** Whether the viewer may open that panel. They see this summary either way. */
   canView: boolean;
+  /** The panel's voltage, to show the step through a transformer. */
+  voltage: string;
+}
+
+/** A transformer, disconnect, UPS or utility service in the feed chain. */
+export interface DeviceFeedLink {
+  kind: 'device';
+  deviceId: number;
+  deviceKind: PowerDeviceKind;
+  name: string;
+  /** "75 kVA · 480 V → 208 V" and the like. */
+  rating: string;
+  /** The voltage it puts out (a transformer's secondary). */
+  voltage: string;
+  locationPath: string;
+  canView: boolean;
+}
+
+/** Nameplate details from panel schedules. */
+export interface PanelNameplate {
+  /** Short-circuit (AIC/SCCR) rating, in kA. */
+  aicKa: number | null;
+  /** Bus rating, which may be above the main breaker's. */
+  busAmps: number | null;
+  mounting: Mounting;
+  enclosure: string;
+  feederWire: string;
+  feederConduit: string;
+}
+
+/** One rating the load below a panel is checked against. */
+export interface CapacityLimit {
+  /** "Main breaker 225 A", "Feeder HA 1 + 3 + 5 (100 A)", "Transformer T-LDP1 (75 kVA)". */
+  label: string;
+  /** What that item carries: demand of everything below it. */
+  demandVa: number;
+  capacityVa: number;
+  /** demandVa over capacityVa, as a fraction. 0.8 and above is flagged. */
+  ratio: number;
+}
+
+export interface LoadCheck {
+  /** Demand of this panel's own circuits. */
+  demandVa: number;
+  /** This panel plus everything it feeds, through sub-panels and transformers. */
+  totalDemandVa: number;
+  limits: CapacityLimit[];
 }
 
 export interface PanelDetail extends Omit<
@@ -274,6 +345,15 @@ export interface PanelDetail extends Omit<
   /** From the breaker feeding this panel up to the service. Empty when fed by the utility. */
   feedChain: FeedLink[];
   fedFromBreakerId: number | null;
+  /** The transformer, disconnect, UPS or service feeding it, instead of a breaker. */
+  fedFromDeviceId: number | null;
+  nameplate: PanelNameplate;
+  /** Sections after the first, each numbered from 1. */
+  sections: PanelSection[];
+  /** Demand below the panel against its main, feeder and transformer. */
+  loadCheck: LoadCheck;
+  /** Things that look wrong, e.g. a voltage that does not match the feed. */
+  warnings: string[];
   /** Path of the public page ("/p/…") when the panel has one and public pages are allowed. */
   publicPath: string | null;
   /** Whether the viewer may turn the public page on or off (Manager or admin). */
@@ -283,6 +363,8 @@ export interface PanelDetail extends Omit<
   /** The transfer switch the panel is on, if any. */
   atsId: number | null;
   generator: PanelGenerator | null;
+  /** Discrepancy reports not yet resolved. */
+  openReports: number;
 }
 
 // ---- Generators -------------------------------------------------------------------------
@@ -295,6 +377,8 @@ export interface GeneratorSummary {
   kw: number | null;
   fuel: Fuel;
   voltage: string;
+  tankGallons: number | null;
+  runtimeHours: number | null;
   /** Panels it backs up, directly or through the panels it feeds. */
   panelCount: number;
   role: EffectiveRole;
@@ -325,6 +409,10 @@ export interface TransferSwitchDto {
   id: number;
   name: string;
   kind: AtsKind;
+  duty: AtsDuty;
+  transition: AtsTransition;
+  /** Order loads come back on: 1 first. */
+  priority: number | null;
   amps: number | null;
   generatorId: number | null;
   generatorName: string | null;
@@ -353,6 +441,8 @@ export interface PublicPanel {
     position: number;
     slot: Slot;
     poles: number;
+    section: number;
+    unit: string;
     amps: number;
     device: Device;
     protection: Protection;
@@ -444,6 +534,9 @@ export interface SearchResponse {
   locations: { id: number; name: string; kind: LocationKind; path: string }[];
   panels: { id: number; name: string; path: string }[];
   generators: { id: number; name: string; path: string }[];
+  devices: { id: number; name: string; kind: PowerDeviceKind; rating: string; path: string }[];
+  /** Equipment by tag or description, with what feeds it. */
+  equipment: { id: number; tag: string; kind: string; description: string; path: string; fedFrom: string | null }[];
   breakers: {
     breakerId: number;
     panelId: number;
@@ -543,7 +636,7 @@ export interface LogLines {
 
 // ---- Power flow (topology) ------------------------------------------------------------------
 
-export type TopologyKind = 'utility' | 'panel' | 'relay' | 'ats' | 'generator' | 'hidden';
+export type TopologyKind = 'utility' | 'panel' | 'relay' | 'ats' | 'generator' | 'hidden' | PowerDeviceKind;
 
 export interface TopologyNode {
   /** "p12" (panel), "a3" (transfer switch), "g2" (generator), "u" (utility), "h45" (out of access). */
@@ -578,4 +671,160 @@ export interface Topology {
   location: { id: number; name: string; path: string };
   nodes: TopologyNode[];
   edges: TopologyEdge[];
+}
+
+// ---- Power devices ----------------------------------------------------------------------
+
+export interface PowerDeviceSummary extends PowerDeviceShape {
+  id: number;
+  name: string;
+  locationId: number;
+  locationPath: string;
+  meter: string;
+  utility: string;
+  /** "75 kVA · 480 V → 208 V" and the like. */
+  rating: string;
+  /** Short text for what feeds it, e.g. "MSB · 1 + 3 + 5" or "T-1". */
+  fedFrom: string | null;
+  role: EffectiveRole;
+}
+
+/** What a device feeds: panels and other devices. */
+export interface DeviceLoad {
+  kind: 'panel' | 'device' | 'equipment';
+  id: number;
+  name: string;
+  /** Panel voltage, or the device's rating. */
+  detail: string;
+  locationPath: string;
+}
+
+export interface PowerDeviceDetail extends PowerDeviceSummary {
+  manufacturer: string;
+  model: string;
+  notes: string;
+  updatedAt: string;
+  canEdit: boolean;
+  fedFromBreakerId: number | null;
+  fedFromDeviceId: number | null;
+  /** From the breaker or device feeding it up to the service. */
+  feedChain: FeedLink[];
+  /** Demand of everything it feeds, and for a transformer or UPS how much of its kVA that is. */
+  demandVa: number;
+  ratio: number | null;
+  warnings: string[];
+  loads: DeviceLoad[];
+  hiddenLoads: number;
+}
+
+/** What could feed a panel or device without making a loop. */
+export interface FeedOptions {
+  breakers: FeedCandidate[];
+  devices: { id: number; name: string; kind: PowerDeviceKind; rating: string; locationPath: string }[];
+}
+
+// ---- Equipment register -----------------------------------------------------------------
+
+export interface EquipmentDto {
+  id: number;
+  tag: string;
+  kind: string;
+  description: string;
+  locationId: number;
+  locationPath: string;
+  hp: number | null;
+  voltage: string;
+  manufacturer: string;
+  model: string;
+  notes: string;
+  fedFromBreakerId: number | null;
+  fedFromDeviceId: number | null;
+  /** "LP-1A · 5 + 7 + 9 (30 A)" or "DS-AHU1": the nearest thing feeding it. */
+  fedFrom: string | null;
+  /** From its breaker or disconnect up to the service. */
+  feedChain: FeedLink[];
+  /** E.g. a 277 V motor on a 208 V circuit. */
+  warnings: string[];
+  canEdit: boolean;
+}
+
+/** A breaker whose label names a room it does not serve yet. */
+export interface RoomLinkSuggestion {
+  breakerId: number;
+  panelId: number;
+  panelName: string;
+  circuit: string;
+  label: string;
+  locationId: number;
+  roomName: string;
+  roomPath: string;
+}
+
+/** How far field verification has got under a location. */
+export interface VerifyProgress {
+  locationId: number;
+  name: string;
+  kind: LocationKind;
+  path: string;
+  /** Circuits that can be checked (not spares). */
+  circuits: number;
+  verified: number;
+  wrong: number;
+  panels: number;
+  /** Panels with every circuit verified. */
+  panelsDone: number;
+}
+
+export interface ProgressReport {
+  /** The location asked about, then each site and building under it. */
+  total: VerifyProgress;
+  parts: VerifyProgress[];
+  /** Panels under it, least verified first. */
+  panels: { id: number; name: string; path: string; circuits: number; verified: number; wrong: number }[];
+}
+
+// ---- Shutdown impact ----------------------------------------------------------------------
+
+/** What loses power when a breaker opens, a panel's main is shut off, or a device is opened. */
+export interface ImpactReport {
+  /** "LP-1A circuit 5 + 7 + 9 (Water heater WH-1)", "Panel HA", "T-LDP1". */
+  title: string;
+  /** Circuits that go dark, counting every downstream panel's circuits. */
+  circuits: number;
+  panels: {
+    id: number;
+    name: string;
+    path: string;
+    circuits: number;
+    /** Set when it is on a transfer switch or generator: it moves to the generator instead. */
+    backup: string | null;
+  }[];
+  devices: { id: number; name: string; kind: PowerDeviceKind; path: string; backup: string | null }[];
+  equipment: { id: number; tag: string; kind: string; path: string }[];
+  /** Relay circuits that lose power because the circuit they switch does. */
+  relays: { panelId: number; panelName: string; relay: string; label: string }[];
+  /** Critical circuits that go dark; `backup` when the circuit has its own UPS or generator. */
+  critical: { panelId: number; panelName: string; circuit: string; label: string; backup: string | null }[];
+  rooms: { id: number; name: string; path: string }[];
+  /** Panels and items downstream the viewer cannot see. */
+  hidden: number;
+}
+
+export interface ReportDto {
+  id: number;
+  panelId: number;
+  panelName: string;
+  locationPath: string;
+  breakerId: number | null;
+  /** As it read when reported, e.g. "5 + 7 Lab lights". */
+  circuit: string;
+  message: string;
+  reporter: string;
+  source: 'app' | 'public';
+  status: 'open' | 'resolved';
+  resolution: string;
+  resolvedBy: string;
+  resolvedAt: string | null;
+  createdAt: string;
+  canResolve: boolean;
 }

@@ -90,7 +90,7 @@ export function PrintButton({
 
   const url = (download: boolean) => {
     const q = new URLSearchParams({ style, paper, tz: timeZone() });
-    if (style === 'labels' && skip > 0) q.set('skip', String(skip));
+    if ((style === 'labels' || style === 'qr') && skip > 0) q.set('skip', String(skip));
     if (style === 'strips') q.set('pitch', pitch);
     if (download) q.set('download', '1');
     return `${endpoint}?${q}`;
@@ -145,6 +145,19 @@ export function PrintButton({
                 <span className="small muted">
                   Printing starts after them, going down each column, so a part-used sheet is not wasted.
                 </span>
+              </label>
+            )}
+            {style === 'qr' && (
+              <label className="field">
+                <span className="field-label">Stickers already used on the sheet</span>
+                <input
+                  type="number"
+                  min={0}
+                  max={paper === 'a4' ? 14 : 11}
+                  value={skip}
+                  onChange={(e) => setSkip(Math.max(0, Math.floor(Number(e.target.value) || 0)))}
+                />
+                <span className="small muted">Printing starts after them, across each row.</span>
               </label>
             )}
             {style === 'strips' && (
@@ -240,6 +253,12 @@ export const PANEL_PRINT_STYLES: PrintStyle[] = [
     title: 'Breaker label strips',
     description: 'Strips to cut out and stick beside each column of breakers, spaced to line up with them.',
   },
+  {
+    value: 'qr',
+    title: 'QR door sticker',
+    description:
+      'A 2-inch square for the outside of the door: scanning opens the panel on a phone, to check circuits or report a problem. Avery 22806 on Letter.',
+  },
 ];
 
 export function locationPrintStyles(name: string): PrintStyle[] {
@@ -253,6 +272,11 @@ export function locationPrintStyles(name: string): PrintStyle[] {
       value: 'index',
       title: 'Room index',
       description: 'Which breakers serve each room, grouped by floor.',
+    },
+    {
+      value: 'qr',
+      title: 'QR door stickers',
+      description: `A 2-inch square sticker for every panel in ${name}, to put on the doors. Avery 22806 on Letter (12 per sheet).`,
     },
   ];
 }

@@ -5,13 +5,20 @@ import {
   DEVICES,
   DEVICE_LABELS,
   ampsLabel,
+  formatVa,
+  vaFromText,
   PROTECTIONS,
   PROTECTION_LABELS,
   allowsTandem,
   circuitLabel,
   circuitVolts,
+  MCC_CONTROLS,
+  VERIFY_LABELS,
+  STARTER_SIZES,
+  isListLayout,
   isRelayPanel,
   maxPoles,
+  sectionsOf,
   phasesOf,
   type BreakerDto,
   type FeedCandidate,
@@ -22,11 +29,13 @@ import { useState } from 'react';
 import { api } from '../api';
 import { Link } from 'react-router-dom';
 import { useConfirm } from '../components/ConfirmDialog';
+import { ImpactButton } from '../components/Impact';
+import { formatDate } from '../components/ui';
 import type { TreeNode } from '../tree';
 import { servesByFloor } from './serves';
 import { ServesPicker } from './ServesPicker';
 import { TagInput } from './TagInput';
-import { sizeOf, validStarts, type EditBreaker, type EditPanel, type Size } from './state';
+import { firstFitIn, sizeOf, validStarts, type EditBreaker, type EditPanel, type Size } from './state';
 
 interface Props {
   panelId: number;
@@ -38,7 +47,7 @@ interface Props {
   readOnly: boolean;
   onPatch: (patch: Partial<EditBreaker>, coalesce?: string) => void;
   onSize: (size: Size) => void;
-  onMove: (position: number, slot?: Slot) => void;
+  onMove: (position: number, slot?: Slot, section?: number) => void;
   onRemove: () => void;
 }
 
@@ -58,11 +67,15 @@ export function Inspector({
   const [picking, setPicking] = useState(false);
   const confirm = useConfirm();
   const relay = isRelayPanel(doc);
+  const units = isListLayout(doc);
+  const mcc = doc.layout === 'mcc';
+  const sections = sectionsOf(doc);
   const thing = relay ? 'relay' : b.device === 'surge' ? 'surge protector' : 'breaker';
   const size = sizeOf(b);
   const groups = servesByFloor(byId, b.serves);
   const hidden = b.serves.filter((s) => s.hidden || !byId.has(s.locationId)).length;
   const feeds = server?.feeds ?? [];
+  const feedsDevices = server?.feedsDevices ?? [];
   const allSizes: { value: Size; label: string; disabled?: string }[] = [
     { value: '1', label: '1-pole' },
     { value: '2', label: '2-pole' },
@@ -77,12 +90,12 @@ export function Inspector({
       disabled: allowsTandem(doc) ? undefined : 'Three-phase panelboards take no tandems',
     },
   ];
-  // Relays come in 1- and 2-pole.
-  const sizes = relay ? allSizes.slice(0, 2) : allSizes;
+  // Relays come in 1- and 2-pole; switchboard and MCC units have no tandems.
+  const sizes = relay ? allSizes.slice(0, 2) : units ? allSizes.slice(0, 3) : allSizes;
   const phases = phasesOf(doc, b);
   const volts = circuitVolts(doc.voltage, b.poles);
   const where = [
-    `${relay ? 'Relay' : 'Circuit'} ${circuitLabel(doc, b)}`,
+    `${relay ? 'Relay' : units ? 'Unit' : 'Circuit'} ${circuitLabel(doc, b)}`,
     phases.length ? `Phase ${phases.join(' ')}` : null,
     volts ? `${volts} V` : null,
   ]
@@ -120,6 +133,31 @@ export function Inspector({
               <dd>{PROTECTION_LABELS[b.protection]}</dd>
             </>
           )}
+          {units && (
+            <>
+              <dt>Frame</dt>
+              <dd>{b.frameAmps ? `${b.frameAmps} A` : 'Not set'}</dd>
+              <dt>Feeder</dt>
+              <dd>{[b.wire, b.conduit].filter(Boolean).join(' in ') || 'Not set'}</dd>
+            </>
+          )}
+          {mcc && (
+            <>
+              <dt>Starter</dt>
+              <dd>{[b.starter, b.hp ? `${b.hp} HP` : '', b.control].filter(Boolean).join(' · ') || 'Not set'}</dd>
+            </>
+          )}
+          {b.loadVa ? (
+            <>
+              <dt>Load</dt>
+              <dd>
+                {formatVa(b.loadVa)}
+                {b.demandPct !== null && b.demandPct !== 100 && ` at ${b.demandPct}% demand`}
+              </dd>
+            </>
+          ) : null}
+          <dt>Field check</dt>
+          <dd>{checkText(b, server)}</dd>
           <dt>Flags</dt>
           <dd>
             {[b.critical && 'Critical', b.backup !== 'none' && `On ${BACKUP_LABELS[b.backup]}`, b.isSpare && 'Spare']
@@ -135,9 +173,11 @@ export function Inspector({
             {hidden > 0 && ` (+${hidden} outside your access)`}
           </dd>
         </dl>
-        {feeds.length > 0 && <FeedsNote feeds={feeds} />}
+        {(feeds.length > 0 || feedsDevices.length > 0) && <FeedsNote feeds={feeds} devices={feedsDevices} />}
+        {server && <EquipmentNote breaker={server} />}
         {server && <SwitchedByNote breaker={server} />}
         {b.notes && <p className="notes">{b.notes}</p>}
+        {server && !relay && !b.isSpare && <ImpactButton query={`breaker=${server.id}`} />}
       </aside>
     );
   }
@@ -158,6 +198,8 @@ export function Inspector({
           onChange={(e) => onPatch({ label: e.target.value }, `label:${b.key}`)}
         />
       </label>
+
+      {units && <UnitFields b={b} mcc={mcc} onPatch={onPatch} />}
 
       {relay && (
         <>
@@ -225,9 +267,28 @@ export function Inspector({
         </div>
       </fieldset>
 
+      {sections.length > 1 && (
+        <label className="field">
+          <span className="field-label">Section</span>
+          <select
+            value={b.section}
+            onChange={(e) => {
+              const n = Number(e.target.value);
+              onMove(firstFitIn(doc, b.key, n) ?? b.position, undefined, n);
+            }}
+          >
+            {sections.map((sec, n) => (
+              <option key={n} value={n + 1}>
+                {sec.name}
+              </option>
+            ))}
+          </select>
+        </label>
+      )}
+
       <div className="two-col">
         <label className="field">
-          <span className="field-label">{relay ? 'Relay number' : 'Starts at space'}</span>
+          <span className="field-label">{relay ? 'Relay number' : units ? 'Row' : 'Starts at space'}</span>
           <select value={b.position} onChange={(e) => onMove(Number(e.target.value))}>
             {validStarts(doc, b.key).map((p) => (
               <option key={p} value={p}>
@@ -294,6 +355,28 @@ export function Inspector({
           <span />
         )}
       </div>
+      {!relay && !(b.device === 'surge' && b.amps === 0) && <LoadFields b={b} onPatch={onPatch} />}
+
+      {!relay && (
+        <fieldset className="field">
+          <legend className="field-label">Field check</legend>
+          <div className="segmented three">
+            {(['verified', 'wrong', ''] as const).map((st) => (
+              <button
+                key={st || 'none'}
+                type="button"
+                aria-pressed={b.verifyStatus === st}
+                onClick={() => onPatch({ verifyStatus: st })}
+              >
+                {st ? VERIFY_LABELS[st] : 'Not checked'}
+              </button>
+            ))}
+          </div>
+          {server && server.verifyStatus === b.verifyStatus && server.verifiedBy && (
+            <span className="muted small">{checkText(b, server)}</span>
+          )}
+        </fieldset>
+      )}
 
       <fieldset className="flags">
         <legend className="field-label">Flags</legend>
@@ -363,8 +446,10 @@ export function Inspector({
         <textarea rows={2} value={b.notes} onChange={(e) => onPatch({ notes: e.target.value }, `notes:${b.key}`)} />
       </label>
 
-      {feeds.length > 0 && <FeedsNote feeds={feeds} />}
+      {(feeds.length > 0 || feedsDevices.length > 0) && <FeedsNote feeds={feeds} devices={feedsDevices} />}
+      {server && <EquipmentNote breaker={server} />}
       {server && <SwitchedByNote breaker={server} />}
+      {server && !relay && !b.isSpare && <ImpactButton query={`breaker=${server.id}`} />}
 
       <button
         type="button"
@@ -387,14 +472,18 @@ export function Inspector({
   );
 }
 
-function FeedsNote({ feeds }: { feeds: BreakerDto['feeds'] }) {
+function FeedsNote({ feeds, devices = [] }: { feeds: BreakerDto['feeds']; devices?: BreakerDto['feedsDevices'] }) {
+  const links = [
+    ...devices.map((d) => ({ key: `d${d.deviceId}`, to: `/devices/${d.deviceId}`, name: d.name })),
+    ...feeds.map((f) => ({ key: `p${f.panelId}`, to: `/panels/${f.panelId}`, name: f.panelName })),
+  ];
   return (
     <p className="feeds-note">
       Feeds{' '}
-      {feeds.map((f, i) => (
-        <span key={f.panelId}>
+      {links.map((l, i) => (
+        <span key={l.key}>
           {i > 0 && ', '}
-          <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link>
+          <Link to={l.to}>{l.name}</Link>
         </span>
       ))}
     </p>
@@ -467,4 +556,171 @@ function SwitchedByNote({ breaker }: { breaker: BreakerDto }) {
         `${breaker.switchedBy.length ? ' and ' : ''}${breaker.hiddenSwitchedBy} relay${breaker.hiddenSwitchedBy === 1 ? '' : 's'} outside your access`}
     </p>
   );
+}
+
+/** Connected load and demand factor, with the VA from the notes offered when it is there. */
+function LoadFields({
+  b,
+  onPatch,
+}: {
+  b: EditBreaker;
+  onPatch: (patch: Partial<EditBreaker>, coalesce?: string) => void;
+}) {
+  const fromNotes = b.loadVa ? null : vaFromText(`${b.label} ${b.notes}`);
+  return (
+    <div className="two-col">
+      <label className="field">
+        <span className="field-label">Load (VA)</span>
+        <input
+          type="number"
+          min={0}
+          step="any"
+          value={b.loadVa ?? ''}
+          placeholder="Connected load"
+          onChange={(e) => onPatch({ loadVa: e.target.value ? Number(e.target.value) : null }, `load:${b.key}`)}
+        />
+        {fromNotes !== null && (
+          <button type="button" className="link-btn small" onClick={() => onPatch({ loadVa: fromNotes })}>
+            Use {formatVa(fromNotes)} from the notes
+          </button>
+        )}
+      </label>
+      <label className="field">
+        <span className="field-label">Demand %</span>
+        <input
+          type="number"
+          min={0}
+          max={200}
+          value={b.demandPct ?? ''}
+          placeholder="100"
+          disabled={!b.loadVa}
+          onChange={(e) => onPatch({ demandPct: e.target.value ? Number(e.target.value) : null }, `demand:${b.key}`)}
+        />
+      </label>
+    </div>
+  );
+}
+
+/** Switchboard and MCC units: the unit number as written, frame, feeder; MCC starter, HP, control. */
+function UnitFields({
+  b,
+  mcc,
+  onPatch,
+}: {
+  b: EditBreaker;
+  mcc: boolean;
+  onPatch: (patch: Partial<EditBreaker>, coalesce?: string) => void;
+}) {
+  const num = (v: string) => (v ? Number(v) : null);
+  return (
+    <>
+      <div className="two-col">
+        <label className="field">
+          <span className="field-label">Unit number</span>
+          <input
+            value={b.unit}
+            maxLength={20}
+            placeholder={String(b.position)}
+            onChange={(e) => onPatch({ unit: e.target.value }, `unit:${b.key}`)}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Frame (A)</span>
+          <input
+            type="number"
+            min={1}
+            value={b.frameAmps ?? ''}
+            onChange={(e) => onPatch({ frameAmps: num(e.target.value) }, `frame:${b.key}`)}
+          />
+        </label>
+      </div>
+      <div className="two-col">
+        <label className="field">
+          <span className="field-label">Feeder wire</span>
+          <input
+            value={b.wire}
+            maxLength={80}
+            placeholder="e.g. 4 #500 kcmil + #3 G"
+            onChange={(e) => onPatch({ wire: e.target.value }, `wire:${b.key}`)}
+          />
+        </label>
+        <label className="field">
+          <span className="field-label">Conduit</span>
+          <input
+            value={b.conduit}
+            maxLength={40}
+            placeholder='e.g. 3" EMT'
+            onChange={(e) => onPatch({ conduit: e.target.value }, `conduit:${b.key}`)}
+          />
+        </label>
+      </div>
+      {mcc && (
+        <div className="three-col">
+          <label className="field">
+            <span className="field-label">Starter</span>
+            <input
+              value={b.starter}
+              maxLength={30}
+              list="starter-sizes"
+              onChange={(e) => onPatch({ starter: e.target.value }, `starter:${b.key}`)}
+            />
+            <datalist id="starter-sizes">
+              {STARTER_SIZES.map((x) => (
+                <option key={x} value={x} />
+              ))}
+            </datalist>
+          </label>
+          <label className="field">
+            <span className="field-label">HP</span>
+            <input
+              type="number"
+              min={0}
+              step="any"
+              value={b.hp ?? ''}
+              onChange={(e) => onPatch({ hp: num(e.target.value) }, `hp:${b.key}`)}
+            />
+          </label>
+          <label className="field">
+            <span className="field-label">Control</span>
+            <input
+              value={b.control}
+              maxLength={120}
+              list="mcc-controls"
+              placeholder="e.g. FVNR"
+              onChange={(e) => onPatch({ control: e.target.value }, `control:${b.key}`)}
+            />
+            <datalist id="mcc-controls">
+              {MCC_CONTROLS.map((x) => (
+                <option key={x} value={x} />
+              ))}
+            </datalist>
+          </label>
+        </div>
+      )}
+    </>
+  );
+}
+
+/** "Equipment: AHU-2, EF-1", linked to the register. */
+function EquipmentNote({ breaker }: { breaker: BreakerDto }) {
+  if (!breaker.equipment.length) return null;
+  return (
+    <p className="feeds-note">
+      Equipment{' '}
+      {breaker.equipment.map((e, i) => (
+        <span key={e.id}>
+          {i > 0 && ', '}
+          <Link to={`/equipment/${e.id}`}>{e.tag}</Link>
+        </span>
+      ))}
+    </p>
+  );
+}
+
+/** "Verified by Ryan on Oct 12, 2026", "Not checked". */
+function checkText(b: EditBreaker, server: BreakerDto | undefined): string {
+  if (!b.verifyStatus) return 'Not checked';
+  const label = VERIFY_LABELS[b.verifyStatus];
+  if (!server || server.verifyStatus !== b.verifyStatus || !server.verifiedBy) return label;
+  return `${label} by ${server.verifiedBy}${server.verifiedAt ? ` on ${formatDate(server.verifiedAt)}` : ''}`;
 }

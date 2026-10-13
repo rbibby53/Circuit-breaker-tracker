@@ -10,6 +10,7 @@ import {
   setupSchema,
   type AuthConfig,
   type SessionInfo,
+  withParentGroups,
 } from '@cbt/core';
 import type { FastifyInstance } from 'fastify';
 import { audit } from '../audit';
@@ -406,6 +407,8 @@ export async function completeOidcLogin(
   state: OidcState,
   rules: SsoRules = NO_GROUP_RULES,
 ): Promise<{ userId: number; redirect: string }> {
+  // Nested groups sent as paths count for every group above them.
+  claims = { ...claims, groups: claims.groups && withParentGroups(claims.groups) };
   const linked = db
     .prepare('SELECT user_id FROM user_identities WHERE issuer = ? AND subject = ?')
     .get(claims.issuer, claims.subject) as { user_id: number } | undefined;

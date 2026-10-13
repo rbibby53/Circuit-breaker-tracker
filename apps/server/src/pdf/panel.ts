@@ -5,7 +5,12 @@ import {
   circuitLabel,
   columnsFor,
   generatorRating,
+  formatVa,
+  isListLayout,
   isRelayPanel,
+  sectionsOf,
+  spacesText,
+  nameplateText,
   panelDirectory,
   phaseOf,
   type BreakerDto,
@@ -26,6 +31,7 @@ export function servesText(b: BreakerDto): string {
   for (const r of b.switchedBy) parts.push(`Switched by ${r.panelName} relay ${r.relay}`);
   if (b.hiddenSwitchedBy) parts.push(`Switched by ${b.hiddenSwitchedBy} relay${b.hiddenSwitchedBy === 1 ? '' : 's'}`);
   for (const f of b.feeds) parts.push(`Feeds ${f.panelName}`);
+  for (const d of b.feedsDevices) parts.push(`Feeds ${d.name}`);
   if (b.hiddenFeeds) parts.push(`Feeds ${b.hiddenFeeds} other panel${b.hiddenFeeds === 1 ? '' : 's'}`);
   let hidden = 0;
   for (const s of b.serves) {
@@ -37,6 +43,13 @@ export function servesText(b: BreakerDto): string {
     parts.push(s.note ? `${name} (${s.note})` : name);
   }
   if (hidden) parts.push(`${hidden} more not shown`);
+  if (b.loadVa) parts.push(formatVa(b.loadVa));
+  // Switchboard and MCC units: frame, feeder, starter and motor.
+  if (b.frameAmps) parts.push(`${b.frameAmps} AF`);
+  const feeder = [b.wire, b.conduit].filter(Boolean).join(' in ');
+  if (feeder) parts.push(feeder);
+  if (b.starter) parts.push(`${b.starter} starter`);
+  if (b.hp) parts.push(`${b.hp} HP`);
   return parts.join(', ');
 }
 
@@ -52,8 +65,10 @@ function facts(panel: PanelDetail, pdf: Pdf): string {
   return [
     relay ? [panel.controlSystem, 'relay panel'].filter(Boolean).join(' ') : mainText(panel),
     panel.voltage,
-    `${panel.spaces} ${relay ? 'relays' : 'spaces'}`,
+    spacesText(panel),
     [panel.manufacturer, panel.model].filter(Boolean).join(' '),
+    nameplateText(panel.nameplate, panel.mainType === 'lugs' ? null : panel.mainAmps),
+    panel.loadCheck.demandVa ? `Demand ${formatVa(panel.loadCheck.demandVa)}` : '',
     `Updated ${formatDate(panel.updatedAt, pdf.ctx)}`,
   ]
     .filter(Boolean)
@@ -71,6 +86,12 @@ export function generatorText(panel: PanelDetail): string | null {
 function fedText(panel: PanelDetail): string | null {
   const f = panel.feedChain[0];
   if (!f) return null;
+  if (f.kind === 'device') {
+    // A transformer or disconnect: name it, and the breaker above it when there is one.
+    const up = panel.feedChain.find((x) => x.kind === 'panel');
+    const above = up?.kind === 'panel' ? `, fed from ${up.panelName} circuit ${up.circuit} (${up.amps} A)` : '';
+    return `Fed from ${f.name}${f.rating ? ` (${f.rating})` : ''}${above}, in ${f.locationPath}`;
+  }
   const label = f.label ? ` "${f.label}"` : '';
   return `Fed from ${f.panelName}, circuit ${f.circuit}${label} (${f.amps} A), in ${f.locationPath}`;
 }
@@ -123,6 +144,7 @@ function drawSchedule(
   style: ScheduleStyle,
 ): ScheduleInfo {
   const breakers: Breaker[] = panel.breakers.map((b) => ({ ...b, key: String(b.id) }));
+  const units = isListLayout(panel);
   const dir = panelDirectory(panel, breakers);
   const used = new Set<DirectoryTag>();
   let maxPoles = 1;
@@ -212,7 +234,8 @@ function drawSchedule(
       }
       if (e.type === 'breaker') {
         maxPoles = Math.max(maxPoles, e.numbers.length);
-        e.numbers.forEach((n, i) => numberAt(String(n), top + i * rowH, rowH));
+        // Switchboard and MCC units show the unit number as written ("2A").
+        e.numbers.forEach((n, i) => numberAt(units ? e.breaker.unit || String(n) : String(n), top + i * rowH, rowH));
         if (e.numbers.length > 1) {
           // A tie bar beside the numbers, like the handle tie on a multi-pole breaker.
           const inset = style.compact ? 1.5 : 2.5;
@@ -268,6 +291,27 @@ function drawSchedule(
   pdf.doc.save().lineWidth(1).rect(x, y, width, height).stroke(INK).restore();
   if (cols === 2) pdf.vline(x + colW, y, y + height, INK, 1);
   return { used, maxPoles, tandem, phased, compact: style.compact };
+}
+
+/** Each section of a panel as a panel of its own, with a heading when there is more than one. */
+export function sectionViews(panel: PanelDetail): { title: string | null; view: PanelDetail }[] {
+  const list = sectionsOf(panel);
+  if (list.length === 1) return [{ title: null, view: panel }];
+  return list.map((s, i) => ({
+    title: `${s.name}${s.throughLugs ? ' (fed through lugs)' : ''}`,
+    view: { ...panel, spaces: s.spaces, breakers: panel.breakers.filter((b) => (b.section ?? 1) === i + 1) },
+  }));
+}
+
+function mergeInfo(a: ScheduleInfo | null, b: ScheduleInfo): ScheduleInfo {
+  if (!a) return b;
+  return {
+    used: new Set([...a.used, ...b.used]),
+    maxPoles: Math.max(a.maxPoles, b.maxPoles),
+    tandem: a.tandem || b.tandem,
+    phased: a.phased || b.phased,
+    compact: a.compact,
+  };
 }
 
 /** The key under a schedule: only the markers this panel uses. Returns the y below it. */
@@ -333,17 +377,28 @@ export function drawPanelSheet(pdf: Pdf, panel: PanelDetail): void {
   y += 8;
 
   const keyRoom = 34;
-  const rows = Math.ceil(panel.spaces / columnsFor(panel));
-  const rowH = Math.min(34, (pdf.bottom - keyRoom - y) / rows);
-  const info = drawSchedule(pdf, panel, pdf.left, y, pdf.contentWidth, rowH, {
-    numW: 24,
-    ampsW: 40,
-    serves: true,
-    maxLabel: 9.5,
-    compact: false,
-  });
-  y += rows * rowH + 9;
-  y = drawKey(pdf, pdf.left, y, pdf.contentWidth, info, 7);
+  const views = sectionViews(panel);
+  const headH = views.length > 1 ? 16 : 0;
+  const rows = views.reduce((n, v) => n + Math.ceil(v.view.spaces / columnsFor(panel)), 0);
+  const rowH = Math.min(34, (pdf.bottom - keyRoom - y - headH * views.length) / rows);
+  let info: ScheduleInfo | null = null;
+  for (const v of views) {
+    if (v.title) {
+      pdf.line(v.title, pdf.left, y + 2, { font: 'semi', size: 9, width: pdf.contentWidth });
+      y += headH;
+    }
+    const drawn = drawSchedule(pdf, v.view, pdf.left, y, pdf.contentWidth, rowH, {
+      numW: isListLayout(panel) ? 34 : 24,
+      ampsW: 40,
+      serves: true,
+      maxLabel: 9.5,
+      compact: false,
+    });
+    info = mergeInfo(info, drawn);
+    y += Math.ceil(v.view.spaces / columnsFor(panel)) * rowH + (v.title ? 6 : 0);
+  }
+  y += 9;
+  y = drawKey(pdf, pdf.left, y, pdf.contentWidth, info!, 7);
   drawNotes(pdf, panel, y + 8);
 }
 
@@ -416,17 +471,28 @@ export function drawDoorCard(pdf: Pdf, panel: PanelDetail): void {
 
   const maxH = Math.min(CARD_MAX_H, pdf.bottom - top);
   const keyRoom = 30;
-  const rows = Math.ceil(panel.spaces / columnsFor(panel));
-  const rowH = Math.min(20, (top + maxH - pad - keyRoom - y) / rows);
-  const info = drawSchedule(pdf, panel, x + pad, y, inner, rowH, {
-    numW: 17,
-    ampsW: 24,
-    serves: false,
-    maxLabel: 7.5,
-    compact: true,
-  });
-  y += rows * rowH + 6;
-  y = drawKey(pdf, x + pad, y, inner, info, 5.5);
+  const views = sectionViews(panel);
+  const headH = views.length > 1 ? 11 : 0;
+  const rows = views.reduce((n, v) => n + Math.ceil(v.view.spaces / columnsFor(panel)), 0);
+  const rowH = Math.min(20, (top + maxH - pad - keyRoom - y - headH * views.length) / rows);
+  let info: ScheduleInfo | null = null;
+  for (const v of views) {
+    if (v.title) {
+      pdf.line(v.title, x + pad, y + 1, { font: 'semi', size: 6.5, width: inner });
+      y += headH;
+    }
+    const drawn = drawSchedule(pdf, v.view, x + pad, y, inner, rowH, {
+      numW: isListLayout(panel) ? 24 : 17,
+      ampsW: 24,
+      serves: false,
+      maxLabel: 7.5,
+      compact: true,
+    });
+    info = mergeInfo(info, drawn);
+    y += Math.ceil(v.view.spaces / columnsFor(panel)) * rowH + (v.title ? 4 : 0);
+  }
+  y += 6;
+  y = drawKey(pdf, x + pad, y, inner, info!, 5.5);
   const cardH = Math.min(maxH, y - top + pad - 4);
 
   pdf.doc.save().lineWidth(0.6).dash(4, { space: 3 }).rect(x, top, CARD_W, cardH).stroke(FAINT).undash().restore();

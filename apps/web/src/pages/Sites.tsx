@@ -12,6 +12,9 @@ import { ErrorNote, Field } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { useLocations, usePanels } from '../queries';
 import { ancestry, buildTree, hiddenBuilding, shownChildren, type TreeNode } from '../tree';
+import { VerifyProgressCard } from '../components/Progress';
+import { AddDeviceForm, DevicesHere } from './Devices';
+import { AddEquipmentForm, EquipmentHere, RoomLinkSuggestions } from './Equipment';
 import { AddGeneratorForm, GeneratorsHere } from './Generators';
 import { AddPanelForm, PanelsHere, ServedBy } from './SitePanels';
 
@@ -233,6 +236,11 @@ function LocationView({
               Power flow
             </Link>
           )}
+          {!crumbOnly && node.kind !== 'company' && (
+            <Link className="btn" to={`/field?loc=${node.id}`}>
+              Field mode
+            </Link>
+          )}
           {canRename && !editing && (
             <button className="btn" onClick={() => setEditing(true)}>
               Rename
@@ -265,8 +273,16 @@ function LocationView({
       <ErrorNote error={remove.error} />
       {editing && <EditForm node={node} onDone={() => setEditing(false)} />}
 
+      {!crumbOnly && node.kind !== 'room' && (
+        <VerifyProgressCard key={`vp-${node.id}`} locationId={node.id} name={node.name} />
+      )}
       <PanelsHere node={node} byId={byId} />
       <GeneratorsHere node={node} byId={byId} />
+      <DevicesHere node={node} byId={byId} />
+      <EquipmentHere node={node} byId={byId} />
+      {(node.kind === 'site' || node.kind === 'building') && canEdit && (
+        <RoomLinkSuggestions key={`rl-${node.id}`} node={node} />
+      )}
       {node.kind === 'room' && canEdit && (
         <AddPanelForm
           key={node.id}
@@ -278,6 +294,13 @@ function LocationView({
       {canEdit && (addKinds.length > 0 || node.kind !== 'company') && (
         <div className="add-actions">
           {node.kind !== 'company' && <AddGeneratorForm key={`gen-${node.id}`} locationId={node.id} />}
+          {node.kind !== 'company' && <AddDeviceForm key={`dev-${node.id}`} locationId={node.id} />}
+          {node.kind !== 'company' && <AddEquipmentForm key={`eq-${node.id}`} locationId={node.id} />}
+          {node.kind !== 'company' && (
+            <Link className="btn" to={`/import?loc=${node.id}`}>
+              Import from a spreadsheet
+            </Link>
+          )}
           {addKinds.map((k) => (
             <AddForm
               key={`${node.id}-${k}`}

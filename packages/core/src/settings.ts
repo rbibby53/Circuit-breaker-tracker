@@ -180,7 +180,7 @@ export const SETTING_DEFS: SettingDef[] = [
     group: 'sso',
     label: 'Groups claim',
     description:
-      'The claim that lists someone’s groups: “groups” for Authentik, Microsoft and most others. Use dots for a nested claim, e.g. realm_access.roles.',
+      'The claim that lists someone’s groups: “groups” for Authentik, Microsoft and most others. Use dots for a nested claim, e.g. realm_access.roles. Groups sent as paths (/Facilities/Electricians) count for the groups above them too.',
     type: 'text',
     env: 'OIDC_GROUPS_CLAIM',
     default: 'groups',

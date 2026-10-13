@@ -202,3 +202,27 @@ describe('admin groups', () => {
     expect(((await sam.get('/api/locations')).body as any[]).length).toBe(0);
   });
 });
+
+describe('nested groups', () => {
+  it('give the access of every group above one sent as a path', async () => {
+    const s = await setup();
+    await s.admin.post('/api/admin/sso-groups', { group: 'Facilities', locationId: s.home, role: 'viewer' });
+    await s.admin.post('/api/admin/sso-groups', {
+      group: '/Facilities/Electricians',
+      locationId: s.work,
+      role: 'editor',
+    });
+    const { userId } = await completeOidcLogin(db, claims('kim', ['/Facilities/Electricians']), NO_STATE, rules());
+    const kim = await clientFor(userId);
+    const seen = ((await kim.get('/api/locations')).body as any[]).map((l) => l.id);
+    expect(seen).toEqual(expect.arrayContaining([s.home, s.work]));
+    // Admin and allowed groups follow nesting too.
+    const { userId: lee } = await completeOidcLogin(
+      db,
+      claims('lee', ['/Staff/Facilities/Leads']),
+      NO_STATE,
+      rules({ adminGroups: ['/Staff/Facilities'], allowedGroups: ['Staff'] }),
+    );
+    expect(isAdmin(lee)).toBe(true);
+  });
+});

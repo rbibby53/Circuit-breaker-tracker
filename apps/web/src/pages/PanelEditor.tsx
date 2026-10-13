@@ -1,6 +1,13 @@
 import {
   LAYOUT_LABELS,
+  columnsFor,
+  isListLayout,
+  maxPoles,
+  sectionsOf,
+  spacesText,
+  POWER_DEVICE_LABELS,
   generatorRating,
+  nameplateText,
   type PanelDetail,
   type PanelHistoryItem,
   type SavePanelResponse,
@@ -12,17 +19,25 @@ import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom'
 import { api, ApiError, errorMessage } from '../api';
 import { useCurrentUser } from '../auth';
 import { NodeIcon } from '../components/PowerIcon';
+import { ImpactButton } from '../components/Impact';
+import { PanelReports } from '../components/Reports';
 import { PANEL_PRINT_STYLES, PrintButton } from '../components/PrintDialog';
 import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { Inspector } from '../panel/Inspector';
 import { LoadSummary } from '../panel/LoadSummary';
+import { UnitList } from '../panel/UnitList';
+import { BulkBar } from '../panel/BulkBar';
 import { PanelGrid } from '../panel/PanelGrid';
 import { PanelSettings } from '../panel/PanelSettings';
 import { siteOf } from '../panel/serves';
 import {
   addBreaker,
+  addUnit,
+  bulkUpdate,
+  shiftBreakers,
   applyIds,
+  feedKey,
   fromDetail,
   moveBreaker,
   removeBreaker,
@@ -30,6 +45,7 @@ import {
   toRequest,
   updateBreaker,
   updatePanel,
+  type EditBreaker,
   type EditPanel,
   type Result,
   type Size,
@@ -115,10 +131,14 @@ function Editor({
   const [showHistory, setShowHistory] = useState(false);
   // Highlight the breakers with one tag, e.g. every "Servers" circuit.
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  // Field checking: show only circuits not checked yet (or found wrong), and pick many at once.
+  const [checkFilter, setCheckFilter] = useState<'' | 'unchecked' | 'wrong'>('');
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const docRef = useRef(doc);
   const version = useRef(initial.version);
-  const baselineFed = useRef(initial.fedFromBreakerId);
+  const baselineFed = useRef(feedKey(initial));
   const knownIds = useRef(new Set(initial.breakers.map((b) => b.id)));
   const editSeq = useRef(0);
   const saving = useRef(false);
@@ -185,7 +205,7 @@ function Editor({
       const body = toRequest(docRef.current, version.current, baselineFed.current, knownIds.current);
       const res = await api.put<SavePanelResponse>(`/api/panels/${initial.id}`, body);
       version.current = res.panel.version;
-      baselineFed.current = res.panel.fedFromBreakerId;
+      baselineFed.current = feedKey(res.panel);
       knownIds.current = new Set(res.panel.breakers.map((b) => b.id));
       setServer(res.panel);
       const withIds = applyIds(docRef.current, res.idMap);
@@ -284,6 +304,42 @@ function Editor({
     }
   };
 
+  const dimmed =
+    tagFilter || checkFilter
+      ? (b: EditBreaker) =>
+          (!!tagFilter && !b.tags.some((t) => t.toLowerCase() === tagFilter.toLowerCase())) ||
+          (checkFilter === 'unchecked' && b.verifyStatus !== '') ||
+          (checkFilter === 'wrong' && b.verifyStatus !== 'wrong')
+      : undefined;
+  const onPick = (key: string) => {
+    if (!selecting) return setSelected(key);
+    const next = new Set(picked);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setPicked(next);
+  };
+  const bulk = (r: Result) => apply(r);
+
+  // What the rows are called in words.
+  const thing =
+    doc.layout === 'mcc' ? 'bucket' : isListLayout(doc) ? 'unit' : doc.layout === 'relay' ? 'relay' : 'breaker';
+  const feedsMap = new Map(
+    server.breakers.map((b) => [
+      b.id,
+      [
+        ...b.feedsDevices.map((d) => d.name),
+        ...b.feeds.map((f) => f.panelName),
+        ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more`] : []),
+      ],
+    ]),
+  );
+  const relaySources =
+    doc.layout === 'relay'
+      ? new Map(
+          server.breakers.map((b) => [b.id, b.source ? `${b.source.panelName} · ${b.source.circuit}` : 'Feed not set']),
+        )
+      : undefined;
+
   return (
     <main className="editor">
       <div className="editor-head">
@@ -303,11 +359,16 @@ function Editor({
               {doc.layout === 'relay' && doc.controlSystem
                 ? `${doc.controlSystem} relay panel`
                 : LAYOUT_LABELS[doc.layout]}
-              {doc.voltage && ` · ${doc.voltage}`} · {doc.spaces} {doc.layout === 'relay' ? 'relays' : 'spaces'}
+              {doc.voltage && ` · ${doc.voltage}`} · {spacesText(doc)}
               {doc.layout !== 'relay' &&
                 (doc.mainType === 'lugs' ? ' · main lugs' : ` · ${doc.mainAmps ?? '?'} A main`)}
               {(doc.manufacturer || doc.model) && ` · ${[doc.manufacturer, doc.model].filter(Boolean).join(' ')}`}
             </p>
+            {nameplateText(doc.nameplate, doc.mainType === 'lugs' ? null : doc.mainAmps) && (
+              <p className="muted small nameplate">
+                {nameplateText(doc.nameplate, doc.mainType === 'lugs' ? null : doc.mainAmps)}
+              </p>
+            )}
             <PowerStrip panel={server} flowHref={flowHref} />
           </div>
           <div className="toolbar">
@@ -339,6 +400,10 @@ function Editor({
             <button type="button" className="btn" aria-expanded={showHistory} onClick={() => setShowHistory((v) => !v)}>
               History
             </button>
+            <Link className="btn" to={`/panels/${initial.id}/field`}>
+              Field mode
+            </Link>
+            <ImpactButton query={`panel=${initial.id}`} label="Shutdown impact" />
             <PrintButton
               endpoint={`/api/panels/${initial.id}/pdf`}
               csv={`/api/panels/${initial.id}/csv`}
@@ -370,6 +435,7 @@ function Editor({
         )}
       </div>
 
+      <PanelReports panelId={initial.id} count={initial.openReports} />
       {saveState === 'conflict' && (
         <div className="banner banner-warn" role="alert">
           <span>Someone else saved this panel while you were editing. Your last change was not saved.</span>
@@ -409,45 +475,118 @@ function Editor({
         <section className="editor-center" aria-label="Panel">
           <Legend relay={doc.layout === 'relay'} />
           {doc.layout !== 'relay' && (
-            <LoadSummary panel={doc} breakers={doc.breakers} mainAmps={doc.mainType === 'lugs' ? null : doc.mainAmps} />
+            <LoadSummary
+              panel={doc}
+              breakers={doc.breakers}
+              mainAmps={doc.mainType === 'lugs' ? null : doc.mainAmps}
+              check={server.loadCheck}
+              warnings={server.warnings}
+              onFillFromNotes={
+                readOnly
+                  ? undefined
+                  : (loads) =>
+                      commit({
+                        ...docRef.current,
+                        breakers: docRef.current.breakers.map((b) =>
+                          loads.has(b.key) ? { ...b, loadVa: loads.get(b.key)! } : b,
+                        ),
+                      })
+              }
+            />
           )}
-          <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
-          <PanelGrid
-            doc={doc}
-            highlightTag={tagFilter}
-            byId={byId}
-            selectedKey={selected}
-            readOnly={readOnly}
-            onSelect={setSelected}
-            onAdd={(position: number, slot: Slot) => {
-              const r = addBreaker(docRef.current, position, slot);
-              if (apply(r) && r.ok && 'key' in r && r.key) setSelected(r.key);
-            }}
-            onMove={(key, position, slot) => apply(moveBreaker(docRef.current, key, position, slot))}
-            relaySources={
-              doc.layout === 'relay'
-                ? new Map(
-                    server.breakers.map((b) => [
-                      b.id,
-                      b.source ? `${b.source.panelName} · ${b.source.circuit}` : 'Feed not set',
-                    ]),
-                  )
-                : undefined
-            }
-            feeds={
-              new Map(
-                server.breakers.map((b) => [
-                  b.id,
-                  [
-                    ...b.feeds.map((f) => f.panelName),
-                    ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more panel${b.hiddenFeeds === 1 ? '' : 's'}`] : []),
-                  ],
-                ]),
+          <div className="editor-filters">
+            <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
+            <CheckFilter breakers={doc.breakers} value={checkFilter} onChange={setCheckFilter} />
+            {!readOnly && (
+              <button
+                type="button"
+                className="btn btn-sm"
+                aria-pressed={selecting}
+                onClick={() => {
+                  setSelecting(!selecting);
+                  setPicked(new Set());
+                  setSelected(null);
+                }}
+              >
+                {selecting ? 'Stop selecting' : 'Select several'}
+              </button>
+            )}
+          </div>
+          {isListLayout(doc) ? (
+            <UnitList
+              doc={doc}
+              byId={byId}
+              highlightTag={tagFilter}
+              dimmed={dimmed}
+              picked={selecting ? picked : undefined}
+              selectedKey={selected}
+              readOnly={readOnly}
+              onSelect={onPick}
+              onAdd={() => {
+                const r = addUnit(docRef.current);
+                if (apply(r) && r.ok && 'key' in r && r.key) setSelected(r.key);
+              }}
+              feeds={feedsMap}
+            />
+          ) : (
+            sectionsOf(doc).map((sec, i) => (
+              <div key={i} className="pg-section">
+                {i > 0 && (
+                  <h3 className="pg-section-title">
+                    {sec.name}
+                    {sec.throughLugs && <span className="muted"> · fed through lugs</span>}
+                  </h3>
+                )}
+                <PanelGrid
+                  doc={{ ...doc, spaces: sec.spaces, breakers: doc.breakers.filter((b) => b.section === i + 1) }}
+                  heading={i === 0 ? undefined : sec.throughLugs ? 'THROUGH LUGS' : sec.name.toUpperCase()}
+                  highlightTag={tagFilter}
+                  dimmed={dimmed}
+                  picked={selecting ? picked : undefined}
+                  byId={byId}
+                  selectedKey={selected}
+                  readOnly={readOnly}
+                  onSelect={onPick}
+                  onAdd={(position: number, slot: Slot) => {
+                    const r = addBreaker(docRef.current, position, slot, i + 1);
+                    if (apply(r) && r.ok && 'key' in r && r.key) setSelected(r.key);
+                  }}
+                  onMove={(key, position, slot) => apply(moveBreaker(docRef.current, key, position, slot, i + 1))}
+                  relaySources={relaySources}
+                  feeds={feedsMap}
+                />
+              </div>
+            ))
+          )}
+        </section>
+        {selecting && !readOnly ? (
+          <BulkBar
+            count={picked.size}
+            maxPoles={maxPoles(doc)}
+            rowStep={columnsFor(doc)}
+            onAmps={(amps) => bulk(bulkUpdate(docRef.current, picked, { amps }))}
+            onPoles={(poles) => bulk(bulkUpdate(docRef.current, picked, { poles, slot: 'full' }))}
+            onTag={(tag, add) =>
+              bulk(
+                bulkUpdate(docRef.current, picked, (b) => ({
+                  tags: add
+                    ? b.tags.some((t) => t.toLowerCase() === tag.toLowerCase())
+                      ? b.tags
+                      : [...b.tags, tag]
+                    : b.tags.filter((t) => t.toLowerCase() !== tag.toLowerCase()),
+                })),
               )
             }
+            onCheck={(verifyStatus) => bulk(bulkUpdate(docRef.current, picked, { verifyStatus }))}
+            onShift={(delta) => bulk(shiftBreakers(docRef.current, picked, delta))}
+            onSelectAll={() => setPicked(new Set(doc.breakers.filter((b) => !dimmed || !dimmed(b)).map((b) => b.key)))}
+            onClear={() => setPicked(new Set())}
+            onDone={() => {
+              setSelecting(false);
+              setPicked(new Set());
+            }}
           />
-        </section>
-        {selectedBreaker ? (
+        ) : selectedBreaker ? (
           <Inspector
             key={selectedBreaker.key}
             panelId={initial.id}
@@ -459,7 +598,9 @@ function Editor({
             readOnly={readOnly}
             onPatch={(patch, coalesce) => apply(updateBreaker(docRef.current, selectedBreaker.key, patch), coalesce)}
             onSize={(size: Size) => apply(setSize(docRef.current, selectedBreaker.key, size))}
-            onMove={(position, slot) => apply(moveBreaker(docRef.current, selectedBreaker.key, position, slot))}
+            onMove={(position, slot, section) =>
+              apply(moveBreaker(docRef.current, selectedBreaker.key, position, slot, section))
+            }
             onRemove={() => {
               commit(removeBreaker(docRef.current, selectedBreaker.key));
               setSelected(null);
@@ -467,17 +608,61 @@ function Editor({
           />
         ) : (
           <aside className="inspector inspector-empty">
-            <h2>{readOnly ? 'Pick a breaker' : 'Pick or add a breaker'}</h2>
+            <h2>{readOnly ? `Pick a ${thing}` : `Pick or add a ${thing}`}</h2>
             <p className="muted">
               {readOnly
-                ? 'Select any breaker to see what it powers.'
-                : 'Click an empty space to add a breaker, click a breaker to edit it, or drag it to another space. Changes save automatically.'}
+                ? `Select any ${thing} to see what it powers.`
+                : isListLayout(doc)
+                  ? `Add a ${thing} below the list, or click one to edit it. Changes save automatically.`
+                  : 'Click an empty space to add a breaker, click a breaker to edit it, or drag it to another space. Changes save automatically.'}
             </p>
             {initial.notes && <p className="notes">{initial.notes}</p>}
           </aside>
         )}
       </div>
     </main>
+  );
+}
+
+/** Show only circuits not checked yet, or found wrong, while walking a panel. */
+function CheckFilter({
+  breakers,
+  value,
+  onChange,
+}: {
+  breakers: EditBreaker[];
+  value: '' | 'unchecked' | 'wrong';
+  onChange: (v: '' | 'unchecked' | 'wrong') => void;
+}) {
+  const circuits = breakers.filter((b) => !b.isSpare);
+  const unchecked = circuits.filter((b) => !b.verifyStatus).length;
+  const wrong = circuits.filter((b) => b.verifyStatus === 'wrong').length;
+  const verified = circuits.length - unchecked - wrong;
+  if (!circuits.length) return null;
+  return (
+    <div className="tag-filter" role="group" aria-label="Show by field check">
+      <span className="small muted">
+        Checked {verified}/{circuits.length}:
+      </span>
+      <button
+        type="button"
+        className="btn btn-sm"
+        aria-pressed={value === 'unchecked'}
+        onClick={() => onChange(value === 'unchecked' ? '' : 'unchecked')}
+      >
+        Not checked <span className="muted">{unchecked}</span>
+      </button>
+      {wrong > 0 && (
+        <button
+          type="button"
+          className="btn btn-sm"
+          aria-pressed={value === 'wrong'}
+          onClick={() => onChange(value === 'wrong' ? '' : 'wrong')}
+        >
+          Wrong <span className="muted">{wrong}</span>
+        </button>
+      )}
+    </div>
   );
 }
 
@@ -505,6 +690,9 @@ function PowerStrip({ panel, flowHref }: { panel: PanelDetail; flowHref: string 
   const g = panel.generator;
   const relay = panel.layout === 'relay';
   const notSet = chain.length === 0 && panel.mainType === 'lugs' && !relay;
+  // A utility service at the top is the start of the chain itself.
+  const top = chain[0];
+  const fromService = top?.kind === 'device' && top.deviceKind === 'service';
   return (
     <div className="power-strip">
       {!(relay && chain.length === 0) && (
@@ -512,23 +700,40 @@ function PowerStrip({ panel, flowHref }: { panel: PanelDetail; flowHref: string 
           {notSet ? (
             <li className="ps-chip ps-warn">Fed from: not set yet (Panel settings → Fed from)</li>
           ) : (
-            <li className="ps-chip ps-utility">
-              <NodeIcon kind="utility" size={16} />
-              Utility
-            </li>
+            !fromService && (
+              <li className="ps-chip ps-utility">
+                <NodeIcon kind="utility" size={16} />
+                Utility
+              </li>
+            )
           )}
-          {chain.map((f) => (
-            <li key={f.breakerId} className="ps-chip">
-              <NodeIcon kind={f.canView ? 'panel' : 'hidden'} size={16} />
-              {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>}
-              <span className="ps-ckt" title={`${f.label || 'Unlabelled'} · in ${f.locationPath}`}>
-                {f.circuit} · {f.amps}A
-              </span>
-            </li>
-          ))}
+          {chain.map((f) =>
+            f.kind === 'device' ? (
+              <li key={`d${f.deviceId}`} className={`ps-chip ps-${f.deviceKind}`}>
+                <NodeIcon kind={f.deviceKind} size={16} />
+                {f.canView ? <Link to={`/devices/${f.deviceId}`}>{f.name}</Link> : <strong>{f.name}</strong>}
+                {f.rating && (
+                  <span className="ps-ckt" title={`${POWER_DEVICE_LABELS[f.deviceKind]} in ${f.locationPath}`}>
+                    {f.rating}
+                  </span>
+                )}
+              </li>
+            ) : (
+              <li key={f.breakerId} className="ps-chip">
+                <NodeIcon kind={f.canView ? 'panel' : 'hidden'} size={16} />
+                {f.canView ? <Link to={`/panels/${f.panelId}`}>{f.panelName}</Link> : <strong>{f.panelName}</strong>}
+                <span className="ps-ckt" title={`${f.label || 'Unlabelled'} · in ${f.locationPath}`}>
+                  {f.circuit} · {f.amps}A
+                </span>
+              </li>
+            ),
+          )}
           <li className="ps-chip ps-here" aria-current="true">
             <NodeIcon kind={relay ? 'relay' : 'panel'} size={16} />
             {panel.name}
+            {panel.voltage && chain.some((f) => f.kind === 'device' && f.deviceKind === 'transformer') && (
+              <span className="ps-ckt">{panel.voltage}</span>
+            )}
           </li>
         </ol>
       )}

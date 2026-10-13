@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { SETTING_BY_KEY, parseSetting } from './settings';
-import { groupsFromClaims, inAnyGroup, parseGroupList, ssoButtonLabel, ssoProviderName } from './sso';
+import { groupsFromClaims, inAnyGroup, withParentGroups, parseGroupList, ssoButtonLabel, ssoProviderName } from './sso';
 
 describe('ssoProviderName', () => {
   it('names common providers from the issuer', () => {
@@ -38,6 +38,21 @@ describe('groups', () => {
     expect(groupsFromClaims({ 'a.b': ['flat'] }, 'a.b')).toEqual(['flat']);
     expect(groupsFromClaims({ sub: 'x' }, 'groups')).toBeNull();
     expect(groupsFromClaims({ groups: [] }, '')).toEqual([]);
+  });
+
+  it('counts the groups above a nested group sent as a path', () => {
+    expect(groupsFromClaims({ groups: ['/Facilities/Electrical/Electricians', 'admins'] }, 'groups')).toEqual([
+      '/Facilities/Electrical/Electricians',
+      '/Facilities/Electrical',
+      '/Facilities',
+      'Facilities',
+      'Electrical',
+      'Electricians',
+      'admins',
+    ]);
+    // Only paths are split: a plain name with a slash stays whole.
+    expect(withParentGroups(['HVAC/Plumbing'])).toEqual(['HVAC/Plumbing']);
+    expect(inAnyGroup(withParentGroups(['/Facilities/Electricians']), ['facilities'])).toBe(true);
   });
 });
 

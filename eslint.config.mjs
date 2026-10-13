@@ -19,6 +19,11 @@ export default tseslint.config(
     languageOptions: { globals: globals.browser },
   },
   {
+    // The service worker that keeps field mode working offline.
+    files: ['apps/web/public/sw.js'],
+    languageOptions: { globals: globals.serviceworker },
+  },
+  {
     files: ['apps/server/**/*.{ts,mjs}', '*.mjs', 'scripts/**/*.mjs'],
     languageOptions: { globals: globals.node },
   },

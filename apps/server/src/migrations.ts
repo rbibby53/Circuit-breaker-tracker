@@ -335,4 +335,174 @@ export const MIGRATIONS: string[] = [
          transfer_switch = ''
    WHERE generator_id IS NOT NULL AND transfer_switch != '';
   `,
+  `
+  -- Power devices between a breaker and what it feeds: transformers (the 480 V to 208 V step),
+  -- disconnects, UPSs, and the utility service and meter at the top. Each is fed from a breaker
+  -- or from another device; panels can be fed from one too.
+  CREATE TABLE power_devices (
+    id                  INTEGER PRIMARY KEY,
+    location_id         INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    kind                TEXT NOT NULL CHECK (kind IN ('transformer', 'disconnect', 'ups', 'service')),
+    name                TEXT NOT NULL,
+    kva                 REAL,
+    voltage             TEXT NOT NULL DEFAULT '',
+    secondary_voltage   TEXT NOT NULL DEFAULT '',
+    amps                INTEGER,
+    fused               INTEGER NOT NULL DEFAULT 0,
+    fuse_amps           INTEGER,
+    runtime_minutes     INTEGER,
+    meter               TEXT NOT NULL DEFAULT '',
+    utility             TEXT NOT NULL DEFAULT '',
+    manufacturer        TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT '',
+    fed_from_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    fed_from_device_id  INTEGER REFERENCES power_devices (id) ON DELETE SET NULL,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+  );
+  CREATE INDEX power_devices_location ON power_devices (location_id);
+  CREATE INDEX power_devices_fed_breaker ON power_devices (fed_from_breaker_id);
+  CREATE INDEX power_devices_fed_device ON power_devices (fed_from_device_id);
+  ALTER TABLE panels ADD COLUMN fed_from_device_id INTEGER REFERENCES power_devices (id) ON DELETE SET NULL;
+  CREATE INDEX panels_fed_device ON panels (fed_from_device_id);
+
+  -- Nameplate details from panel schedules.
+  ALTER TABLE panels ADD COLUMN aic_ka INTEGER;
+  ALTER TABLE panels ADD COLUMN bus_amps INTEGER;
+  ALTER TABLE panels ADD COLUMN mounting TEXT NOT NULL DEFAULT '';
+  ALTER TABLE panels ADD COLUMN enclosure TEXT NOT NULL DEFAULT '';
+  ALTER TABLE panels ADD COLUMN feeder_wire TEXT NOT NULL DEFAULT '';
+  ALTER TABLE panels ADD COLUMN feeder_conduit TEXT NOT NULL DEFAULT '';
+
+  -- Transfer switch duty (NEC 700 emergency, 701 legally required, 702 optional standby),
+  -- transition, and the order loads come back on.
+  ALTER TABLE transfer_switches ADD COLUMN duty TEXT NOT NULL DEFAULT ''
+    CHECK (duty IN ('', 'emergency', 'legally-required', 'optional'));
+  ALTER TABLE transfer_switches ADD COLUMN transition TEXT NOT NULL DEFAULT ''
+    CHECK (transition IN ('', 'open', 'closed', 'delayed'));
+  ALTER TABLE transfer_switches ADD COLUMN priority INTEGER;
+
+  -- Generator fuel tank and runtime at load.
+  ALTER TABLE generators ADD COLUMN tank_gallons INTEGER;
+  ALTER TABLE generators ADD COLUMN runtime_hours REAL;
+  `,
+  `
+  -- Connected load per circuit (VA) and its demand factor (percent; unset means 100%).
+  ALTER TABLE breakers ADD COLUMN load_va REAL;
+  ALTER TABLE breakers ADD COLUMN demand_pct INTEGER;
+  `,
+  `
+  ${FOREIGN_KEYS_OFF}
+  -- Switchboards and motor control centers number their units 1, 2, 3…; panels can have more
+  -- than one section, each numbered from 1. The layout is checked by the app from now on, so
+  -- new layouts need no rebuild: the table is rebuilt once, without that CHECK, same rows.
+  CREATE TABLE panels_new (
+    id                  INTEGER PRIMARY KEY,
+    location_id         INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    name                TEXT NOT NULL,
+    layout              TEXT NOT NULL,
+    spaces              INTEGER NOT NULL,
+    main_amps           INTEGER,
+    main_type           TEXT NOT NULL DEFAULT 'breaker' CHECK (main_type IN ('breaker', 'lugs')),
+    voltage             TEXT NOT NULL DEFAULT '',
+    manufacturer        TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT '',
+    fed_from_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    version             INTEGER NOT NULL DEFAULT 1,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL,
+    public_token        TEXT,
+    generator_id        INTEGER REFERENCES generators (id) ON DELETE SET NULL,
+    transfer_switch     TEXT NOT NULL DEFAULT '',
+    control_system      TEXT NOT NULL DEFAULT '',
+    ats_id              INTEGER REFERENCES transfer_switches (id) ON DELETE SET NULL,
+    fed_from_device_id  INTEGER REFERENCES power_devices (id) ON DELETE SET NULL,
+    aic_ka              INTEGER,
+    bus_amps            INTEGER,
+    mounting            TEXT NOT NULL DEFAULT '',
+    enclosure           TEXT NOT NULL DEFAULT '',
+    feeder_wire         TEXT NOT NULL DEFAULT '',
+    feeder_conduit      TEXT NOT NULL DEFAULT '',
+    sections            TEXT NOT NULL DEFAULT '[]'
+  );
+  INSERT INTO panels_new (id, location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model,
+                          notes, fed_from_breaker_id, version, created_at, updated_at, public_token, generator_id,
+                          transfer_switch, control_system, ats_id, fed_from_device_id, aic_ka, bus_amps, mounting,
+                          enclosure, feeder_wire, feeder_conduit)
+    SELECT id, location_id, name, layout, spaces, main_amps, main_type, voltage, manufacturer, model,
+           notes, fed_from_breaker_id, version, created_at, updated_at, public_token, generator_id,
+           transfer_switch, control_system, ats_id, fed_from_device_id, aic_ka, bus_amps, mounting,
+           enclosure, feeder_wire, feeder_conduit
+    FROM panels;
+  DROP TABLE panels;
+  ALTER TABLE panels_new RENAME TO panels;
+  CREATE INDEX panels_location ON panels (location_id);
+  CREATE INDEX panels_fed_from ON panels (fed_from_breaker_id);
+  CREATE UNIQUE INDEX panels_public_token ON panels (public_token) WHERE public_token IS NOT NULL;
+  CREATE INDEX panels_generator ON panels (generator_id);
+  CREATE INDEX panels_ats ON panels (ats_id);
+  CREATE INDEX panels_fed_device ON panels (fed_from_device_id);
+
+  -- Which section a breaker is in, and switchboard / MCC unit details.
+  ALTER TABLE breakers ADD COLUMN section INTEGER NOT NULL DEFAULT 1;
+  ALTER TABLE breakers ADD COLUMN unit TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN frame_amps INTEGER;
+  ALTER TABLE breakers ADD COLUMN wire TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN conduit TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN starter TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN hp REAL;
+  `,
+  `
+  -- The equipment register: AHU-1, EF-2, CT-1… with what they are, where, and what feeds them
+  -- (a breaker, or a disconnect or other device), so "what feeds AHU-2?" is one search.
+  CREATE TABLE equipment (
+    id                  INTEGER PRIMARY KEY,
+    location_id         INTEGER NOT NULL REFERENCES locations (id) ON DELETE RESTRICT,
+    tag                 TEXT NOT NULL,
+    kind                TEXT NOT NULL DEFAULT '',
+    description         TEXT NOT NULL DEFAULT '',
+    hp                  REAL,
+    voltage             TEXT NOT NULL DEFAULT '',
+    manufacturer        TEXT NOT NULL DEFAULT '',
+    model               TEXT NOT NULL DEFAULT '',
+    notes               TEXT NOT NULL DEFAULT '',
+    fed_from_breaker_id INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    fed_from_device_id  INTEGER REFERENCES power_devices (id) ON DELETE SET NULL,
+    created_at          TEXT NOT NULL,
+    updated_at          TEXT NOT NULL
+  );
+  CREATE INDEX equipment_location ON equipment (location_id);
+  CREATE INDEX equipment_tag ON equipment (tag COLLATE NOCASE);
+  CREATE INDEX equipment_breaker ON equipment (fed_from_breaker_id);
+  CREATE INDEX equipment_device ON equipment (fed_from_device_id);
+  `,
+  `
+  -- Field verification per circuit: checked against the panel and right, or wrong; by whom and when.
+  ALTER TABLE breakers ADD COLUMN verify_status TEXT NOT NULL DEFAULT ''
+    CHECK (verify_status IN ('', 'verified', 'wrong'));
+  ALTER TABLE breakers ADD COLUMN verified_by TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN verified_at TEXT;
+  `,
+  `
+  -- Discrepancy reports: "this doesn't match", from field mode or a panel's public page.
+  CREATE TABLE reports (
+    id          INTEGER PRIMARY KEY,
+    panel_id    INTEGER NOT NULL REFERENCES panels (id) ON DELETE CASCADE,
+    breaker_id  INTEGER REFERENCES breakers (id) ON DELETE SET NULL,
+    circuit     TEXT NOT NULL DEFAULT '',
+    message     TEXT NOT NULL,
+    reporter    TEXT NOT NULL DEFAULT '',
+    user_id     INTEGER REFERENCES users (id) ON DELETE SET NULL,
+    source      TEXT NOT NULL CHECK (source IN ('app', 'public')),
+    client_id   TEXT UNIQUE,
+    status      TEXT NOT NULL DEFAULT 'open' CHECK (status IN ('open', 'resolved')),
+    resolution  TEXT NOT NULL DEFAULT '',
+    resolved_by TEXT NOT NULL DEFAULT '',
+    resolved_at TEXT,
+    created_at  TEXT NOT NULL
+  );
+  CREATE INDEX reports_panel ON reports (panel_id, status);
+  `,
 ];

@@ -61,6 +61,9 @@ export function generatorRoutes(app: FastifyInstance, db: DB): void {
       id: t.id,
       name: t.name,
       kind: t.kind,
+      duty: t.duty,
+      transition: t.transition,
+      priority: t.priority,
       amps: t.amps,
       generatorId: t.generator_id,
       generatorName: generator && canSee(actor, access, generator) ? generator.name : null,
@@ -98,6 +101,8 @@ export function generatorRoutes(app: FastifyInstance, db: DB): void {
     kw: g.kw,
     fuel: g.fuel,
     voltage: g.voltage,
+    tankGallons: g.tank_gallons,
+    runtimeHours: g.runtime_hours,
     panelCount: panels.get(g.id)?.length ?? 0,
     role: effectiveRole(actor, access.node(g.location_id)!, access.grants)!,
   });
@@ -159,10 +164,24 @@ export function generatorRoutes(app: FastifyInstance, db: DB): void {
     const t = now();
     const r = db
       .prepare(
-        `INSERT INTO generators (location_id, name, kw, fuel, voltage, manufacturer, model, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO generators (location_id, name, kw, fuel, voltage, manufacturer, model, notes, tank_gallons,
+           runtime_hours, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(locationId, body.name, body.kw, body.fuel, body.voltage, body.manufacturer, body.model, body.notes, t, t);
+      .run(
+        locationId,
+        body.name,
+        body.kw,
+        body.fuel,
+        body.voltage,
+        body.manufacturer,
+        body.model,
+        body.notes,
+        body.tankGallons,
+        body.runtimeHours,
+        t,
+        t,
+      );
     const id = Number(r.lastInsertRowid);
     audit(
       db,
@@ -188,9 +207,22 @@ export function generatorRoutes(app: FastifyInstance, db: DB): void {
     requireEdit(actor, access, g.location_id);
     const body = parse(generatorInputSchema, req.body);
     db.prepare(
-      `UPDATE generators SET name = ?, kw = ?, fuel = ?, voltage = ?, manufacturer = ?, model = ?, notes = ?, updated_at = ?
+      `UPDATE generators SET name = ?, kw = ?, fuel = ?, voltage = ?, manufacturer = ?, model = ?, notes = ?,
+         tank_gallons = ?, runtime_hours = ?, updated_at = ?
        WHERE id = ?`,
-    ).run(body.name, body.kw, body.fuel, body.voltage, body.manufacturer, body.model, body.notes, now(), g.id);
+    ).run(
+      body.name,
+      body.kw,
+      body.fuel,
+      body.voltage,
+      body.manufacturer,
+      body.model,
+      body.notes,
+      body.tankGallons,
+      body.runtimeHours,
+      now(),
+      g.id,
+    );
     const before = {
       name: g.name,
       kw: g.kw,
@@ -199,6 +231,8 @@ export function generatorRoutes(app: FastifyInstance, db: DB): void {
       manufacturer: g.manufacturer,
       model: g.model,
       notes: g.notes,
+      tankGallons: g.tank_gallons,
+      runtimeHours: g.runtime_hours,
     };
     const changed = (Object.keys(before) as (keyof typeof before)[]).filter((k) => before[k] !== body[k]);
     if (changed.length) {
@@ -285,10 +319,23 @@ export function generatorRoutes(app: FastifyInstance, db: DB): void {
     const t = now();
     const r = db
       .prepare(
-        `INSERT INTO transfer_switches (location_id, name, kind, amps, generator_id, notes, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO transfer_switches (location_id, name, kind, duty, transition, priority, amps, generator_id, notes,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(body.locationId, body.name, body.kind, body.amps, body.generatorId, body.notes, t, t);
+      .run(
+        body.locationId,
+        body.name,
+        body.kind,
+        body.duty,
+        body.transition,
+        body.priority,
+        body.amps,
+        body.generatorId,
+        body.notes,
+        t,
+        t,
+      );
     const id = Number(r.lastInsertRowid);
     audit(
       db,
@@ -315,9 +362,22 @@ export function generatorRoutes(app: FastifyInstance, db: DB): void {
     const body = parse(transferSwitchInputSchema, req.body);
     if (body.locationId !== t.location_id || body.generatorId !== t.generator_id) checkSwitch(actor, access, body);
     db.prepare(
-      `UPDATE transfer_switches SET name = ?, kind = ?, amps = ?, generator_id = ?, location_id = ?, notes = ?, updated_at = ?
+      `UPDATE transfer_switches SET name = ?, kind = ?, duty = ?, transition = ?, priority = ?, amps = ?, generator_id = ?,
+         location_id = ?, notes = ?, updated_at = ?
        WHERE id = ?`,
-    ).run(body.name, body.kind, body.amps, body.generatorId, body.locationId, body.notes, now(), t.id);
+    ).run(
+      body.name,
+      body.kind,
+      body.duty,
+      body.transition,
+      body.priority,
+      body.amps,
+      body.generatorId,
+      body.locationId,
+      body.notes,
+      now(),
+      t.id,
+    );
     audit(
       db,
       auth,

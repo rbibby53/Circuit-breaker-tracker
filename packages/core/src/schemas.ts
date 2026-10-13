@@ -1,7 +1,19 @@
 import { z } from 'zod';
 import { LOCATION_KINDS } from './locations';
-import { BACKUPS, DEVICES, MAIN_TYPES, MAX_SPACES, MIN_SPACES, PANEL_LAYOUTS, PROTECTIONS, SLOTS } from './panel';
+import {
+  BACKUPS,
+  DEVICES,
+  MAIN_TYPES,
+  MAX_SECTIONS,
+  MAX_SPACES,
+  MAX_UNITS,
+  PANEL_LAYOUTS,
+  PROTECTIONS,
+  SLOTS,
+  VERIFY_STATUSES,
+} from './panel';
 import { ROLES } from './roles';
+import { ATS_DUTIES, ATS_TRANSITIONS, MOUNTINGS, POWER_DEVICE_KINDS } from './devices';
 import { ATS_KINDS, FUELS } from './generator';
 
 export const usernameSchema = z
@@ -116,10 +128,17 @@ export const updateUserSchema = z.object({
 const amps = z.number().int().min(1).max(4000);
 const optionalText = (max: number) => z.string().trim().max(max).default('');
 
+export const sectionSchema = z.object({
+  name: z.string().trim().min(1).max(40),
+  spaces: z.number().int().min(1).max(MAX_UNITS),
+  throughLugs: z.boolean().default(false),
+});
+
 export const createPanelSchema = z.object({
   name: z.string().trim().min(1).max(80),
   layout: z.enum(PANEL_LAYOUTS).default('residential'),
-  spaces: z.number().int().min(MIN_SPACES).max(MAX_SPACES),
+  /** Spaces in the first section (units on a switchboard or MCC); checked per layout. */
+  spaces: z.number().int().min(1).max(MAX_UNITS),
   mainAmps: amps.nullable().default(null),
   mainType: z.enum(MAIN_TYPES).default('breaker'),
   voltage: optionalText(40),
@@ -134,6 +153,18 @@ export const createPanelSchema = z.object({
   atsId: z.number().int().positive().nullable().default(null),
   /** Relay panels: the lighting control system, e.g. nLight. */
   controlSystem: optionalText(60),
+  /** Nameplate: short-circuit rating (kA), bus rating, mounting, enclosure, feeder wire and conduit. */
+  aicKa: z.number().int().min(1).max(500).nullable().default(null),
+  busAmps: amps.nullable().default(null),
+  mounting: z.enum(MOUNTINGS).default(''),
+  enclosure: optionalText(40),
+  feederWire: optionalText(80),
+  feederConduit: optionalText(40),
+  /** Sections after the first, each numbered from 1. */
+  sections: z
+    .array(sectionSchema)
+    .max(MAX_SECTIONS - 1)
+    .default([]),
 });
 
 export const servesInputSchema = z.object({
@@ -146,7 +177,9 @@ export const breakerInputSchema = z
     id: z.number().int().positive().optional(),
     /** Client-side key, echoed back so new breakers can be matched to their new ids. */
     clientKey: z.string().min(1).max(64),
-    position: z.number().int().min(1).max(MAX_SPACES),
+    position: z.number().int().min(1).max(MAX_UNITS),
+    /** Which section of the panel, from 1. */
+    section: z.number().int().min(1).max(MAX_SECTIONS).default(1),
     slot: z.enum(SLOTS).default('full'),
     poles: z.number().int().min(1).max(3),
     /** 0 only for a surge protector without breakers of its own. */
@@ -165,6 +198,20 @@ export const breakerInputSchema = z
     sourceBreakerId: z.number().int().positive().nullable().default(null),
     /** Relays: what controls it, e.g. an nLight zone, channel or schedule. */
     control: optionalText(120),
+    /** Connected load in volt-amps, from the panel schedule. */
+    loadVa: z.number().min(0).max(100_000_000).nullable().default(null),
+    /** Demand factor in percent (unset means 100%). */
+    demandPct: z.number().int().min(0).max(200).nullable().default(null),
+    /** Switchboards and MCCs: unit number as written, frame size, feeder wire and conduit. */
+    unit: optionalText(20),
+    frameAmps: z.number().int().min(1).max(10000).nullable().default(null),
+    wire: optionalText(80),
+    conduit: optionalText(40),
+    /** MCC buckets: starter size and motor horsepower (control type goes in `control`). */
+    starter: optionalText(30),
+    hp: z.number().min(0).max(100000).nullable().default(null),
+    /** Field check. Omit to leave an existing breaker's as it is. */
+    verifyStatus: z.enum(VERIFY_STATUSES).optional(),
   })
   .refine((b) => b.amps > 0 || b.device === 'surge', {
     message: 'A breaker needs a rating of at least 1 A.',
@@ -176,12 +223,25 @@ export const savePanelSchema = createPanelSchema.extend({
   version: z.number().int().min(1),
   /** Omit to leave unchanged; null to clear. */
   fedFromBreakerId: z.number().int().positive().nullable().optional(),
+  /** A transformer, disconnect, UPS or service feeding it instead of a breaker. Omit to leave unchanged. */
+  fedFromDeviceId: z.number().int().positive().nullable().optional(),
   /** Omit any of these to leave them as they are. */
   generatorId: z.number().int().positive().nullable().optional(),
   transferSwitch: z.string().trim().max(40).optional(),
   atsId: z.number().int().positive().nullable().optional(),
   controlSystem: z.string().trim().max(60).optional(),
-  breakers: z.array(breakerInputSchema).max(MAX_SPACES * 2),
+  aicKa: z.number().int().min(1).max(500).nullable().optional(),
+  busAmps: amps.nullable().optional(),
+  mounting: z.enum(MOUNTINGS).optional(),
+  enclosure: z.string().trim().max(40).optional(),
+  feederWire: z.string().trim().max(80).optional(),
+  feederConduit: z.string().trim().max(40).optional(),
+  breakers: z.array(breakerInputSchema).max(MAX_SPACES * 2 * MAX_SECTIONS),
+  /** Omit to leave unchanged. */
+  sections: z
+    .array(sectionSchema)
+    .max(MAX_SECTIONS - 1)
+    .optional(),
 });
 
 export const duplicatePanelSchema = z.object({
@@ -210,6 +270,8 @@ export const generatorInputSchema = z.object({
   manufacturer: optionalText(80),
   model: optionalText(80),
   notes: optionalText(2000),
+  tankGallons: z.number().int().min(1).max(1000000).nullable().default(null),
+  runtimeHours: z.number().min(0.1).max(10000).nullable().default(null),
 });
 
 export type GeneratorInput = z.infer<typeof generatorInputSchema>;
@@ -217,6 +279,9 @@ export type GeneratorInput = z.infer<typeof generatorInputSchema>;
 export const transferSwitchInputSchema = z.object({
   name: z.string().trim().min(1, 'Give the transfer switch a name.').max(80),
   kind: z.enum(ATS_KINDS).default('automatic'),
+  duty: z.enum(ATS_DUTIES).default(''),
+  transition: z.enum(ATS_TRANSITIONS).default(''),
+  priority: z.number().int().min(1).max(99).nullable().default(null),
   amps: z.number().int().min(1).max(10000).nullable().default(null),
   /** The generator on its emergency side. */
   generatorId: z.number().int().positive().nullable().default(null),
@@ -226,3 +291,94 @@ export const transferSwitchInputSchema = z.object({
 });
 
 export type TransferSwitchInput = z.infer<typeof transferSwitchInputSchema>;
+
+// ---- Power devices ----------------------------------------------------------------------
+
+const kva = z.number().min(0.1).max(100000).nullable().default(null);
+
+export const powerDeviceInputSchema = z.object({
+  kind: z.enum(POWER_DEVICE_KINDS),
+  name: z.string().trim().min(1, 'Give it a name, e.g. T-LDP1.').max(80),
+  locationId: z.number().int().positive(),
+  kva,
+  /** Primary (or only) voltage. */
+  voltage: optionalText(40),
+  /** Transformers: secondary voltage. */
+  secondaryVoltage: optionalText(40),
+  amps: amps.nullable().default(null),
+  fused: z.boolean().default(false),
+  fuseAmps: amps.nullable().default(null),
+  runtimeMinutes: z.number().int().min(1).max(100000).nullable().default(null),
+  meter: optionalText(60),
+  utility: optionalText(80),
+  manufacturer: optionalText(80),
+  model: optionalText(80),
+  notes: optionalText(2000),
+  /** What feeds it: a breaker, or another device (one or neither). Omit to leave unchanged. */
+  fedFromBreakerId: z.number().int().positive().nullable().optional(),
+  fedFromDeviceId: z.number().int().positive().nullable().optional(),
+});
+
+export type PowerDeviceInput = z.infer<typeof powerDeviceInputSchema>;
+
+export const equipmentInputSchema = z.object({
+  tag: z.string().trim().min(1, 'Give it a tag, e.g. AHU-1.').max(40),
+  kind: optionalText(60),
+  description: optionalText(120),
+  locationId: z.number().int().positive(),
+  hp: z.number().min(0).max(100000).nullable().default(null),
+  voltage: optionalText(40),
+  manufacturer: optionalText(80),
+  model: optionalText(80),
+  notes: optionalText(2000),
+  /** What feeds it: a breaker, or a disconnect or other device. Omit to leave unchanged. */
+  fedFromBreakerId: z.number().int().positive().nullable().optional(),
+  fedFromDeviceId: z.number().int().positive().nullable().optional(),
+});
+
+export type EquipmentInput = z.infer<typeof equipmentInputSchema>;
+
+/** Room links suggested from breaker labels, accepted in bulk. */
+export const acceptRoomLinksSchema = z.object({
+  links: z
+    .array(z.object({ breakerId: z.number().int().positive(), locationId: z.number().int().positive() }))
+    .min(1)
+    .max(2000),
+});
+
+/** Set the field check of several circuits at once (field mode, bulk edit). */
+export const verifyBreakersSchema = z.object({
+  breakers: z
+    .array(z.object({ breakerId: z.number().int().positive(), status: z.enum(VERIFY_STATUSES) }))
+    .min(1)
+    .max(1000),
+});
+
+/** "This doesn't match": a report from field mode about a circuit (or the panel as a whole). */
+export const reportInputSchema = z.object({
+  breakerId: z.number().int().positive().nullable().default(null),
+  message: z.string().trim().min(1, 'Say what does not match.').max(1000),
+  /** Set by field mode so a report sent again after being offline is only recorded once. */
+  clientId: z
+    .string()
+    .regex(/^[A-Za-z0-9_-]{8,64}$/)
+    .optional(),
+  /** Also mark the circuit wrong (Editor access needed). */
+  markWrong: z.boolean().default(false),
+});
+
+/** A report from a panel's public page: the circuit by its place in the panel, and an optional name. */
+export const publicReportSchema = z.object({
+  section: z.number().int().min(1).max(MAX_SECTIONS).nullable().default(null),
+  position: z.number().int().min(1).max(MAX_UNITS).nullable().default(null),
+  slot: z.enum(SLOTS).default('full'),
+  message: z.string().trim().min(1, 'Say what does not match.').max(1000),
+  name: optionalText(80),
+  /** Left empty by people; filled in by form-filling bots. */
+  website: z.string().max(200).default(''),
+});
+
+export const resolveReportSchema = z.object({
+  status: z.enum(['open', 'resolved']),
+  resolution: optionalText(1000),
+});

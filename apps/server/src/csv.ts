@@ -32,6 +32,8 @@ export const BREAKER_COLUMNS = [
   'Poles',
   'Type',
   'Amps',
+  'Load (VA)',
+  'Demand %',
   'Label',
   'Protection',
   'Critical',
@@ -45,6 +47,11 @@ export const BREAKER_COLUMNS = [
   'Generator',
   'Tags',
   'Notes',
+  'Frame (A)',
+  'Wire',
+  'Conduit',
+  'Starter',
+  'HP',
 ];
 
 /** One row per breaker, in panel order. Locations the reader cannot see are counted, not named. */
@@ -58,6 +65,7 @@ export function breakerRows(panel: PanelDetail): (string | number | boolean | nu
     ].join('; ');
     const feeds = [
       ...b.feeds.map((f) => f.panelName),
+      ...b.feedsDevices.map((d) => d.name),
       ...(b.hiddenFeeds ? [`${b.hiddenFeeds} more not shown`] : []),
     ].join('; ');
     return [
@@ -69,6 +77,8 @@ export function breakerRows(panel: PanelDetail): (string | number | boolean | nu
       isRelayPanel(panel) ? 'Relay' : DEVICE_LABELS[b.device],
       // A surge protector without breakers has no rating.
       b.amps === 0 ? '' : b.amps,
+      b.loadVa ?? '',
+      b.loadVa && b.demandPct !== null ? b.demandPct : '',
       b.label,
       PROTECTION_LABELS[b.protection],
       b.critical,
@@ -85,6 +95,11 @@ export function breakerRows(panel: PanelDetail): (string | number | boolean | nu
       panel.generator ? panel.generator.name : '',
       b.tags.join('; '),
       b.notes,
+      b.frameAmps ?? '',
+      b.wire,
+      b.conduit,
+      b.starter,
+      b.hp ?? '',
     ];
   });
 }

@@ -98,10 +98,100 @@ describe('QR code links', () => {
   it('lead to the public page when there is one and it is allowed', () => {
     const base = { qrBase: 'https://b.example', publicPanels: true };
     expect(panelQrUrl(base, { id: 4, publicPath: '/p/abc' })).toBe('https://b.example/p/abc');
-    expect(panelQrUrl(base, { id: 4, publicPath: null })).toBe('https://b.example/panels/4');
+    expect(panelQrUrl(base, { id: 4, publicPath: null })).toBe('https://b.example/panels/4/field');
     expect(panelQrUrl({ ...base, publicPanels: false }, { id: 4, publicPath: '/p/abc' })).toBe(
-      'https://b.example/panels/4',
+      'https://b.example/panels/4/field',
     );
     expect(panelQrUrl({ ...base, qrBase: null }, { id: 4, publicPath: '/p/abc' })).toBeNull();
+  });
+});
+
+describe('discrepancy reports', () => {
+  it('come from the public page without signing in, and are resolved by an editor', async () => {
+    const h = await home();
+    const token = (await share(h.admin, h.panel, { enabled: true })).body.publicPath.slice(3);
+    const anon = new Client(app);
+    const sent = await anon.post(`/api/public/panels/${token}/reports`, {
+      position: 1,
+      message: 'Breaker 1 turns off the dishwasher, not the fridge',
+      name: 'Sam (plumber)',
+    });
+    expect(sent.status).toBe(200);
+    // Bots filling the hidden field are thanked and ignored; unknown circuits are refused.
+    expect((await anon.post(`/api/public/panels/${token}/reports`, { message: 'spam', website: 'x' })).status).toBe(
+      200,
+    );
+    expect((await anon.post(`/api/public/panels/${token}/reports`, { position: 9, message: 'x' })).status).toBe(400);
+    expect((await anon.post(`/api/public/panels/nope-nope-nope-nope/reports`, { message: 'x' })).status).toBe(404);
+
+    expect((await h.admin.get(`/api/panels/${h.panel}`)).body.openReports).toBe(1);
+    const [report] = (await h.admin.get('/api/reports')).body;
+    expect(report).toMatchObject({
+      panelName: 'Main panel',
+      circuit: '1 Fridge',
+      reporter: 'Sam (plumber)',
+      source: 'public',
+      status: 'open',
+      canResolve: true,
+    });
+
+    // A viewer sees it but cannot resolve it.
+    const viewer = await invite(app, h.admin, h.site, 'viewer', 'viewer');
+    expect((await viewer.get(`/api/panels/${h.panel}/reports`)).body[0]).toMatchObject({ canResolve: false });
+    expect((await viewer.req('PATCH', `/api/reports/${report.id}`, { status: 'resolved' })).status).toBe(403);
+
+    const done = await h.admin.req('PATCH', `/api/reports/${report.id}`, {
+      status: 'resolved',
+      resolution: 'Relabelled circuit 1',
+    });
+    expect(done.body).toMatchObject({
+      status: 'resolved',
+      resolvedBy: expect.any(String),
+      resolution: 'Relabelled circuit 1',
+    });
+    expect((await h.admin.get('/api/reports')).body).toEqual([]);
+    expect((await h.admin.get('/api/reports?status=all')).body).toHaveLength(1);
+    const log = (await h.admin.get('/api/activity')).body;
+    expect(JSON.stringify(log)).toContain('Problem reported from the public page of Main panel by Sam (plumber)');
+  });
+
+  it('come from field mode once, even when sent again after being offline, and can mark the circuit wrong', async () => {
+    const h = await home();
+    const breakerId = (await h.admin.get(`/api/panels/${h.panel}`)).body.breakers[0].id;
+    const body = {
+      breakerId,
+      message: 'Label says fridge; it is the dishwasher',
+      clientId: 'field-abc12345',
+      markWrong: true,
+    };
+    const first = await h.admin.post(`/api/panels/${h.panel}/reports`, body);
+    expect(first.status).toBe(200);
+    const again = await h.admin.post(`/api/panels/${h.panel}/reports`, body);
+    expect(again.body.id).toBe(first.body.id);
+    expect((await h.admin.get(`/api/panels/${h.panel}/reports`)).body).toHaveLength(1);
+    const panel = (await h.admin.get(`/api/panels/${h.panel}`)).body;
+    expect(panel.breakers[0]).toMatchObject({ verifyStatus: 'wrong' });
+    expect(panel.openReports).toBe(1);
+
+    // Viewers may report but not mark circuits wrong.
+    const viewer = await invite(app, h.admin, h.site, 'viewer', 'viewer');
+    expect((await viewer.post(`/api/panels/${h.panel}/reports`, { breakerId, message: 'Hot to touch' })).status).toBe(
+      200,
+    );
+    expect(
+      (await viewer.post(`/api/panels/${h.panel}/reports`, { breakerId, message: 'x', markWrong: true })).status,
+    ).toBe(403);
+  });
+});
+
+describe('QR door stickers', () => {
+  it('print for one panel or every panel in a place', async () => {
+    const h = await home();
+    const one = await h.admin.raw(`/api/panels/${h.panel}/pdf?style=qr`);
+    expect(one.status).toBe(200);
+    expect(one.headers['content-type']).toBe('application/pdf');
+    const all = await h.admin.raw(`/api/locations/${h.site}/pdf?style=qr&skip=3`);
+    expect(all.status).toBe(200);
+    expect(all.headers['content-disposition']).toContain('QR door stickers');
   });
 });

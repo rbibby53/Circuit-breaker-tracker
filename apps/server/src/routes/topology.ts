@@ -1,10 +1,12 @@
 // Power flow for a location: where power comes from (the utility, generators through transfer
-// switches) and how it reaches each panel, sub-panel and relay panel. Panels inside the location
+// switches) and how it reaches each transformer, panel, sub-panel and relay panel. Panels inside the location
 // are shown with everything upstream of them, so the path back to the service is complete.
 
 import {
+  ATS_DUTY_SHORT,
   canView,
   circuitLabel,
+  deviceRating,
   generatorRating,
   isRelayPanel,
   isWithin,
@@ -18,21 +20,26 @@ import { actorOf, requireAuth } from '../context';
 import type { DB } from '../db';
 import { idParam, notFound } from '../errors';
 import {
+  allDevices,
   allPanels,
   breakersOf,
   canViewPanel,
+  deviceFeed,
+  deviceShape,
   generatorFor,
   getBreaker,
+  getDevice,
   getGenerator,
   getTransferSwitch,
+  panelFeed,
   type BreakerRow,
+  type DeviceRow,
+  type FeedRef,
   type GeneratorRow,
   type PanelRow,
   type TransferSwitchRow,
 } from '../panels';
 import { AccessData } from '../repo';
-
-const MAX_UPSTREAM = 50;
 
 export function topologyRoutes(app: FastifyInstance, db: DB): void {
   app.get('/api/locations/:id/topology', async (req): Promise<Topology> => {
@@ -124,7 +131,11 @@ export function topologyRoutes(app: FastifyInstance, db: DB): void {
           id: key,
           kind: 'ats',
           name: seen ? t.name : 'Transfer switch',
-          detail: seen ? [ATS_KIND_LABELS[t.kind], t.amps ? `${t.amps} A` : ''].filter(Boolean).join(' · ') : '',
+          detail: seen
+            ? [ATS_DUTY_SHORT[t.duty] || ATS_KIND_LABELS[t.kind], t.amps ? `${t.amps} A` : '']
+                .filter(Boolean)
+                .join(' · ')
+            : '',
           href: seen && t.generator_id ? `/generators/${t.generator_id}` : null,
           locationPath: seen ? access.pathLabel(t.location_id) : '',
           onGenerator: !!t.generator_id,
@@ -157,40 +168,78 @@ export function topologyRoutes(app: FastifyInstance, db: DB): void {
     const feederLabel = (feeder: BreakerRow, feederPanel: PanelRow) =>
       `${circuitLabel(feederPanel, feeder)}${feeder.amps ? ` · ${feeder.amps} A` : ''}`;
 
+    const deviceNode = (d: DeviceRow): string => {
+      const key = `d${d.id}`;
+      if (!nodes.has(key)) {
+        const seen = canSeeLocation(d.location_id);
+        nodes.set(key, {
+          id: key,
+          kind: d.kind,
+          name: d.name,
+          detail: deviceRating(deviceShape(d)),
+          href: seen ? `/devices/${d.id}` : null,
+          locationPath: seen ? access.pathLabel(d.location_id) : '',
+          onGenerator: false,
+          critical: 0,
+          inScope: inside(d.location_id),
+        });
+      }
+      return key;
+    };
+
+    // Each panel and device is walked once; marking it first stops any loop in the data.
+    const walkedPanels = new Set<number>();
+    const walkedDevices = new Set<number>();
+
+    /** The node a feed comes from (walking everything above it), and the label for its line. */
+    const sourceOf = (feed: FeedRef): { key: string; label: string } | null => {
+      if (feed.breakerId) {
+        const feeder = getBreaker(db, feed.breakerId);
+        const feederPanel = feeder ? panels.get(feeder.panel_id) : undefined;
+        if (!feeder || !feederPanel) return null;
+        walkPanel(feederPanel);
+        return { key: panelNode(feederPanel), label: feederLabel(feeder, feederPanel) };
+      }
+      if (feed.deviceId) {
+        const d = getDevice(db, feed.deviceId);
+        if (!d) return null;
+        walkDevice(d);
+        return { key: deviceNode(d), label: '' };
+      }
+      return null;
+    };
+
+    /** A device and everything above it. A utility service is where power comes in. */
+    const walkDevice = (d: DeviceRow) => {
+      if (walkedDevices.has(d.id)) return;
+      walkedDevices.add(d.id);
+      const key = deviceNode(d);
+      const source = sourceOf(deviceFeed(d));
+      if (source) addEdge({ from: source.key, to: key, kind: 'feed', label: source.label });
+    };
+
     /** A panel and everything above it, with the edges that bring power to it. */
-    const visit = (start: PanelRow) => {
-      let p: PanelRow | undefined = start;
-      for (let steps = 0; p && steps < MAX_UPSTREAM; steps++) {
-        const key = panelNode(p);
-        const done = edges.some((e) => e.to === key || (p!.ats_id && e.to === `a${p!.ats_id}`));
-        const feeder: BreakerRow | undefined = p.fed_from_breaker_id
-          ? getBreaker(db, p.fed_from_breaker_id)
-          : undefined;
-        const feederPanel: PanelRow | undefined = feeder ? panels.get(feeder.panel_id) : undefined;
-        const source = feeder && feederPanel ? panelNode(feederPanel) : null;
-        const ats = p.ats_id ? getTransferSwitch(db, p.ats_id) : undefined;
-        if (ats) {
-          const a = atsNode(ats);
-          addEdge({ from: a, to: key, kind: 'load', label: '' });
-          addEdge({
-            from: source ?? utility(),
-            to: a,
-            kind: 'normal',
-            label: feeder && feederPanel ? feederLabel(feeder, feederPanel) : 'Normal',
-          });
-        } else if (source) {
-          addEdge({ from: source, to: key, kind: 'feed', label: feederLabel(feeder!, feederPanel!) });
-        } else if (!isRelayPanel(p)) {
-          addEdge({ from: utility(), to: key, kind: 'feed', label: p.main_type === 'lugs' ? 'Feed not set' : '' });
-        }
-        if (p.generator_id) {
-          const g = getGenerator(db, p.generator_id);
-          if (g) addEdge({ from: generatorNode(g), to: key, kind: 'backup', label: p.transfer_switch || 'Backup' });
-        }
-        if (done) break;
-        p = feederPanel;
+    const walkPanel = (p: PanelRow) => {
+      if (walkedPanels.has(p.id)) return;
+      walkedPanels.add(p.id);
+      const key = panelNode(p);
+      const source = sourceOf(panelFeed(p));
+      const ats = p.ats_id ? getTransferSwitch(db, p.ats_id) : undefined;
+      if (ats) {
+        const a = atsNode(ats);
+        addEdge({ from: a, to: key, kind: 'load', label: '' });
+        addEdge({ from: source?.key ?? utility(), to: a, kind: 'normal', label: source?.label || 'Normal' });
+      } else if (source) {
+        addEdge({ from: source.key, to: key, kind: 'feed', label: source.label });
+      } else if (!isRelayPanel(p)) {
+        addEdge({ from: utility(), to: key, kind: 'feed', label: p.main_type === 'lugs' ? 'Feed not set' : '' });
+      }
+      if (p.generator_id) {
+        const g = getGenerator(db, p.generator_id);
+        if (g) addEdge({ from: generatorNode(g), to: key, kind: 'backup', label: p.transfer_switch || 'Backup' });
       }
     };
+    const visit = walkPanel;
 
     const inScope = [...panels.values()].filter((p) => inside(p.location_id) && canViewPanel(actor, access, p));
     for (const p of inScope) visit(p);
@@ -216,6 +265,10 @@ export function topologyRoutes(app: FastifyInstance, db: DB): void {
     }
     for (const t of db.prepare('SELECT * FROM transfer_switches').all() as TransferSwitchRow[]) {
       if (inside(t.location_id) && canSeeLocation(t.location_id)) atsNode(t);
+    }
+    // Transformers, disconnects, UPSs and services here, with what feeds them.
+    for (const d of allDevices(db)) {
+      if (inside(d.location_id) && canSeeLocation(d.location_id)) walkDevice(d);
     }
 
     const l = access.byId.get(id)!;

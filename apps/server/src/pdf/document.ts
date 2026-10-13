@@ -63,13 +63,15 @@ export function printedLine(ctx: Pick<PrintContext, 'now' | 'timeZone' | 'printe
   return ctx.printedBy ? `${text} by ${ctx.printedBy}` : text;
 }
 
-/** Where a panel's QR code leads: its public page when shared, otherwise the panel in the app. */
+/** Where a panel's QR code leads: its public page when shared, otherwise field mode in the app (it is scanned with a phone). */
 export function panelQrUrl(
   ctx: Pick<PrintContext, 'qrBase' | 'publicPanels'>,
   panel: { id: number; publicPath: string | null },
 ): string | null {
   if (!ctx.qrBase) return null;
-  return ctx.publicPanels && panel.publicPath ? `${ctx.qrBase}${panel.publicPath}` : `${ctx.qrBase}/panels/${panel.id}`;
+  return ctx.publicPanels && panel.publicPath
+    ? `${ctx.qrBase}${panel.publicPath}`
+    : `${ctx.qrBase}/panels/${panel.id}/field`;
 }
 
 export function formatDate(iso: string | Date, ctx: Pick<PrintContext, 'timeZone'>): string {

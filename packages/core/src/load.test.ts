@@ -18,8 +18,8 @@ describe('panel load', () => {
     const panel = { layout: 'residential' as const, spaces: 12 };
     const load = panelLoad(panel, [b(1, 50, 2), b(2, 20), b(4, 15), b(6, 20, 1, true)]);
     expect(load.legs).toEqual([
-      { leg: 'L1', amps: 70, circuits: 2 },
-      { leg: 'L2', amps: 65, circuits: 2 },
+      { leg: 'L1', amps: 70, circuits: 2, va: 0, demandVa: 0, loadAmps: 0 },
+      { leg: 'L2', amps: 65, circuits: 2, va: 0, demandVa: 0, loadAmps: 0 },
     ]);
     expect(load).toMatchObject({ circuits: 3, spares: 1, freeSpaces: 7, warning: null });
   });

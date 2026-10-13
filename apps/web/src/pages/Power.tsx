@@ -34,6 +34,10 @@ const KIND_NAMES: Record<TopologyKind, string> = {
   ats: 'Transfer switch',
   generator: 'Generator',
   hidden: 'Panel',
+  transformer: 'Transformer',
+  disconnect: 'Disconnect',
+  ups: 'UPS',
+  service: 'Utility service',
 };
 
 const EDGE_NAMES: Record<TopologyEdge['kind'], string> = {

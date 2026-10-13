@@ -10,7 +10,7 @@ import { disposition } from '../download';
 import { canViewPanel, getPanel, panelDetail } from '../panels';
 import { drawBook, drawRoomIndex } from '../pdf/book';
 import { Pdf, safeTimeZone, type PrintContext } from '../pdf/document';
-import { STRIP_PITCHES, drawLabelSheet, drawLabelStrips } from '../pdf/labels';
+import { STRIP_PITCHES, drawLabelSheet, drawLabelStrips, drawQrLabels } from '../pdf/labels';
 import { drawDoorCard, drawPanelSheet } from '../pdf/panel';
 import { AccessData } from '../repo';
 import { panelsUnder, roomIndex } from '../roomIndex';
@@ -22,13 +22,17 @@ const common = {
 };
 const panelQuery = z.object({
   ...common,
-  style: z.enum(['sheet', 'door', 'labels', 'strips']).default('sheet'),
+  style: z.enum(['sheet', 'door', 'labels', 'strips', 'qr']).default('sheet'),
   /** Label sheets: blank labels to leave at the start, for a partly used sheet. */
   skip: z.coerce.number().int().min(0).max(200).default(0),
   /** Label strips: the spacing between breakers, in inches. */
   pitch: z.enum(STRIP_PITCHES).default('1'),
 });
-const locationQuery = z.object({ ...common, style: z.enum(['book', 'index']).default('book') });
+const locationQuery = z.object({
+  ...common,
+  style: z.enum(['book', 'index', 'qr']).default('book'),
+  skip: z.coerce.number().int().min(0).max(200).default(0),
+});
 
 export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
   const context = (tz: string | undefined, auth: AuthState): PrintContext => {
@@ -71,8 +75,11 @@ export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
     if (q.style === 'door') drawDoorCard(pdf, detail);
     else if (q.style === 'labels') drawLabelSheet(pdf, paper, detail, q.skip);
     else if (q.style === 'strips') drawLabelStrips(pdf, detail, q.pitch);
+    else if (q.style === 'qr') drawQrLabels(pdf, paper, [detail], q.skip);
     else drawPanelSheet(pdf, detail);
-    const suffix = { sheet: '', door: ' door card', labels: ' labels', strips: ' label strips' }[q.style];
+    const suffix = { sheet: '', door: ' door card', labels: ' labels', strips: ' label strips', qr: ' QR sticker' }[
+      q.style
+    ];
     const name = `${detail.name}${suffix}`;
     return send(reply, await pdf.finish(), name, q.download === '1');
   });
@@ -87,9 +94,16 @@ export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
     if (!root || !canView(actor, access.node(id)!, access.grants)) throw notFound();
 
     const ctx = context(q.tz, auth);
+    const paper = q.paper ?? config.settings.get('paperSize');
+    if (q.style === 'qr') {
+      const pdf = new Pdf(paper, `${root.name} QR door stickers`, ctx);
+      const panels = panelsUnder(db, actor, access, root).map((p) => panelDetail(db, actor, access, p));
+      drawQrLabels(pdf, paper, panels, q.skip);
+      return send(reply, await pdf.finish(), `${root.name} QR door stickers`, q.download === '1');
+    }
     const index = roomIndex(db, actor, access, id);
     const kindLabel = KIND_LABELS[root.kind];
-    const pdf = new Pdf(q.paper ?? config.settings.get('paperSize'), `${root.name} panel directory`, ctx);
+    const pdf = new Pdf(paper, `${root.name} panel directory`, ctx);
 
     if (q.style === 'index') {
       drawRoomIndex(pdf, index);

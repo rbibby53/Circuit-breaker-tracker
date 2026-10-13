@@ -52,6 +52,34 @@ const GeneratorPage = lazyPage(
   () => import('./pages/Generators'),
   (m) => m.GeneratorPage,
 );
+const DevicePage = lazyPage(
+  () => import('./pages/Devices'),
+  (m) => m.DevicePage,
+);
+const EquipmentListPage = lazyPage(
+  () => import('./pages/Equipment'),
+  (m) => m.EquipmentListPage,
+);
+const EquipmentPage = lazyPage(
+  () => import('./pages/Equipment'),
+  (m) => m.EquipmentPage,
+);
+const ImportPage = lazyPage(
+  () => import('./pages/Import'),
+  (m) => m.ImportPage,
+);
+const ReportsPage = lazyPage(
+  () => import('./pages/Reports'),
+  (m) => m.ReportsPage,
+);
+const FieldPanelPage = lazyPage(
+  () => import('./pages/Field'),
+  (m) => m.FieldPanelPage,
+);
+const FieldIndexPage = lazyPage(
+  () => import('./pages/Field'),
+  (m) => m.FieldIndexPage,
+);
 const PowerPage = lazyPage(
   () => import('./pages/Power'),
   (m) => m.PowerPage,
@@ -99,13 +127,22 @@ const UsersPage = lazyPage(
 
 applyTheme();
 
+// Field mode works without signal through a service worker (production builds only).
+if ('serviceWorker' in navigator && import.meta.env.PROD) {
+  window.addEventListener('load', () => {
+    navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+  });
+}
+
 /** A 401 anywhere means the session ended (expired, signed out elsewhere): re-check who we are. */
 const onError = (err: unknown) => {
   if (err instanceof ApiError && err.status === 401) void queryClient.invalidateQueries({ queryKey: ['me'] });
 };
 
 const queryClient: QueryClient = new QueryClient({
-  defaultOptions: { queries: { refetchOnWindowFocus: false } },
+  // offlineFirst: reads are tried even without a connection, so field mode can be served from the
+  // copies the service worker keeps.
+  defaultOptions: { queries: { refetchOnWindowFocus: false, networkMode: 'offlineFirst' } },
   queryCache: new QueryCache({ onError: (err, query) => query.queryKey[0] !== 'me' && onError(err) }),
   mutationCache: new MutationCache({ onError }),
 });
@@ -131,8 +168,15 @@ createRoot(document.getElementById('root')!).render(
               >
                 <Route path="/" element={<SitesPage />} />
                 <Route path="/panels/:id" element={<PanelEditorPage />} />
+                <Route path="/panels/:id/field" element={<FieldPanelPage />} />
+                <Route path="/field" element={<FieldIndexPage />} />
                 <Route path="/generators/:id" element={<GeneratorPage />} />
                 <Route path="/power" element={<PowerPage />} />
+                <Route path="/devices/:id" element={<DevicePage />} />
+                <Route path="/equipment" element={<EquipmentListPage />} />
+                <Route path="/equipment/:id" element={<EquipmentPage />} />
+                <Route path="/import" element={<ImportPage />} />
+                <Route path="/reports" element={<ReportsPage />} />
                 <Route path="/access" element={<AccessPage />} />
                 <Route path="/users" element={<UsersPage />} />
                 <Route path="/activity" element={<ActivityPage />} />
