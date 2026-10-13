@@ -13,8 +13,9 @@ import { useTitle } from '../lib/useTitle';
 import { useLocations, usePanels } from '../queries';
 import { ancestry, buildTree, hiddenBuilding, shownChildren, type TreeNode } from '../tree';
 import { VerifyProgressCard } from '../components/Progress';
-import { AddDeviceForm, DevicesHere } from './Devices';
+import { AddDeviceForm, CampusFeedCard, DevicesHere } from './Devices';
 import { AddEquipmentForm, EquipmentHere, RoomLinkSuggestions } from './Equipment';
+import { MetersHere } from './Meters';
 import { AddGeneratorForm, GeneratorsHere } from './Generators';
 import { AddPanelForm, PanelsHere, ServedBy } from './SitePanels';
 
@@ -276,10 +277,12 @@ function LocationView({
       {!crumbOnly && node.kind !== 'room' && (
         <VerifyProgressCard key={`vp-${node.id}`} locationId={node.id} name={node.name} />
       )}
+      {!crumbOnly && node.kind === 'building' && <CampusFeedCard key={`cf-${node.id}`} locationId={node.id} />}
       <PanelsHere node={node} byId={byId} />
       <GeneratorsHere node={node} byId={byId} />
       <DevicesHere node={node} byId={byId} />
       <EquipmentHere node={node} byId={byId} />
+      <MetersHere node={node} byId={byId} />
       {(node.kind === 'site' || node.kind === 'building') && canEdit && (
         <RoomLinkSuggestions key={`rl-${node.id}`} node={node} />
       )}
@@ -296,6 +299,11 @@ function LocationView({
           {node.kind !== 'company' && <AddGeneratorForm key={`gen-${node.id}`} locationId={node.id} />}
           {node.kind !== 'company' && <AddDeviceForm key={`dev-${node.id}`} locationId={node.id} />}
           {node.kind !== 'company' && <AddEquipmentForm key={`eq-${node.id}`} locationId={node.id} />}
+          {node.kind !== 'company' && (
+            <Link className="btn" to={`/meters/new?loc=${node.id}`}>
+              + Add a meter
+            </Link>
+          )}
           {node.kind !== 'company' && (
             <Link className="btn" to={`/import?loc=${node.id}`}>
               Import from a spreadsheet

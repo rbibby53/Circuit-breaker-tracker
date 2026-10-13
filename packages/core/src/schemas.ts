@@ -225,6 +225,8 @@ export const savePanelSchema = createPanelSchema.extend({
   fedFromBreakerId: z.number().int().positive().nullable().optional(),
   /** A transformer, disconnect, UPS or service feeding it instead of a breaker. Omit to leave unchanged. */
   fedFromDeviceId: z.number().int().positive().nullable().optional(),
+  /** Which way (position) of a switching cube or other device feeds it, e.g. "Way 3". Omit to leave unchanged. */
+  fedWay: z.string().trim().max(20).optional(),
   /** Omit any of these to leave them as they are. */
   generatorId: z.number().int().positive().nullable().optional(),
   transferSwitch: z.string().trim().max(40).optional(),
@@ -317,6 +319,8 @@ export const powerDeviceInputSchema = z.object({
   /** What feeds it: a breaker, or another device (one or neither). Omit to leave unchanged. */
   fedFromBreakerId: z.number().int().positive().nullable().optional(),
   fedFromDeviceId: z.number().int().positive().nullable().optional(),
+  /** Which way of the device feeding it, e.g. "Way 3" of a switching cube. Omit to leave unchanged. */
+  fedWay: z.string().trim().max(20).optional(),
 });
 
 export type PowerDeviceInput = z.infer<typeof powerDeviceInputSchema>;
@@ -382,3 +386,50 @@ export const resolveReportSchema = z.object({
   status: z.enum(['open', 'resolved']),
   resolution: optionalText(1000),
 });
+
+export const METER_PROTOCOLS = ['', 'modbus-tcp', 'modbus-rtu', 'bacnet-ip', 'bacnet-mstp', 'pulse', 'other'] as const;
+export type MeterProtocol = (typeof METER_PROTOCOLS)[number];
+export const METER_PROTOCOL_LABELS: Record<MeterProtocol, string> = {
+  '': 'None',
+  'modbus-tcp': 'Modbus TCP',
+  'modbus-rtu': 'Modbus RTU',
+  'bacnet-ip': 'BACnet/IP',
+  'bacnet-mstp': 'BACnet MS/TP',
+  pulse: 'Pulse output',
+  other: 'Other',
+};
+
+/**
+ * A meter and what it measures: one breaker's circuit (a meter fed from a breaker), a whole panel
+ * or switchboard at its main, or a transformer, switching cube or other device. At most one.
+ */
+export const meterInputSchema = z
+  .object({
+    name: z.string().trim().min(1, 'Give it a name, e.g. M-MSB1.').max(60),
+    locationId: z.number().int().positive(),
+    meterNumber: optionalText(60),
+    manufacturer: optionalText(80),
+    model: optionalText(80),
+    serial: optionalText(60),
+    /** "2000:5" */
+    ctRatio: optionalText(30),
+    /** "480:120" */
+    ptRatio: optionalText(30),
+    multiplier: z.number().positive().max(1_000_000).nullable().default(null),
+    protocol: z.enum(METER_PROTOCOLS).default(''),
+    /** IP address and unit ID, MS/TP MAC, BACnet device instance… */
+    address: optionalText(120),
+    notes: optionalText(2000),
+    panelId: z.number().int().positive().nullable().default(null),
+    breakerId: z.number().int().positive().nullable().default(null),
+    deviceId: z.number().int().positive().nullable().default(null),
+  })
+  .refine((m) => [m.panelId, m.breakerId, m.deviceId].filter((x) => x !== null).length <= 1, {
+    message: 'A meter measures one thing: a breaker, a panel or a device.',
+    path: ['panelId'],
+  });
+
+export type MeterInput = z.infer<typeof meterInputSchema>;
+
+/** Set the field check of a meter. */
+export const verifyMeterSchema = z.object({ status: z.enum(VERIFY_STATUSES) });

@@ -13,14 +13,32 @@ export interface VoltageInfo {
 const SQRT3 = Math.sqrt(3);
 
 /** Standard pairs: the line-to-neutral voltage that goes with each line-to-line one. */
-const NEUTRAL_OF: Record<number, number> = { 208: 120, 480: 277, 600: 347, 415: 240, 400: 230 };
+const NEUTRAL_OF: Record<number, number> = {
+  208: 120,
+  480: 277,
+  600: 347,
+  415: 240,
+  400: 230,
+  // Medium-voltage distribution.
+  4160: 2400,
+  12470: 7200,
+  13200: 7620,
+  13800: 7970,
+  24940: 14400,
+  34500: 19920,
+};
 
 /**
  * What a voltage label means, or null when there is no number in it. A label without a phase
  * count is taken as three-phase when its pair is a three-phase one (120/208, 277/480).
  */
 export function parseVoltage(text: string, fallbackPhases?: 1 | 3): VoltageInfo | null {
-  const nums = (text.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter((n) => n >= 24 && n <= 35000);
+  // Medium voltage is usually written in kV: "12.47 kV", "7.2/12.47 kV". Those become volts.
+  const volts = text.replace(
+    /((?:\d+(?:\.\d+)?\s*\/\s*)*\d+(?:\.\d+)?)\s*kv\b/gi,
+    (_, group: string) => `${group.replace(/\d+(?:\.\d+)?/g, (n) => String(Math.round(Number(n) * 1000)))} V`,
+  );
+  const nums = (volts.match(/\d+(?:\.\d+)?/g) ?? []).map(Number).filter((n) => n >= 24 && n <= 35000);
   // "3-phase", "3 phase", "3ph", "3Ø": that number is a phase count, not a voltage.
   const three = /\b3\s*-?\s*(?:phase|ph\b|ø|φ)|three[-\s]?phase/i.test(text);
   const single = /\b1\s*-?\s*(?:phase|ph\b|ø|φ)|single[-\s]?phase|split[-\s]?phase/i.test(text);

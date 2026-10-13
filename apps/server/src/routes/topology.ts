@@ -192,7 +192,7 @@ export function topologyRoutes(app: FastifyInstance, db: DB): void {
     const walkedDevices = new Set<number>();
 
     /** The node a feed comes from (walking everything above it), and the label for its line. */
-    const sourceOf = (feed: FeedRef): { key: string; label: string } | null => {
+    const sourceOf = (feed: FeedRef, way = ''): { key: string; label: string } | null => {
       if (feed.breakerId) {
         const feeder = getBreaker(db, feed.breakerId);
         const feederPanel = feeder ? panels.get(feeder.panel_id) : undefined;
@@ -204,7 +204,8 @@ export function topologyRoutes(app: FastifyInstance, db: DB): void {
         const d = getDevice(db, feed.deviceId);
         if (!d) return null;
         walkDevice(d);
-        return { key: deviceNode(d), label: '' };
+        // A switching cube's way, e.g. "Way 3".
+        return { key: deviceNode(d), label: way };
       }
       return null;
     };
@@ -214,7 +215,7 @@ export function topologyRoutes(app: FastifyInstance, db: DB): void {
       if (walkedDevices.has(d.id)) return;
       walkedDevices.add(d.id);
       const key = deviceNode(d);
-      const source = sourceOf(deviceFeed(d));
+      const source = sourceOf(deviceFeed(d), d.fed_way);
       if (source) addEdge({ from: source.key, to: key, kind: 'feed', label: source.label });
     };
 
@@ -223,7 +224,7 @@ export function topologyRoutes(app: FastifyInstance, db: DB): void {
       if (walkedPanels.has(p.id)) return;
       walkedPanels.add(p.id);
       const key = panelNode(p);
-      const source = sourceOf(panelFeed(p));
+      const source = sourceOf(panelFeed(p), p.fed_way);
       const ats = p.ats_id ? getTransferSwitch(db, p.ats_id) : undefined;
       if (ats) {
         const a = atsNode(ats);

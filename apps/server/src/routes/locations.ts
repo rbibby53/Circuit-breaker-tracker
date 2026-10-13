@@ -179,6 +179,8 @@ export function locationRoutes(app: FastifyInstance, db: DB): void {
       n: number;
     };
     if (switches.n > 0) throw conflict(`Delete or move the transfer switches in ${node.name} first.`);
+    const meters = db.prepare('SELECT COUNT(*) AS n FROM meters WHERE location_id = ?').get(id) as { n: number };
+    if (meters.n > 0) throw conflict(`Delete or move the meters in ${node.name} first.`);
 
     audit(
       db,

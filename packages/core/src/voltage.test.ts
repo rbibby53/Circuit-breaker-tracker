@@ -6,6 +6,10 @@ describe('voltages', () => {
   it('reads the labels people write', () => {
     expect(parseVoltage('277/480 V 3-phase')).toEqual({ lineToNeutral: 277, lineToLine: 480, phases: 3 });
     expect(parseVoltage('120/208 V')).toEqual({ lineToNeutral: 120, lineToLine: 208, phases: 3 });
+    // Campus medium voltage, in kV.
+    expect(parseVoltage('12.47 kV 3-phase')).toEqual({ lineToNeutral: 7200, lineToLine: 12470, phases: 3 });
+    expect(parseVoltage('7.2/12.47 kV')).toEqual({ lineToNeutral: 7200, lineToLine: 12470, phases: 3 });
+    expect(parseVoltage('13.2kV')?.lineToLine).toBe(13200);
     expect(parseVoltage('120/240 V split-phase')).toEqual({ lineToNeutral: 120, lineToLine: 240, phases: 1 });
     expect(parseVoltage('480 V')).toEqual({ lineToNeutral: 277, lineToLine: 480, phases: 3 });
     expect(parseVoltage('277 V')).toMatchObject({ lineToNeutral: 277, lineToLine: 480 });

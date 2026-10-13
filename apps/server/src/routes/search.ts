@@ -16,6 +16,7 @@ import {
   type GeneratorRow,
   type PanelRow,
 } from '../panels';
+import { measuresText, type MeterRow } from '../meters';
 import { AccessData } from '../repo';
 
 const LIMIT = 8;
@@ -34,7 +35,8 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
     const auth = requireAuth(req);
     const actor = actorOf(auth);
     const q = String((req.query as { q?: string }).q ?? '').trim();
-    if (q.length < 2) return { locations: [], panels: [], generators: [], devices: [], equipment: [], breakers: [] };
+    if (q.length < 2)
+      return { locations: [], panels: [], generators: [], devices: [], equipment: [], meters: [], breakers: [] };
     const pattern = like(q);
     const access = new AccessData(db);
     const visible = visibleLocations(actor, [...access.nodes.values()], access.grants);
@@ -98,6 +100,25 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
         fedFrom: nearestFeedText(upstream(db, equipmentFeed(e))),
       }));
 
+    // Meters by name, meter number or serial.
+    const meters = (
+      db
+        .prepare(
+          `SELECT * FROM meters WHERE name LIKE ? ESCAPE '\\' OR meter_number LIKE ? ESCAPE '\\' OR serial LIKE ? ESCAPE '\\'
+           ORDER BY name COLLATE NOCASE`,
+        )
+        .all(pattern, pattern, pattern) as MeterRow[]
+    )
+      .filter((m) => visible.get(m.location_id)?.access === 'full')
+      .slice(0, LIMIT)
+      .map((m) => ({
+        id: m.id,
+        name: m.name,
+        meterNumber: m.meter_number,
+        measures: measuresText(db, m),
+        path: access.pathLabel(m.location_id),
+      }));
+
     // Breakers matching by tag, label or notes, or serving a matching place. Tags come first:
     // searching "servers" should list every breaker tagged Servers.
     const byTag = db
@@ -152,7 +173,7 @@ export function searchRoutes(app: FastifyInstance, db: DB): void {
     for (const b of byText) add(b, null);
     for (const b of byPlace) add(b, access.byId.get(b.served)?.name ?? null);
 
-    return { locations, panels, generators, devices, equipment, breakers };
+    return { locations, panels, generators, devices, equipment, meters, breakers };
   });
 
   /** Tags on breakers the person can see, most used first, for suggestions and filters. */

@@ -92,14 +92,24 @@ as a single Docker container with its data in one SQLite file.
   each other, with kVA and primary and secondary voltage, fused or non-fused amps, UPS
   runtime, or the meter and utility. Panels can be fed from them, and the power path, map,
   PDFs and CSV show the step, e.g. HA 480 V → T-LDP1 (75 kVA · 480 V → 120/208 V) → LP-1A.
+- **Campus grids:** for sites that run their own distribution, **switching cubes** (pad-mounted
+  medium-voltage switchgear, e.g. 12.47 kV) feed each building's transformer or main switchboard
+  through a numbered way. Each building page shows the cube and way it ties back to, each cube
+  lists the buildings it feeds, and the power path and map show the way ("SC-2 · Way 3").
+- **Meters:** your own meters on switchgear, panels and circuits, with meter number, make, model,
+  serial, CT and PT ratios, multiplier, and how it talks (Modbus TCP/RTU, BACnet IP/MS-TP, pulse)
+  with its address. A meter measures a breaker's circuit (a meter fed from a breaker), a panel or
+  switchboard at its main, or a cube or transformer. Panels, breakers and devices list their
+  meters, and search finds them by name, number or serial.
 - **Equipment register:** AHU-1, EF-2, RTU-3 and the rest, with type, HP, voltage, room, and
   the breaker or disconnect feeding it. Search "AHU-2" to see what feeds it; breakers list
   the equipment on them.
 - **Room links from labels:** a building's page suggests which rooms a breaker serves when its
   label names a room number ("RECEPT ROOM 3002" → Room 3002), to accept in bulk.
-- **Field verification:** mark each circuit verified or wrong, with who and when, filter for
-  the ones not yet checked, and see progress by site, building and panel ("Science Hall: 62%
-  verified").
+- **Field verification:** mark each circuit or meter verified or wrong, with who and when, filter
+  for the ones not yet checked, and see progress by site, building and panel ("Science Hall: 62%
+  verified"). **Who verified what** lists every check, newest first, with a count per person,
+  filtered by place, person or result.
 - **Select several** breakers to set amps, poles, tags or the field check together, or move a
   range up or down.
 - **Field mode** for walking a panel with a phone: one circuit per row in big type, with
@@ -198,7 +208,13 @@ as a single Docker container with its data in one SQLite file.
 | ![Searching for equipment](docs/screenshots/equipment-search.png)                                      | ![Verification progress by building](docs/screenshots/verify-progress.png)              |
 | "What feeds AHU-2?" is one search.                                                                     | How far field checking has got, building by building.                                   |
 
+|                                                                             |                                                              |
+| --------------------------------------------------------------------------- | ------------------------------------------------------------ |
+| ![A building's campus feed](docs/screenshots/campus-feed.png)               | ![Who verified what](docs/screenshots/who-verified-what.png) |
+| A building ties back to switching cube SC-2, way 3, through its main panel. | Every check with who and when, and a count per person.       |
+
 <p align="center">
+  <img src="docs/screenshots/field-meters.png" alt="Checking meters in field mode on a phone" width="300">
   <img src="docs/screenshots/field-mode.png" alt="Field mode on a phone: big circuit rows with Matches and Doesn't match buttons" width="300">
   <img src="docs/screenshots/public-report.png" alt="Reporting a problem from a panel's public page" width="300">
 </p>

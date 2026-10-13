@@ -4,6 +4,30 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+### Added
+
+- **Switching cubes** for campuses that run their own grid: a new kind under **+ Add a
+  transformer, switching cube or disconnect**, with its voltage (kV is understood, e.g.
+  12.47 kV) and rating. Feed a building's transformer or main switchboard from it and say which
+  **way** (position) it comes off. Building pages show a **Campus feed** card with the cube and
+  way they tie back to, cube pages list the **Buildings fed**, and the power path and map label
+  the way.
+- **Meters:** a register of your own meters (**+ Add a meter** on a location, panel, breaker,
+  cube or transformer, and **Meters** from the Equipment page). Each has a meter number, make,
+  model, serial, CT and PT ratios, multiplier and communication (Modbus, BACnet, pulse) with its
+  address, and measures a breaker (a meter fed from a breaker), a panel's main, or a device.
+  Search finds meters by name, number or serial.
+- **Meter field checks:** verify a meter (or mark it wrong) from its page or in field mode,
+  which now lists the panel's meters above its circuits. Checks record who and when.
+- **Who verified what** (from **Field verification** on a site or building): every circuit and
+  meter check with who did it and when, newest first, with a count per person, filtered by
+  place, person and result.
+
+### Upgrading
+
+- One database update runs on start: the device table is rebuilt once (same rows) so new kinds
+  need no rebuild, and tables and columns are added for meters and feed ways.
+
 ## 1.3.0 — 2026-10-13
 
 The biggest release yet, from a list gathered from several people documenting large campuses:

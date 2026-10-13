@@ -84,6 +84,8 @@ export interface EditPanel {
   controlSystem: string;
   atsId: number | null;
   breakers: EditBreaker[];
+  /** Which way of the device feeding it, e.g. "Way 3" of a switching cube. */
+  fedWay: string;
 }
 
 let counter = 0;
@@ -104,6 +106,7 @@ export function fromDetail(p: PanelDetail): EditPanel {
     fedFromDeviceId: p.fedFromDeviceId,
     nameplate: { ...p.nameplate },
     sections: p.sections.map((x) => ({ ...x })),
+    fedWay: p.fedWay,
     generatorId: p.generatorId,
     transferSwitch: p.transferSwitch,
     controlSystem: p.controlSystem,
@@ -194,6 +197,7 @@ export function toRequest(doc: EditPanel, version: number, baselineFeed: string,
     atsId: doc.atsId,
     ...doc.nameplate,
     sections: doc.sections,
+    fedWay: doc.fedWay,
     version,
     breakers,
     ...(feedKey(doc) !== baselineFeed

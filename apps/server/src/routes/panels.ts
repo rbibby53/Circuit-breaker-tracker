@@ -368,7 +368,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         `UPDATE panels SET name = ?, layout = ?, spaces = ?, main_amps = ?, main_type = ?, voltage = ?, manufacturer = ?,
            model = ?, notes = ?, fed_from_breaker_id = ?, generator_id = ?, transfer_switch = ?, control_system = ?,
            ats_id = ?, fed_from_device_id = ?, aic_ka = ?, bus_amps = ?, mounting = ?, enclosure = ?, feeder_wire = ?,
-           feeder_conduit = ?, sections = ?
+           feeder_conduit = ?, sections = ?, fed_way = ?
          WHERE id = ?`,
       ).run(
         body.name,
@@ -393,6 +393,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
         body.feederWire ?? panel.feeder_wire,
         body.feederConduit ?? panel.feeder_conduit,
         JSON.stringify(sections),
+        // The way only means something on a device feed.
+        fedFromDevice ? (body.fedWay ?? panel.fed_way) : '',
         panel.id,
       );
 

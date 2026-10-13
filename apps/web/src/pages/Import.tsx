@@ -137,6 +137,7 @@ function newPanelDoc(p: ImportedPanel, layout: PanelLayout): EditPanel {
     fedFromBreakerId: null,
     fedFromDeviceId: null,
     nameplate: { aicKa: null, busAmps: null, mounting: '', enclosure: '', feederWire: '', feederConduit: '' },
+    fedWay: '',
     sections: Array.from({ length: sectionCount - 1 }, (_, i) => ({
       name: `Section ${i + 2}`,
       spaces: size(i + 2),

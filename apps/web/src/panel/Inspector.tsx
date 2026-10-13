@@ -21,6 +21,7 @@ import {
   sectionsOf,
   phasesOf,
   type BreakerDto,
+  type MeterSummary,
   type FeedCandidate,
   type Slot,
 } from '@cbt/core';
@@ -39,6 +40,10 @@ import { firstFitIn, sizeOf, validStarts, type EditBreaker, type EditPanel, type
 
 interface Props {
   panelId: number;
+  /** The panel's room, for adding a meter here. */
+  locationId: number;
+  /** Meters on this panel's main and breakers. */
+  meters: MeterSummary[];
   doc: EditPanel;
   breaker: EditBreaker;
   server: BreakerDto | undefined;
@@ -53,6 +58,8 @@ interface Props {
 
 export function Inspector({
   panelId,
+  locationId,
+  meters,
   doc,
   breaker: b,
   server,
@@ -175,6 +182,12 @@ export function Inspector({
         </dl>
         {(feeds.length > 0 || feedsDevices.length > 0) && <FeedsNote feeds={feeds} devices={feedsDevices} />}
         {server && <EquipmentNote breaker={server} />}
+        {server && !relay && (
+          <MeterNote
+            meters={meters.filter((m) => m.breakerId === server.id)}
+            add={readOnly ? null : `/meters/new?loc=${locationId}&panel=${panelId}&breaker=${server.id}`}
+          />
+        )}
         {server && <SwitchedByNote breaker={server} />}
         {b.notes && <p className="notes">{b.notes}</p>}
         {server && !relay && !b.isSpare && <ImpactButton query={`breaker=${server.id}`} />}
@@ -448,6 +461,12 @@ export function Inspector({
 
       {(feeds.length > 0 || feedsDevices.length > 0) && <FeedsNote feeds={feeds} devices={feedsDevices} />}
       {server && <EquipmentNote breaker={server} />}
+      {server && !relay && (
+        <MeterNote
+          meters={meters.filter((m) => m.breakerId === server.id)}
+          add={readOnly ? null : `/meters/new?loc=${locationId}&panel=${panelId}&breaker=${server.id}`}
+        />
+      )}
       {server && <SwitchedByNote breaker={server} />}
       {server && !relay && !b.isSpare && <ImpactButton query={`breaker=${server.id}`} />}
 
@@ -698,6 +717,29 @@ function UnitFields({
         </div>
       )}
     </>
+  );
+}
+
+/** The meters on this circuit, or a link to add one. */
+function MeterNote({ meters, add }: { meters: MeterSummary[]; add: string | null }) {
+  if (!meters.length && !add) return null;
+  return (
+    <p className="feeds-note">
+      {meters.length > 0 ? (
+        <>
+          Metered by{' '}
+          {meters.map((m, i) => (
+            <span key={m.id}>
+              {i > 0 && ', '}
+              <Link to={`/meters/${m.id}`}>{m.name}</Link>
+              {m.verifyStatus === 'verified' ? ' ✓' : m.verifyStatus === 'wrong' ? ' ✗' : ''}
+            </span>
+          ))}
+        </>
+      ) : (
+        <Link to={add!}>+ Add a meter on this circuit</Link>
+      )}
+    </p>
   );
 }
 

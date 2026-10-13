@@ -32,6 +32,7 @@ export function FeedChainStrip({
                 <NodeIcon kind={f.deviceKind} size={16} />
                 {f.canView ? <Link to={`/devices/${f.deviceId}`}>{f.name}</Link> : <strong>{f.name}</strong>}
                 {f.rating && <span className="ps-ckt">{f.rating}</span>}
+                {f.way && <span className="ps-ckt">{f.way}</span>}
               </li>
             ) : (
               <li key={f.breakerId} className="ps-chip">

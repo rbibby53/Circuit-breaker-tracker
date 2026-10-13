@@ -370,6 +370,34 @@ function Editor({
               </p>
             )}
             <PowerStrip panel={server} flowHref={flowHref} />
+            {(server.meters.length > 0 || !readOnly) && (
+              <p className="small panel-meters">
+                <NodeIcon kind="meter" size={16} />
+                {server.meters.length > 0 ? (
+                  <>
+                    Meters:{' '}
+                    {server.meters.map((m, i) => (
+                      <span key={m.id}>
+                        {i > 0 && ' · '}
+                        <Link to={`/meters/${m.id}`}>{m.name}</Link>
+                        <span className="muted">
+                          {' '}
+                          ({m.breakerId ? m.measures.replace(`${server.name} · `, 'circuit ') : 'main'})
+                        </span>
+                        {m.verifyStatus === 'verified' ? ' ✓' : m.verifyStatus === 'wrong' ? ' ✗' : ''}
+                      </span>
+                    ))}
+                  </>
+                ) : (
+                  <span className="muted">No meter recorded.</span>
+                )}
+                {!readOnly && (
+                  <Link className="panel-meters-add" to={`/meters/new?loc=${server.locationId}&panel=${server.id}`}>
+                    + Add a meter
+                  </Link>
+                )}
+              </p>
+            )}
           </div>
           <div className="toolbar">
             {!readOnly && <SaveBadge state={saveState} />}
@@ -590,6 +618,8 @@ function Editor({
           <Inspector
             key={selectedBreaker.key}
             panelId={initial.id}
+            locationId={initial.locationId}
+            meters={initial.meters}
             doc={doc}
             breaker={selectedBreaker}
             server={serverBreaker}
@@ -717,6 +747,7 @@ function PowerStrip({ panel, flowHref }: { panel: PanelDetail; flowHref: string 
                     {f.rating}
                   </span>
                 )}
+                {f.way && <span className="ps-ckt">{f.way}</span>}
               </li>
             ) : (
               <li key={f.breakerId} className="ps-chip">

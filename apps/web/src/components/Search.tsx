@@ -55,7 +55,8 @@ export function Search() {
     !r.panels.length &&
     !r.generators.length &&
     !r.devices.length &&
-    !r.equipment.length;
+    !r.equipment.length &&
+    !r.meters.length;
   const show = open && debounced.length >= 2;
 
   return (
@@ -189,9 +190,29 @@ export function Search() {
               </ul>
             </section>
           )}
+          {r && r.meters.length > 0 && (
+            <section>
+              <h3>Meters</h3>
+              <ul>
+                {r.meters.map((m) => (
+                  <li key={m.id}>
+                    <Link to={`/meters/${m.id}`} onClick={done}>
+                      <span className="search-main">
+                        <span className="strong">{m.name}</span>{' '}
+                        <span className="muted small">
+                          {[m.meterNumber && `#${m.meterNumber}`, m.measures].filter(Boolean).join(' · ')}
+                        </span>
+                        <span className="muted small block">{m.path}</span>
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </section>
+          )}
           {r && r.devices.length > 0 && (
             <section>
-              <h3>Transformers and disconnects</h3>
+              <h3>Transformers, cubes and disconnects</h3>
               <ul>
                 {r.devices.map((d) => (
                   <li key={d.id}>

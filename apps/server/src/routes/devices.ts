@@ -11,6 +11,7 @@ import {
   formatVa,
   isRelayPanel,
   powerDeviceInputSchema,
+  type CampusFeed,
   type DeviceLoad,
   type FeedCandidate,
   type FeedOptions,
@@ -43,6 +44,8 @@ import {
   type FeedRef,
   type PanelRow,
 } from '../panels';
+import { buildingsFed, campusFeed } from '../campus';
+import { deviceMeters } from '../meters';
 import { AccessData } from '../repo';
 
 type Actor = ReturnType<typeof actorOf>;
@@ -67,7 +70,9 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
   const fedFromText = (d: DeviceRow): string | null => {
     const up = upstream(db, deviceFeed(d), { deviceId: d.id })[0];
     if (!up) return null;
-    return up.kind === 'breaker' ? `${up.panel.name} · ${circuitLabel(up.panel, up.breaker)}` : up.device.name;
+    return up.kind === 'breaker'
+      ? `${up.panel.name} · ${circuitLabel(up.panel, up.breaker)}`
+      : `${up.device.name}${d.fed_way ? ` · ${d.fed_way}` : ''}`;
   };
 
   const summary = (actor: Actor, access: AccessData, d: DeviceRow): PowerDeviceSummary => ({
@@ -80,6 +85,7 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
     utility: d.utility,
     rating: deviceRating(deviceShape(d)),
     fedFrom: fedFromText(d),
+    fedWay: d.fed_way,
     role: effectiveRole(actor, access.node(d.location_id)!, access.grants)!,
   });
 
@@ -125,6 +131,15 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
     devices: db
       .prepare('SELECT * FROM power_devices WHERE fed_from_device_id = ? ORDER BY name COLLATE NOCASE')
       .all(d.id) as DeviceRow[],
+  });
+
+  /** The switching cubes a building or other place ties back to on a campus grid. */
+  app.get('/api/locations/:id/campus-feed', async (req): Promise<CampusFeed> => {
+    const actor = actorOf(requireAuth(req));
+    const access = new AccessData(db);
+    const id = idParam((req.params as { id: string }).id);
+    if (!canSeeLocation(actor, access, id)) throw notFound();
+    return campusFeed(db, actor, access, id);
   });
 
   app.get('/api/power-devices', async (req): Promise<PowerDeviceSummary[]> => {
@@ -184,7 +199,7 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
       canEdit: atLeast(base.role, 'editor'),
       fedFromBreakerId: d.fed_from_breaker_id,
       fedFromDeviceId: d.fed_from_device_id,
-      feedChain: chainLinks(actor, access, upstream(db, deviceFeed(d), { deviceId: d.id })),
+      feedChain: chainLinks(actor, access, upstream(db, deviceFeed(d), { deviceId: d.id }), d.fed_way),
       demandVa,
       ratio,
       warnings: [
@@ -195,6 +210,8 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
       ],
       loads,
       hiddenLoads: panels.length + devices.length + equipment.length - loads.length,
+      buildings: d.kind === 'switch' || d.kind === 'service' ? buildingsFed(db, actor, access, d) : [],
+      meters: deviceMeters(db, d.id),
     };
   });
 
@@ -225,10 +242,19 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
     const r = db
       .prepare(
         `INSERT INTO power_devices (kind, name, kva, voltage, secondary_voltage, amps, fused, fuse_amps, runtime_minutes,
-           meter, utility, manufacturer, model, notes, location_id, fed_from_breaker_id, fed_from_device_id, created_at, updated_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           meter, utility, manufacturer, model, notes, location_id, fed_from_breaker_id, fed_from_device_id, fed_way,
+           created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       )
-      .run(...columns(body), body.locationId, body.fedFromBreakerId ?? null, body.fedFromDeviceId ?? null, t, t);
+      .run(
+        ...columns(body),
+        body.locationId,
+        body.fedFromBreakerId ?? null,
+        body.fedFromDeviceId ?? null,
+        body.fedFromDeviceId ? (body.fedWay ?? '') : '',
+        t,
+        t,
+      );
     const id = Number(r.lastInsertRowid);
     const rating = deviceRating({ ...body, meter: body.meter });
     audit(
@@ -266,9 +292,18 @@ export function deviceRoutes(app: FastifyInstance, db: DB): void {
     db.prepare(
       `UPDATE power_devices SET kind = ?, name = ?, kva = ?, voltage = ?, secondary_voltage = ?, amps = ?, fused = ?,
          fuse_amps = ?, runtime_minutes = ?, meter = ?, utility = ?, manufacturer = ?, model = ?, notes = ?, location_id = ?,
-         fed_from_breaker_id = ?, fed_from_device_id = ?, updated_at = ?
+         fed_from_breaker_id = ?, fed_from_device_id = ?, fed_way = ?, updated_at = ?
        WHERE id = ?`,
-    ).run(...columns(body), body.locationId, feed.breakerId, feed.deviceId, now(), d.id);
+    ).run(
+      ...columns(body),
+      body.locationId,
+      feed.breakerId,
+      feed.deviceId,
+      // The way only means something on a device feed.
+      feed.deviceId ? (body.fedWay ?? d.fed_way) : '',
+      now(),
+      d.id,
+    );
     audit(
       db,
       auth,

@@ -6,6 +6,7 @@ import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
 import type { AtsKind, Fuel } from './generator';
 import type { AtsDuty, AtsTransition, Mounting, PowerDeviceKind, PowerDeviceShape } from './devices';
+import type { MeterProtocol } from './schemas';
 
 export interface UserSummary {
   id: number;
@@ -297,6 +298,8 @@ export interface DeviceFeedLink {
   voltage: string;
   locationPath: string;
   canView: boolean;
+  /** Which of its ways (positions) feeds the next thing down, e.g. "Way 3". */
+  way: string;
 }
 
 /** Nameplate details from panel schedules. */
@@ -365,6 +368,10 @@ export interface PanelDetail extends Omit<
   generator: PanelGenerator | null;
   /** Discrepancy reports not yet resolved. */
   openReports: number;
+  /** The way of the device feeding it, e.g. "Way 3" of a switching cube. */
+  fedWay: string;
+  /** Meters on the panel's main or on its breakers. */
+  meters: MeterSummary[];
 }
 
 // ---- Generators -------------------------------------------------------------------------
@@ -537,6 +544,8 @@ export interface SearchResponse {
   devices: { id: number; name: string; kind: PowerDeviceKind; rating: string; path: string }[];
   /** Equipment by tag or description, with what feeds it. */
   equipment: { id: number; tag: string; kind: string; description: string; path: string; fedFrom: string | null }[];
+  /** Meters by name, meter number or serial. */
+  meters: { id: number; name: string; meterNumber: string; measures: string; path: string }[];
   breakers: {
     breakerId: number;
     panelId: number;
@@ -686,6 +695,8 @@ export interface PowerDeviceSummary extends PowerDeviceShape {
   rating: string;
   /** Short text for what feeds it, e.g. "MSB · 1 + 3 + 5" or "T-1". */
   fedFrom: string | null;
+  /** The way of the device feeding it, e.g. "Way 3". */
+  fedWay: string;
   role: EffectiveRole;
 }
 
@@ -715,6 +726,91 @@ export interface PowerDeviceDetail extends PowerDeviceSummary {
   warnings: string[];
   loads: DeviceLoad[];
   hiddenLoads: number;
+  /** Switching cubes and other devices: the buildings everything below them is in. */
+  buildings: CampusBuilding[];
+  /** Meters measuring this device. */
+  meters: MeterSummary[];
+}
+
+/** A building fed from a switching cube, through which way and what. */
+export interface CampusBuilding {
+  locationId: number;
+  name: string;
+  path: string;
+  /** The way of the cube it comes off, when recorded. */
+  way: string;
+  /** The first thing in the building fed from the cube's side, e.g. its transformer. */
+  via: string;
+}
+
+/** Where a building's power comes from on a campus grid: the switching cubes above it. */
+export interface CampusFeed {
+  cubes: {
+    id: number;
+    name: string;
+    path: string;
+    way: string;
+    /** The first thing in the building it feeds, e.g. "T-ETC (1500 kVA · 12.47 kV → 277/480 V)". */
+    via: string;
+    canView: boolean;
+  }[];
+}
+
+export interface MeterSummary {
+  id: number;
+  name: string;
+  meterNumber: string;
+  /** What it measures, in words: "LP-1A main", "MSB · 2A (Chiller CH-1)", "T-ETC". */
+  measures: string;
+  /** The breaker it measures, when it is on one. */
+  breakerId: number | null;
+  /** Field check: who checked it and when. */
+  verifyStatus: VerifyStatus;
+  verifiedBy: string;
+  verifiedAt: string | null;
+}
+
+/** One field check, for "who verified what". */
+export interface VerificationItem {
+  kind: 'breaker' | 'meter';
+  id: number;
+  status: Exclude<VerifyStatus, ''>;
+  by: string;
+  at: string | null;
+  /** The panel, for a breaker or a meter on one. */
+  panelId: number | null;
+  panelName: string;
+  /** "Circuit 5 + 7" or "Meter M-MSB1". */
+  what: string;
+  label: string;
+  path: string;
+}
+
+export interface VerificationLog {
+  /** Everyone who has checked something here, most checks first. */
+  people: { name: string; verified: number; wrong: number; last: string | null }[];
+  /** Newest first; at most `limit`. */
+  items: VerificationItem[];
+  total: number;
+}
+
+export interface MeterDto extends MeterSummary {
+  locationId: number;
+  locationPath: string;
+  manufacturer: string;
+  model: string;
+  serial: string;
+  ctRatio: string;
+  ptRatio: string;
+  multiplier: number | null;
+  protocol: MeterProtocol;
+  address: string;
+  notes: string;
+  panelId: number | null;
+  /** The panel the measured breaker is in. */
+  breakerPanelId: number | null;
+  deviceId: number | null;
+  canEdit: boolean;
 }
 
 /** What could feed a panel or device without making a loop. */

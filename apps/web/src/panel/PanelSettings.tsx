@@ -284,7 +284,7 @@ export function PanelSettings({
               </option>
             )}
             {(options.data?.devices ?? []).length > 0 && (
-              <optgroup label="Transformers, disconnects and UPSs">
+              <optgroup label="Switching cubes, transformers and disconnects">
                 {options.data!.devices.map((d) => (
                   <option key={d.id} value={`d:${d.id}`}>
                     {d.name} · {POWER_DEVICE_LABELS[d.kind]}
@@ -304,6 +304,17 @@ export function PanelSettings({
             ))}
           </select>
         </label>
+        {doc.fedFromDeviceId !== null && (
+          <label className="field">
+            <span className="field-label">Way or position</span>
+            <input
+              value={doc.fedWay}
+              maxLength={20}
+              placeholder="e.g. Way 3"
+              onChange={(e) => onChange({ fedWay: e.target.value }, 'fedWay')}
+            />
+          </label>
+        )}
         <label className="field span-2">
           <span className="field-label">Backup power</span>
           <select
