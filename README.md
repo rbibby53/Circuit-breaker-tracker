@@ -349,6 +349,22 @@ Group names are matched ignoring case. Under **Settings → Single sign-on**:
   hand are never changed, and the last admin is never removed.
 - **Only allow these groups** refuses single sign-on for anyone outside them.
 
+**Nested groups.** Someone in a group inside another group (_Electricians_ inside
+_Facilities_) gets the access of both, as long as the provider says so:
+
+- **Keycloak** sends full paths such as `/Facilities/Electricians` (the group mapper's _Full
+  group path_ setting). The app counts that as membership of `/Facilities` too, so group
+  access, admin groups and allowed groups can name either the full path or just the group's
+  name (`Facilities`, `Electricians`). Use the full path when two branches have groups with
+  the same name.
+- **Authentik** sends only the groups someone is directly in. To include the groups above
+  them, add a scope mapping under _Customization → Property Mappings_ (scope name
+  `all_groups`) with
+  `return {"all_groups": [g.name for g in request.user.all_groups()]}`, add it to the
+  provider's scopes, then set **Scopes** to include `all_groups` and **Groups claim** to
+  `all_groups` here.
+- **Microsoft Entra ID** already includes groups someone is in through other groups.
+
 People's groups are read each time they sign in with single sign-on, so a change in the
 provider applies at their next sign-in. To apply it sooner, use **People → Manage → Sign out
 everywhere**. Someone who also has a password keeps the groups from their last single sign-on

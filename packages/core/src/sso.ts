@@ -72,5 +72,26 @@ export function groupsFromClaims(claims: Record<string, unknown>, claim: string)
   }
   if (value === undefined || value === null) return null;
   const list = Array.isArray(value) ? value : [value];
-  return dedupeGroups(list.filter((g): g is string => typeof g === 'string'));
+  return withParentGroups(list.filter((g): g is string => typeof g === 'string'));
+}
+
+/**
+ * Nested groups: a group sent as a full path ("/Facilities/Electricians", as Keycloak does) also
+ * makes someone a member of every group above it ("/Facilities"), and each group can be named
+ * on its own ("Facilities", "Electricians"). Other names are kept as they are.
+ */
+export function withParentGroups(groups: readonly string[]): string[] {
+  const out: string[] = [];
+  for (const g of groups) {
+    const t = g.trim();
+    out.push(t);
+    if (!t.startsWith('/')) continue;
+    const parts = t
+      .split('/')
+      .map((x) => x.trim())
+      .filter(Boolean);
+    for (let i = parts.length - 1; i >= 1; i--) out.push(`/${parts.slice(0, i).join('/')}`);
+    out.push(...parts);
+  }
+  return dedupeGroups(out);
 }
