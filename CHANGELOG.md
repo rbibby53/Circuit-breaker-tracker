@@ -4,6 +4,8 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.3.1 — 2026-10-13
+
 ### Added
 
 - **Switching cubes** for campuses that run their own grid: a new kind under **+ Add a

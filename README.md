@@ -8,7 +8,7 @@ A self-hosted web app for recreating your electrical panels, labelling what ever
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
 
-> **Status: 1.3, stable.** Accounts with scoped access, Microsoft, Authentik and Keycloak
+> **Status: 1.3.1, stable.** Accounts with scoped access, Microsoft, Authentik and Keycloak
 > sign-in, the panel editor for load centers, 3-phase panelboards, switchboards, MCCs and
 > lighting relay panels, transformers and disconnects, generators and transfer switches, a power
 > flow map, connected load and capacity checks, an equipment register, field verification on a
