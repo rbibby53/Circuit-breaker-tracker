@@ -291,6 +291,11 @@ function LocationView({
           {node.kind !== 'company' && <AddGeneratorForm key={`gen-${node.id}`} locationId={node.id} />}
           {node.kind !== 'company' && <AddDeviceForm key={`dev-${node.id}`} locationId={node.id} />}
           {node.kind !== 'company' && <AddEquipmentForm key={`eq-${node.id}`} locationId={node.id} />}
+          {node.kind !== 'company' && (
+            <Link className="btn" to={`/import?loc=${node.id}`}>
+              Import from a spreadsheet
+            </Link>
+          )}
           {addKinds.map((k) => (
             <AddForm
               key={`${node.id}-${k}`}

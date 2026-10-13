@@ -3211,3 +3211,100 @@ code {
   border-radius: 999px;
   padding: 1px 8px;
 }
+
+/* Spreadsheet import */
+.import-steps {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px 18px;
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  font-size: 13px;
+  color: var(--muted);
+}
+.import-steps .is-current {
+  color: var(--ink);
+  font-weight: 700;
+}
+.import-options {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 12px;
+}
+.radio-row {
+  display: flex;
+  gap: 8px;
+  align-items: flex-start;
+  margin-top: 6px;
+}
+.import-scroll {
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+}
+.import-table {
+  border-collapse: collapse;
+  font-size: 13px;
+  width: 100%;
+}
+.import-table th,
+.import-table td {
+  border-bottom: 1px solid var(--line);
+  padding: 6px 8px;
+  text-align: left;
+  vertical-align: top;
+  white-space: nowrap;
+}
+.import-table th select {
+  display: block;
+  margin-top: 4px;
+  max-width: 180px;
+}
+.import-header {
+  font-weight: 700;
+}
+.import-table td.is-skipped {
+  color: var(--muted);
+  opacity: 0.6;
+}
+.import-plan select {
+  width: auto;
+}
+.import-plan.is-blocked {
+  border-color: var(--danger);
+}
+.import-name {
+  font-size: 16px;
+}
+.import-counts {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px 14px;
+}
+.import-counts .is-removed {
+  color: var(--danger);
+}
+.import-issues {
+  margin: 0;
+  padding-left: 18px;
+  font-size: 13px;
+  max-height: 220px;
+  overflow-y: auto;
+}
+.import-changes {
+  margin-top: 8px;
+}
+.import-changes tr.is-new td:last-child {
+  color: var(--ok);
+}
+.import-changes tr.is-removed td {
+  color: var(--danger);
+}
+.import-changes tr.is-same td {
+  color: var(--muted);
+}
+.import-results {
+  margin: 0;
+  padding-left: 18px;
+}

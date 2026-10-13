@@ -27,6 +27,7 @@ import { useGenerators, useTransferSwitches } from '../queries';
 import { DuplicatePanel } from './DuplicatePanel';
 import { SharePanel } from './SharePanel';
 import type { EditPanel } from './state';
+import { Link } from 'react-router-dom';
 
 export function PanelSettings({
   doc,
@@ -357,6 +358,11 @@ export function PanelSettings({
       {!relay && !units && <SectionsEditor doc={doc} onChange={onChange} />}
       <SharePanel panel={server} />
       <div className="row">
+        {!relay && (
+          <Link className="btn" to={`/import?panel=${server.id}`}>
+            Import circuits from a spreadsheet
+          </Link>
+        )}
         <DuplicatePanel panel={server} />
         <button
           type="button"
