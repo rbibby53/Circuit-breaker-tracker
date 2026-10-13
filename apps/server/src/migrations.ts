@@ -478,4 +478,11 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX equipment_breaker ON equipment (fed_from_breaker_id);
   CREATE INDEX equipment_device ON equipment (fed_from_device_id);
   `,
+  `
+  -- Field verification per circuit: checked against the panel and right, or wrong; by whom and when.
+  ALTER TABLE breakers ADD COLUMN verify_status TEXT NOT NULL DEFAULT ''
+    CHECK (verify_status IN ('', 'verified', 'wrong'));
+  ALTER TABLE breakers ADD COLUMN verified_by TEXT NOT NULL DEFAULT '';
+  ALTER TABLE breakers ADD COLUMN verified_at TEXT;
+  `,
 ];

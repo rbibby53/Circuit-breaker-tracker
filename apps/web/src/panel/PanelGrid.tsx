@@ -37,6 +37,10 @@ interface Props {
   highlightTag?: string | null;
   /** Shown where the main breaker is, for a second section ("THROUGH LUGS"). */
   heading?: string;
+  /** Breakers to dim (a filter); overrides the tag highlight. */
+  dimmed?: (b: EditBreaker) => boolean;
+  /** Breakers picked in select mode. */
+  picked?: ReadonlySet<string>;
 }
 
 const DRAG_TYPE = 'application/x-cbt-breaker';
@@ -53,6 +57,8 @@ export function PanelGrid({
   relaySources,
   highlightTag,
   heading,
+  dimmed,
+  picked,
 }: Props) {
   const cols = columnsFor(doc);
   const relay = doc.layout === 'relay';
@@ -176,9 +182,11 @@ export function PanelGrid({
             const tandem = b.slot !== 'full';
             const circuits = positionsOf(doc, b).map((p) => `${p}${tandem ? b.slot : ''}`);
             const test = TEST_COLOR[b.protection];
-            const selected = b.key === selectedKey;
+            const selected = b.key === selectedKey || !!picked?.has(b.key);
             const phases = phasesOf(doc, b);
-            const dim = !!highlightTag && !b.tags.some((t) => t.toLowerCase() === highlightTag.toLowerCase());
+            const dim = dimmed
+              ? dimmed(b)
+              : !!highlightTag && !b.tags.some((t) => t.toLowerCase() === highlightTag.toLowerCase());
             return (
               <button
                 key={b.key}
@@ -189,7 +197,7 @@ export function PanelGrid({
                   gridRow: `${row} / span ${b.poles}`,
                   alignSelf: tandem ? (b.slot === 'A' ? 'start' : 'end') : 'stretch',
                 }}
-                aria-label={`${relay ? 'Relay' : 'Circuit'} ${circuitLabel(doc, b)}${phases.length ? `, phase ${phases.join(' ')}` : ''}, ${b.device === 'surge' ? 'surge protector, ' : ''}${b.label || 'unlabelled'}, ${b.amps ? `${b.amps} amps` : 'no breaker'}${b.critical ? ', critical' : ''}${b.backup !== 'none' ? `, on ${b.backup}` : ''}`}
+                aria-label={`${relay ? 'Relay' : 'Circuit'} ${circuitLabel(doc, b)}${phases.length ? `, phase ${phases.join(' ')}` : ''}, ${b.device === 'surge' ? 'surge protector, ' : ''}${b.label || 'unlabelled'}, ${b.amps ? `${b.amps} amps` : 'no breaker'}${b.critical ? ', critical' : ''}${b.backup !== 'none' ? `, on ${b.backup}` : ''}${b.verifyStatus === 'verified' ? ', verified' : b.verifyStatus === 'wrong' ? ', marked wrong' : ''}`}
                 aria-pressed={selected}
                 draggable={!readOnly}
                 onDragStart={(e) => {
@@ -214,6 +222,7 @@ export function PanelGrid({
                     {b.critical && <span className="badge badge-crit">CRIT</span>}
                     {b.backup === 'ups' && <span className="badge badge-ups">UPS</span>}
                     {b.backup === 'generator' && <span className="badge badge-gen">GEN</span>}
+                    <CheckBadge status={b.verifyStatus} />
                   </span>
                   {!tandem && (
                     <span className="pg-sub">
@@ -243,4 +252,21 @@ export function PanelGrid({
       </div>
     </div>
   );
+}
+
+/** ✓ for a verified circuit, ✗ for one found wrong. */
+export function CheckBadge({ status }: { status: EditBreaker['verifyStatus'] }) {
+  if (status === 'verified')
+    return (
+      <span className="badge badge-ok" title="Verified" aria-hidden="true">
+        ✓
+      </span>
+    );
+  if (status === 'wrong')
+    return (
+      <span className="badge badge-wrong" title="Marked wrong" aria-hidden="true">
+        ✗
+      </span>
+    );
+  return null;
 }

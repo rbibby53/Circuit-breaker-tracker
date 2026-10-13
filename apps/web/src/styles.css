@@ -3106,3 +3106,68 @@ code {
 .equipment-filter {
   max-width: 420px;
 }
+
+/* Field verification: badges, progress bars, bulk bar. */
+.badge-ok {
+  background: var(--ok);
+  color: var(--surface);
+}
+.badge-wrong {
+  background: var(--danger);
+  color: var(--surface);
+}
+.editor-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px 16px;
+  align-items: center;
+}
+.progress-row {
+  display: grid;
+  grid-template-columns: minmax(120px, 200px) 1fr auto;
+  gap: 12px;
+  align-items: center;
+  font-size: 14px;
+}
+.progress-bar {
+  position: relative;
+  display: flex;
+  height: 12px;
+  border-radius: 6px;
+  background: var(--surface-2);
+  box-shadow: inset 0 0 0 1px var(--line);
+  overflow: hidden;
+}
+.progress-done {
+  background: var(--ok);
+}
+.progress-wrong {
+  background: var(--danger);
+}
+.progress-text {
+  white-space: nowrap;
+}
+.progress-panels {
+  margin: 0;
+  padding-left: 18px;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+}
+.bulk-bar .bulk-row {
+  display: flex;
+  align-items: end;
+  gap: 8px;
+}
+.bulk-bar .bulk-row .field {
+  flex: 1;
+}
+@media (max-width: 640px) {
+  .progress-row {
+    grid-template-columns: 1fr;
+    gap: 4px;
+  }
+  .progress-text {
+    white-space: normal;
+  }
+}

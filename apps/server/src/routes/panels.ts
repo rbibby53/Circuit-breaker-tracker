@@ -299,18 +299,28 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       const update = db.prepare(
         `UPDATE breakers SET position = ?, slot = ?, poles = ?, amps = ?, protection = ?, label = ?, notes = ?,
            is_spare = ?, critical = ?, backup = ?, device = ?, source_breaker_id = ?, control = ?, load_va = ?,
-           demand_pct = ?, section = ?, unit = ?, frame_amps = ?, wire = ?, conduit = ?, starter = ?, hp = ? WHERE id = ?`,
+           demand_pct = ?, section = ?, unit = ?, frame_amps = ?, wire = ?, conduit = ?, starter = ?, hp = ?,
+           verify_status = ?, verified_by = ?, verified_at = ? WHERE id = ?`,
       );
       const insert = db.prepare(
         `INSERT INTO breakers (panel_id, position, slot, poles, amps, protection, label, notes, is_spare, critical, backup, device,
-           source_breaker_id, control, load_va, demand_pct, section, unit, frame_amps, wire, conduit, starter, hp)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+           source_breaker_id, control, load_va, demand_pct, section, unit, frame_amps, wire, conduit, starter, hp,
+           verify_status, verified_by, verified_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
       );
       const clearServes = db.prepare('DELETE FROM breaker_serves WHERE breaker_id = ?');
       const addServe = db.prepare(
         'INSERT OR REPLACE INTO breaker_serves (breaker_id, location_id, note) VALUES (?, ?, ?)',
       );
 
+      const old = new Map(existing.map((x) => [x.id, x]));
+      const t = now();
+      const checkOf = (b: (typeof body.breakers)[number]): [string, string, string | null] => {
+        const was = b.id !== undefined ? old.get(b.id) : undefined;
+        const status = b.verifyStatus ?? was?.verify_status ?? '';
+        if (was && status === was.verify_status) return [status, was.verified_by, was.verified_at];
+        return status ? [status, auth.user.display_name, t] : ['', '', null];
+      };
       for (const b of body.breakers) {
         const values = [
           b.position,
@@ -337,6 +347,8 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
           b.conduit,
           mcc ? b.starter : '',
           mcc ? b.hp : null,
+          // The field check: who and when are set when it changes; left out, it stays as it was.
+          ...checkOf(b),
         ] as const;
         let id: number;
         if (b.id !== undefined) {

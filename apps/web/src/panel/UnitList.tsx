@@ -1,5 +1,6 @@
 import { formatVa } from '@cbt/core';
 import type { TreeNode } from '../tree';
+import { CheckBadge } from './PanelGrid';
 import { servesSummary } from './serves';
 import type { EditPanel } from './state';
 
@@ -16,6 +17,8 @@ export function UnitList({
   onAdd,
   feeds,
   highlightTag,
+  dimmed,
+  picked,
 }: {
   doc: EditPanel;
   byId: Map<number, TreeNode>;
@@ -25,6 +28,8 @@ export function UnitList({
   onAdd: () => void;
   feeds: Map<number, string[]>;
   highlightTag?: string | null;
+  dimmed?: (b: EditPanel['breakers'][number]) => boolean;
+  picked?: ReadonlySet<string>;
 }) {
   const mcc = doc.layout === 'mcc';
   const units = [...doc.breakers].sort((a, b) => a.position - b.position);
@@ -52,19 +57,22 @@ export function UnitList({
           </thead>
           <tbody>
             {units.map((b) => {
-              const dim = !!highlightTag && !b.tags.some((t) => t.toLowerCase() === highlightTag.toLowerCase());
+              const dim = dimmed
+                ? dimmed(b)
+                : !!highlightTag && !b.tags.some((t) => t.toLowerCase() === highlightTag.toLowerCase());
+              const on = b.key === selectedKey || !!picked?.has(b.key);
               const feeding = b.id ? feeds.get(b.id) : undefined;
               const sub = feeding?.length ? `Feeds ${feeding.join(', ')}` : servesSummary(byId, b.serves, b.isSpare);
               return (
                 <tr
                   key={b.key}
-                  className={`${b.key === selectedKey ? 'is-selected' : ''}${b.isSpare ? ' is-spare' : ''}${dim ? ' is-dim' : ''}`}
+                  className={`${on ? 'is-selected' : ''}${b.isSpare ? ' is-spare' : ''}${dim ? ' is-dim' : ''}`}
                 >
                   <th scope="row">
                     <button
                       type="button"
                       className="unit-btn"
-                      aria-pressed={b.key === selectedKey}
+                      aria-pressed={on}
                       aria-label={`Unit ${b.unit || b.position}, ${b.label || 'unlabelled'}, ${b.poles}-pole ${b.amps} amps`}
                       onClick={() => onSelect(b.key)}
                     >
@@ -77,6 +85,7 @@ export function UnitList({
                       {b.critical && <span className="badge badge-crit">CRIT</span>}
                       {b.backup === 'ups' && <span className="badge badge-ups">UPS</span>}
                       {b.backup === 'generator' && <span className="badge badge-gen">GEN</span>}
+                      <CheckBadge status={b.verifyStatus} />
                     </span>
                     <span className="unit-sub">{sub}</span>
                   </td>

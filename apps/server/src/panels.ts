@@ -1,5 +1,6 @@
 import {
   DEVICE_LABELS,
+  VERIFY_LABELS,
   KIND_LABELS,
   canView,
   circuitLabel,
@@ -15,6 +16,7 @@ import {
   type Mounting,
   type PanelNameplate,
   type PanelSection,
+  type VerifyStatus,
   type PowerDeviceKind,
   type PowerDeviceShape,
   type Backup,
@@ -92,6 +94,9 @@ export interface BreakerRow {
   conduit: string;
   starter: string;
   hp: number | null;
+  verify_status: VerifyStatus;
+  verified_by: string;
+  verified_at: string | null;
 }
 
 /** A panel's sections after the first, as stored. */
@@ -577,6 +582,9 @@ export function panelDetail(db: DB, actor: Actor, access: AccessData, panel: Pan
       conduit: b.conduit ?? '',
       starter: b.starter ?? '',
       hp: b.hp ?? null,
+      verifyStatus: b.verify_status ?? '',
+      verifiedBy: b.verified_by ?? '',
+      verifiedAt: b.verified_at ?? null,
     };
   };
   const check = loadCheck(db, panel);
@@ -690,6 +698,7 @@ export function snapshot(panel: PanelRow, breakers: BreakerRow[], serves: Serves
         conduit: b.conduit ?? '',
         starter: b.starter ?? '',
         hp: b.hp ?? null,
+        verifyStatus: (b.verify_status ?? '') as VerifyStatus,
         serves: serves
           .filter((s) => s.breaker_id === b.id)
           .map((s) => `${s.location_id}:${s.note}`)
@@ -754,6 +763,7 @@ const BREAKER_FIELDS = [
   ['conduit', 'conduit'],
   ['starter', 'starter'],
   ['hp', 'HP'],
+  ['verifyStatus', 'check'],
 ] as const;
 
 /** Human-readable lines describing what changed between two snapshots. */
@@ -787,7 +797,11 @@ export function describeChanges(
     const changes: string[] = [];
     // History saved before surge protectors existed has no device: those were all breakers.
     const value = (x: Snapshot['breakers'][number], k: (typeof BREAKER_FIELDS)[number][0]) =>
-      k === 'device' ? DEVICE_LABELS[x.device ?? 'breaker'].toLowerCase() : x[k];
+      k === 'device'
+        ? DEVICE_LABELS[x.device ?? 'breaker'].toLowerCase()
+        : k === 'verifyStatus'
+          ? VERIFY_LABELS[x.verifyStatus ?? ''].toLowerCase()
+          : x[k];
     for (const [k, label] of BREAKER_FIELDS) {
       if (JSON.stringify(value(old, k)) === JSON.stringify(value(b, k))) continue;
       if (k === 'position') changes.push(`moved from ${circuitLabel(layout, old)}`);

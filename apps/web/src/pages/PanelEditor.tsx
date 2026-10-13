@@ -1,6 +1,8 @@
 import {
   LAYOUT_LABELS,
+  columnsFor,
   isListLayout,
+  maxPoles,
   sectionsOf,
   spacesText,
   POWER_DEVICE_LABELS,
@@ -23,12 +25,15 @@ import { useTitle } from '../lib/useTitle';
 import { Inspector } from '../panel/Inspector';
 import { LoadSummary } from '../panel/LoadSummary';
 import { UnitList } from '../panel/UnitList';
+import { BulkBar } from '../panel/BulkBar';
 import { PanelGrid } from '../panel/PanelGrid';
 import { PanelSettings } from '../panel/PanelSettings';
 import { siteOf } from '../panel/serves';
 import {
   addBreaker,
   addUnit,
+  bulkUpdate,
+  shiftBreakers,
   applyIds,
   feedKey,
   fromDetail,
@@ -38,6 +43,7 @@ import {
   toRequest,
   updateBreaker,
   updatePanel,
+  type EditBreaker,
   type EditPanel,
   type Result,
   type Size,
@@ -123,6 +129,10 @@ function Editor({
   const [showHistory, setShowHistory] = useState(false);
   // Highlight the breakers with one tag, e.g. every "Servers" circuit.
   const [tagFilter, setTagFilter] = useState<string | null>(null);
+  // Field checking: show only circuits not checked yet (or found wrong), and pick many at once.
+  const [checkFilter, setCheckFilter] = useState<'' | 'unchecked' | 'wrong'>('');
+  const [selecting, setSelecting] = useState(false);
+  const [picked, setPicked] = useState<Set<string>>(new Set());
 
   const docRef = useRef(doc);
   const version = useRef(initial.version);
@@ -291,6 +301,22 @@ function Editor({
       setMessage(errorMessage(err));
     }
   };
+
+  const dimmed =
+    tagFilter || checkFilter
+      ? (b: EditBreaker) =>
+          (!!tagFilter && !b.tags.some((t) => t.toLowerCase() === tagFilter.toLowerCase())) ||
+          (checkFilter === 'unchecked' && b.verifyStatus !== '') ||
+          (checkFilter === 'wrong' && b.verifyStatus !== 'wrong')
+      : undefined;
+  const onPick = (key: string) => {
+    if (!selecting) return setSelected(key);
+    const next = new Set(picked);
+    if (next.has(key)) next.delete(key);
+    else next.add(key);
+    setPicked(next);
+  };
+  const bulk = (r: Result) => apply(r);
 
   // What the rows are called in words.
   const thing =
@@ -461,15 +487,34 @@ function Editor({
               }
             />
           )}
-          <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
+          <div className="editor-filters">
+            <TagFilter breakers={doc.breakers} value={tagFilter} onChange={setTagFilter} />
+            <CheckFilter breakers={doc.breakers} value={checkFilter} onChange={setCheckFilter} />
+            {!readOnly && (
+              <button
+                type="button"
+                className="btn btn-sm"
+                aria-pressed={selecting}
+                onClick={() => {
+                  setSelecting(!selecting);
+                  setPicked(new Set());
+                  setSelected(null);
+                }}
+              >
+                {selecting ? 'Stop selecting' : 'Select several'}
+              </button>
+            )}
+          </div>
           {isListLayout(doc) ? (
             <UnitList
               doc={doc}
               byId={byId}
               highlightTag={tagFilter}
+              dimmed={dimmed}
+              picked={selecting ? picked : undefined}
               selectedKey={selected}
               readOnly={readOnly}
-              onSelect={setSelected}
+              onSelect={onPick}
               onAdd={() => {
                 const r = addUnit(docRef.current);
                 if (apply(r) && r.ok && 'key' in r && r.key) setSelected(r.key);
@@ -489,10 +534,12 @@ function Editor({
                   doc={{ ...doc, spaces: sec.spaces, breakers: doc.breakers.filter((b) => b.section === i + 1) }}
                   heading={i === 0 ? undefined : sec.throughLugs ? 'THROUGH LUGS' : sec.name.toUpperCase()}
                   highlightTag={tagFilter}
+                  dimmed={dimmed}
+                  picked={selecting ? picked : undefined}
                   byId={byId}
                   selectedKey={selected}
                   readOnly={readOnly}
-                  onSelect={setSelected}
+                  onSelect={onPick}
                   onAdd={(position: number, slot: Slot) => {
                     const r = addBreaker(docRef.current, position, slot, i + 1);
                     if (apply(r) && r.ok && 'key' in r && r.key) setSelected(r.key);
@@ -505,7 +552,34 @@ function Editor({
             ))
           )}
         </section>
-        {selectedBreaker ? (
+        {selecting && !readOnly ? (
+          <BulkBar
+            count={picked.size}
+            maxPoles={maxPoles(doc)}
+            rowStep={columnsFor(doc)}
+            onAmps={(amps) => bulk(bulkUpdate(docRef.current, picked, { amps }))}
+            onPoles={(poles) => bulk(bulkUpdate(docRef.current, picked, { poles, slot: 'full' }))}
+            onTag={(tag, add) =>
+              bulk(
+                bulkUpdate(docRef.current, picked, (b) => ({
+                  tags: add
+                    ? b.tags.some((t) => t.toLowerCase() === tag.toLowerCase())
+                      ? b.tags
+                      : [...b.tags, tag]
+                    : b.tags.filter((t) => t.toLowerCase() !== tag.toLowerCase()),
+                })),
+              )
+            }
+            onCheck={(verifyStatus) => bulk(bulkUpdate(docRef.current, picked, { verifyStatus }))}
+            onShift={(delta) => bulk(shiftBreakers(docRef.current, picked, delta))}
+            onSelectAll={() => setPicked(new Set(doc.breakers.filter((b) => !dimmed || !dimmed(b)).map((b) => b.key)))}
+            onClear={() => setPicked(new Set())}
+            onDone={() => {
+              setSelecting(false);
+              setPicked(new Set());
+            }}
+          />
+        ) : selectedBreaker ? (
           <Inspector
             key={selectedBreaker.key}
             panelId={initial.id}
@@ -540,6 +614,48 @@ function Editor({
         )}
       </div>
     </main>
+  );
+}
+
+/** Show only circuits not checked yet, or found wrong, while walking a panel. */
+function CheckFilter({
+  breakers,
+  value,
+  onChange,
+}: {
+  breakers: EditBreaker[];
+  value: '' | 'unchecked' | 'wrong';
+  onChange: (v: '' | 'unchecked' | 'wrong') => void;
+}) {
+  const circuits = breakers.filter((b) => !b.isSpare);
+  const unchecked = circuits.filter((b) => !b.verifyStatus).length;
+  const wrong = circuits.filter((b) => b.verifyStatus === 'wrong').length;
+  const verified = circuits.length - unchecked - wrong;
+  if (!circuits.length) return null;
+  return (
+    <div className="tag-filter" role="group" aria-label="Show by field check">
+      <span className="small muted">
+        Checked {verified}/{circuits.length}:
+      </span>
+      <button
+        type="button"
+        className="btn btn-sm"
+        aria-pressed={value === 'unchecked'}
+        onClick={() => onChange(value === 'unchecked' ? '' : 'unchecked')}
+      >
+        Not checked <span className="muted">{unchecked}</span>
+      </button>
+      {wrong > 0 && (
+        <button
+          type="button"
+          className="btn btn-sm"
+          aria-pressed={value === 'wrong'}
+          onClick={() => onChange(value === 'wrong' ? '' : 'wrong')}
+        >
+          Wrong <span className="muted">{wrong}</span>
+        </button>
+      )}
+    </div>
   );
 }
 

@@ -10,6 +10,7 @@ import {
   PANEL_LAYOUTS,
   PROTECTIONS,
   SLOTS,
+  VERIFY_STATUSES,
 } from './panel';
 import { ROLES } from './roles';
 import { ATS_DUTIES, ATS_TRANSITIONS, MOUNTINGS, POWER_DEVICE_KINDS } from './devices';
@@ -209,6 +210,8 @@ export const breakerInputSchema = z
     /** MCC buckets: starter size and motor horsepower (control type goes in `control`). */
     starter: optionalText(30),
     hp: z.number().min(0).max(100000).nullable().default(null),
+    /** Field check. Omit to leave an existing breaker's as it is. */
+    verifyStatus: z.enum(VERIFY_STATUSES).optional(),
   })
   .refine((b) => b.amps > 0 || b.device === 'surge', {
     message: 'A breaker needs a rating of at least 1 A.',
@@ -341,4 +344,12 @@ export const acceptRoomLinksSchema = z.object({
     .array(z.object({ breakerId: z.number().int().positive(), locationId: z.number().int().positive() }))
     .min(1)
     .max(2000),
+});
+
+/** Set the field check of several circuits at once (field mode, bulk edit). */
+export const verifyBreakersSchema = z.object({
+  breakers: z
+    .array(z.object({ breakerId: z.number().int().positive(), status: z.enum(VERIFY_STATUSES) }))
+    .min(1)
+    .max(1000),
 });

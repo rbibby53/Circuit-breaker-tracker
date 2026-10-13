@@ -388,3 +388,12 @@ export function spacesText(panel: { layout: PanelLayout; spaces: number; section
     .map((s) => s.spaces)
     .join(' + ')} spaces`;
 }
+
+/** Field verification of a circuit: not checked yet, checked and right, or found wrong. */
+export const VERIFY_STATUSES = ['', 'verified', 'wrong'] as const;
+export type VerifyStatus = (typeof VERIFY_STATUSES)[number];
+export const VERIFY_LABELS: Record<VerifyStatus, string> = {
+  '': 'Not checked',
+  verified: 'Verified',
+  wrong: 'Wrong',
+};

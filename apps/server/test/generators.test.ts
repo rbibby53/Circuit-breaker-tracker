@@ -864,3 +864,54 @@ describe('equipment register', () => {
     expect(other).toBeGreaterThan(0);
   });
 });
+
+describe('field verification', () => {
+  it('records who checked a circuit and when, and progress by building', async () => {
+    const c = await campus();
+    // Through the editor's save: who and when are set when the check changes.
+    const lp = (await c.admin.get(`/api/panels/${c.lp}`)).body;
+    const marked = await save(
+      c.admin,
+      c.lp,
+      lp.breakers.map((b: any) => ({
+        ...b,
+        clientKey: String(b.id),
+        serves: [],
+        verifyStatus: b.position === 1 ? 'verified' : b.verifyStatus,
+      })),
+    );
+    expect(marked.status).toBe(200);
+    const corridor = marked.body.panel.breakers.find((b: any) => b.position === 1);
+    expect(corridor).toMatchObject({ verifyStatus: 'verified', verifiedBy: expect.any(String) });
+    expect(corridor.verifiedAt).toBeTruthy();
+    // A save that leaves the check out keeps it.
+    await save(
+      c.admin,
+      c.lp,
+      lp.breakers.map((b: any) => ({ ...b, clientKey: String(b.id), serves: [], verifyStatus: undefined })),
+    );
+    expect((await c.admin.get(`/api/panels/${c.lp}`)).body.breakers[0].verifyStatus).toBe('verified');
+
+    // In bulk from the field: the second circuit is wrong.
+    const r = await c.admin.post(`/api/panels/${c.lp}/verify`, {
+      breakers: [{ breakerId: c.labBreaker, status: 'wrong' }],
+    });
+    expect(r.body.changed).toBe(1);
+    const history = (await c.admin.get(`/api/panels/${c.lp}/history`)).body;
+    expect(history[0].summary).toMatch(/^Checked circuits on LP-1: 3 Lab lights: check not checked → wrong/);
+
+    const progress = (await c.admin.get(`/api/locations/${c.site}/progress`)).body;
+    expect(progress.total).toMatchObject({ circuits: 3, verified: 1, wrong: 1, panels: 3, panelsDone: 0 });
+    expect(progress.parts).toEqual([expect.objectContaining({ name: 'Science Hall', kind: 'building', circuits: 3 })]);
+    expect(progress.panels.map((p: any) => p.name)).toEqual(['EM-1', 'LP-1', 'EM-2']);
+
+    const viewer = await invite(app, c.admin, c.hall, 'viewer', 'viewer');
+    expect(
+      (await viewer.post(`/api/panels/${c.lp}/verify`, { breakers: [{ breakerId: c.labBreaker, status: '' }] })).status,
+    ).toBe(403);
+    expect(
+      (await c.admin.post(`/api/panels/${c.em1}/verify`, { breakers: [{ breakerId: c.labBreaker, status: '' }] }))
+        .status,
+    ).toBe(400);
+  });
+});

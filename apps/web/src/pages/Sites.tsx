@@ -12,6 +12,7 @@ import { ErrorNote, Field } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
 import { useLocations, usePanels } from '../queries';
 import { ancestry, buildTree, hiddenBuilding, shownChildren, type TreeNode } from '../tree';
+import { VerifyProgressCard } from '../components/Progress';
 import { AddDeviceForm, DevicesHere } from './Devices';
 import { AddEquipmentForm, EquipmentHere, RoomLinkSuggestions } from './Equipment';
 import { AddGeneratorForm, GeneratorsHere } from './Generators';
@@ -267,6 +268,9 @@ function LocationView({
       <ErrorNote error={remove.error} />
       {editing && <EditForm node={node} onDone={() => setEditing(false)} />}
 
+      {!crumbOnly && node.kind !== 'room' && (
+        <VerifyProgressCard key={`vp-${node.id}`} locationId={node.id} name={node.name} />
+      )}
       <PanelsHere node={node} byId={byId} />
       <GeneratorsHere node={node} byId={byId} />
       <DevicesHere node={node} byId={byId} />

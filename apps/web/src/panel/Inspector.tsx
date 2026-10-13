@@ -13,6 +13,7 @@ import {
   circuitLabel,
   circuitVolts,
   MCC_CONTROLS,
+  VERIFY_LABELS,
   STARTER_SIZES,
   isListLayout,
   isRelayPanel,
@@ -28,6 +29,7 @@ import { useState } from 'react';
 import { api } from '../api';
 import { Link } from 'react-router-dom';
 import { useConfirm } from '../components/ConfirmDialog';
+import { formatDate } from '../components/ui';
 import type { TreeNode } from '../tree';
 import { servesByFloor } from './serves';
 import { ServesPicker } from './ServesPicker';
@@ -153,6 +155,8 @@ export function Inspector({
               </dd>
             </>
           ) : null}
+          <dt>Field check</dt>
+          <dd>{checkText(b, server)}</dd>
           <dt>Flags</dt>
           <dd>
             {[b.critical && 'Critical', b.backup !== 'none' && `On ${BACKUP_LABELS[b.backup]}`, b.isSpare && 'Spare']
@@ -350,6 +354,27 @@ export function Inspector({
         )}
       </div>
       {!relay && !(b.device === 'surge' && b.amps === 0) && <LoadFields b={b} onPatch={onPatch} />}
+
+      {!relay && (
+        <fieldset className="field">
+          <legend className="field-label">Field check</legend>
+          <div className="segmented three">
+            {(['verified', 'wrong', ''] as const).map((st) => (
+              <button
+                key={st || 'none'}
+                type="button"
+                aria-pressed={b.verifyStatus === st}
+                onClick={() => onPatch({ verifyStatus: st })}
+              >
+                {st ? VERIFY_LABELS[st] : 'Not checked'}
+              </button>
+            ))}
+          </div>
+          {server && server.verifyStatus === b.verifyStatus && server.verifiedBy && (
+            <span className="muted small">{checkText(b, server)}</span>
+          )}
+        </fieldset>
+      )}
 
       <fieldset className="flags">
         <legend className="field-label">Flags</legend>
@@ -687,4 +712,12 @@ function EquipmentNote({ breaker }: { breaker: BreakerDto }) {
       ))}
     </p>
   );
+}
+
+/** "Verified by Ryan on Oct 12, 2026", "Not checked". */
+function checkText(b: EditBreaker, server: BreakerDto | undefined): string {
+  if (!b.verifyStatus) return 'Not checked';
+  const label = VERIFY_LABELS[b.verifyStatus];
+  if (!server || server.verifyStatus !== b.verifyStatus || !server.verifiedBy) return label;
+  return `${label} by ${server.verifiedBy}${server.verifiedAt ? ` on ${formatDate(server.verifiedAt)}` : ''}`;
 }

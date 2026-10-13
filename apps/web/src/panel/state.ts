@@ -14,6 +14,7 @@ import {
   type PanelLayout,
   type PanelNameplate,
   type PanelSection,
+  type VerifyStatus,
   type Protection,
   type Slot,
 } from '@cbt/core';
@@ -58,6 +59,8 @@ export interface EditBreaker {
   conduit: string;
   starter: string;
   hp: number | null;
+  /** Field check: not checked, verified or wrong. */
+  verifyStatus: VerifyStatus;
 }
 
 export interface EditPanel {
@@ -132,6 +135,7 @@ export function fromDetail(p: PanelDetail): EditPanel {
       conduit: b.conduit,
       starter: b.starter,
       hp: b.hp,
+      verifyStatus: b.verifyStatus,
     })),
   };
 }
@@ -172,6 +176,7 @@ export function toRequest(doc: EditPanel, version: number, baselineFeed: string,
     conduit: b.conduit,
     starter: b.starter,
     hp: b.hp,
+    verifyStatus: b.verifyStatus,
   }));
   return {
     name: doc.name,
@@ -265,6 +270,7 @@ export function addBreaker(
     conduit: '',
     starter: '',
     hp: null,
+    verifyStatus: '',
   });
   return r.ok ? { ...r, key } : r;
 }
@@ -341,4 +347,34 @@ export function firstFitIn(doc: EditPanel, key: string, section: number): number
   const order = [b.position, ...Array.from({ length: spaces }, (_, i) => i + 1)];
   for (const p of order) if (p <= spaces && moveBreaker(doc, key, p, undefined, section).ok) return p;
   return null;
+}
+
+/** Change several breakers at once (bulk edit); the whole panel must still be valid. */
+export function bulkUpdate(
+  doc: EditPanel,
+  keys: ReadonlySet<string>,
+  patch: Partial<EditBreaker> | ((b: EditBreaker) => Partial<EditBreaker>),
+): Result {
+  if (keys.size === 0) return { ok: false, error: 'Select some breakers first.' };
+  const next = {
+    ...doc,
+    breakers: doc.breakers.map((b) =>
+      keys.has(b.key) ? { ...b, ...(typeof patch === 'function' ? patch(b) : patch) } : b,
+    ),
+  };
+  const issue = validateSections(next, next.breakers.map(shape))[0];
+  return issue ? { ok: false, error: issue.message } : { ok: true, doc: next };
+}
+
+/**
+ * Move the selected breakers by `delta` spaces (or unit rows), keeping their order: renumbering
+ * a range. On two-column panels a move of 2 keeps each breaker on its side.
+ */
+export function shiftBreakers(doc: EditPanel, keys: ReadonlySet<string>, delta: number): Result {
+  return bulkUpdate(doc, keys, (b) => ({
+    position: b.position + delta,
+    ...(isListLayout(doc) && /^\d+$/.test(b.unit) && Number(b.unit) === b.position
+      ? { unit: String(b.position + delta) }
+      : {}),
+  }));
 }

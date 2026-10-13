@@ -1,7 +1,7 @@
 // Response shapes shared by the server and the web app.
 import type { LocationKind } from './locations';
 import type { PaperSize, SettingKey, SettingValue } from './settings';
-import type { Backup, Device, MainType, PanelLayout, PanelSection, Protection, Slot } from './panel';
+import type { Backup, Device, MainType, PanelLayout, PanelSection, Protection, Slot, VerifyStatus } from './panel';
 import type { EffectiveRole, Role } from './roles';
 import type { TreeAccess } from './access';
 import type { AtsKind, Fuel } from './generator';
@@ -237,6 +237,10 @@ export interface BreakerDto {
   conduit: string;
   starter: string;
   hp: number | null;
+  /** Field check: who checked it and when. */
+  verifyStatus: VerifyStatus;
+  verifiedBy: string;
+  verifiedAt: string | null;
 }
 
 /** The breaker feeding a relay. Everyone who can see the relay sees this summary. */
@@ -752,4 +756,27 @@ export interface RoomLinkSuggestion {
   locationId: number;
   roomName: string;
   roomPath: string;
+}
+
+/** How far field verification has got under a location. */
+export interface VerifyProgress {
+  locationId: number;
+  name: string;
+  kind: LocationKind;
+  path: string;
+  /** Circuits that can be checked (not spares). */
+  circuits: number;
+  verified: number;
+  wrong: number;
+  panels: number;
+  /** Panels with every circuit verified. */
+  panelsDone: number;
+}
+
+export interface ProgressReport {
+  /** The location asked about, then each site and building under it. */
+  total: VerifyProgress;
+  parts: VerifyProgress[];
+  /** Panels under it, least verified first. */
+  panels: { id: number; name: string; path: string; circuits: number; verified: number; wrong: number }[];
 }
