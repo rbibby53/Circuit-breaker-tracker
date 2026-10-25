@@ -3,7 +3,7 @@ import { now, type DB } from './db';
 import { conflict } from './errors';
 import { hashPassword } from './passwords';
 import { toSummary, type UserRow } from './repo';
-import type { AuthState } from './sessions';
+import { viewingAs, type AuthState } from './sessions';
 
 export async function createUser(
   db: DB,
@@ -40,7 +40,7 @@ export function meResponse(db: DB, auth: AuthState): MeResponse {
   return {
     user: toSummary(auth.user),
     realUser: toSummary(auth.realUser),
-    viewingAs: auth.readOnly,
+    viewingAs: viewingAs(auth),
     hasPassword: !!auth.realUser.password_hash,
     identities,
     totp: !!auth.realUser.totp_enabled_at,

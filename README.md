@@ -179,6 +179,9 @@ as a single Docker container with its data in one SQLite file.
   off, and an admin can switch public pages off everywhere.
 - **CSV export:** every breaker of a panel, or of everything under a location, for Excel,
   Numbers or Google Sheets (from the same **Print & export** button).
+- **API tokens for scripts:** read-only tokens made under **Account**, so a script can fetch
+  the same CSV or JSON you see in the browser, including with single sign-on accounts. See
+  [Scripts and API tokens](#scripts-and-api-tokens).
 - **Duplicate a panel** into another room, e.g. for identical apartments. Room tags come
   along inside the same site.
 
@@ -320,6 +323,7 @@ and shows there as locked. This suits infrastructure-as-code setups:
 | Public address             | `PUBLIC_URL`                                                                            |
 | Allow password sign-in     | `ALLOW_LOCAL_LOGIN`                                                                     |
 | Stay signed in for (days)  | `SESSION_DAYS`                                                                          |
+| Allow API tokens           | `ALLOW_API_TOKENS`                                                                      |
 | Single sign-on (OIDC)      | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_SCOPES`                    |
 | SSO button text            | `OIDC_LABEL`                                                                            |
 | SSO groups                 | `OIDC_GROUPS_CLAIM`, `OIDC_ADMIN_GROUPS`, `OIDC_ALLOWED_GROUPS`, `OIDC_CREATE_ACCOUNTS` |
@@ -479,6 +483,45 @@ To restore, pick a saved backup or upload a backup file. The app shows what is i
 anything changes, saves the current data as `breakers-before-restore-<date>.db` in the data
 folder, then swaps the data in without a restart. Backups from older versions are upgraded
 on the way in. Everyone is signed out and signs in with an account from the backup.
+
+### Scripts and API tokens
+
+A script can read what you can see without a browser. Under **Account → API tokens**, name a
+token (say "SysON export"), choose when it expires, and copy it. It is shown once; only a hash
+is kept. Send it in an `Authorization: Bearer` header:
+
+```python
+import json
+import os
+import urllib.request
+
+BASE = "https://breakers.example.com"
+TOKEN = os.environ["CBT_TOKEN"]  # keep it out of your code
+PANEL = 12  # the number in the panel's address: /panels/12
+
+
+def get(path):
+    req = urllib.request.Request(BASE + path, headers={"Authorization": f"Bearer {TOKEN}"})
+    with urllib.request.urlopen(req) as res:
+        return res.read()
+
+
+open("panel.csv", "wb").write(get(f"/api/panels/{PANEL}/csv"))  # the same file as Print & export
+panel = json.loads(get(f"/api/panels/{PANEL}"))  # or the panel and its breakers as JSON
+print(panel["name"], len(panel["breakers"]), "breakers")
+```
+
+`/api/locations/<id>/csv` gives every breaker under a location, and `/api/auth/me` says whose
+token it is.
+
+- **Read-only.** A token cannot change anything. It cannot open accounts, people, access
+  lists, invites or settings either, even an admin's.
+- **Your access, nothing more.** It sees what its owner sees, and stops working when the
+  account is disabled or deleted. Access from single sign-on groups is as of the owner's last
+  sign-in.
+- **Revoke** a token from **Account** at any time. Each one shows when and from where it was
+  last used. Admins see and revoke everyone's under **Settings → Sign-in**, where **Allow API
+  tokens** (`ALLOW_API_TOKENS`) turns them all off.
 
 ## Develop
 

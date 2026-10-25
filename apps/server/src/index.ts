@@ -29,6 +29,7 @@ const LABELS = {
   challenges: ['unfinished two-step sign-in', 'unfinished two-step sign-ins'],
   invites: ['old invite link', 'old invite links'],
   resets: ['old reset link', 'old reset links'],
+  tokens: ['expired API token', 'expired API tokens'],
 } as const;
 
 const purge = () => {

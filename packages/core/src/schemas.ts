@@ -433,3 +433,15 @@ export type MeterInput = z.infer<typeof meterInputSchema>;
 
 /** Set the field check of a meter. */
 export const verifyMeterSchema = z.object({ status: z.enum(VERIFY_STATUSES) });
+
+/** How long a new API token lasts, in days; null never expires. */
+export const API_TOKEN_DAYS = [30, 90, 365] as const;
+
+export const createApiTokenSchema = z.object({
+  name: z.string().trim().min(1, 'Give it a name').max(100),
+  days: z
+    .number()
+    .int()
+    .refine((d) => (API_TOKEN_DAYS as readonly number[]).includes(d), 'Choose 30, 90 or 365 days')
+    .nullable(),
+});

@@ -125,14 +125,16 @@ export function safePath(req: FastifyRequest): string {
   return path.replace(/^\/(invite|reset|p)\/[^/]+/, '/$1/…');
 }
 
-/** Who made a request, for the end of a log line: "ryan", "ryan as sam", or the address. */
+/** Who made a request, for the end of a log line: "ryan", "ryan as sam", "ryan's token SysON", or the address. */
 export function who(req: FastifyRequest): string {
   const auth = req.auth;
-  const name = auth
-    ? auth.readOnly
-      ? `${auth.realUser.username} as ${auth.user.username}`
-      : auth.realUser.username
-    : '';
+  const name = !auth
+    ? ''
+    : auth.apiToken
+      ? `${auth.realUser.username}'s token ${auth.apiToken.name}`
+      : auth.user.id !== auth.realUser.id
+        ? `${auth.realUser.username} as ${auth.user.username}`
+        : auth.realUser.username;
   return name ? `${name} @ ${req.ip}` : req.ip;
 }
 

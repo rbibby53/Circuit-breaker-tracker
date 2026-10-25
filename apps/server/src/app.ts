@@ -4,11 +4,13 @@ import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { LogController, type FastifyInstance } from 'fastify';
+import { bearerToken, loadTokenAuth, tokenCanRead } from './apiTokens';
 import { withSettings, type StartupConfig } from './config';
 import type { DB } from './db';
 import { HttpError } from './errors';
 import { logRequest, LogStream, safePath, setLogger } from './log';
 import { accessRoutes } from './routes/access';
+import { apiTokenRoutes } from './routes/apiTokens';
 import { authRoutes } from './routes/auth';
 import { locationRoutes } from './routes/locations';
 import { exportRoutes } from './routes/export';
@@ -124,6 +126,23 @@ export async function buildApp(
   app.addHook('onRequest', async (req, reply) => {
     if (!req.url.startsWith('/api/')) return;
     const mutating = !['GET', 'HEAD', 'OPTIONS'].includes(req.method);
+    // A script with an API token. No cookies, so no CSRF to guard against: browsers never add
+    // this header on their own.
+    const token = bearerToken(req);
+    if (token !== null) {
+      const refuse = (code: number, error: string, message: string) => {
+        req.failure = message;
+        return reply.code(code).send({ error, message });
+      };
+      if (!settings.get('allowApiTokens')) return refuse(401, 'unauthorized', 'API tokens are turned off here.');
+      req.auth = loadTokenAuth(db, req, token);
+      if (!req.auth) return refuse(401, 'unauthorized', 'That API token is wrong, expired or revoked.');
+      if (mutating) return refuse(403, 'read_only', 'API tokens can only read.');
+      if (!tokenCanRead(req.url.split('?')[0]!)) {
+        return refuse(403, 'forbidden', 'API tokens can read places, panels and equipment, not accounts or settings.');
+      }
+      return;
+    }
     // CSRF: browsers cannot add custom headers to cross-site form posts or simple requests.
     if (mutating && req.headers[CSRF_HEADER] !== '1') {
       return reply.code(403).send({ error: 'csrf', message: 'Missing request header.' });
@@ -166,6 +185,7 @@ export async function buildApp(
   authRoutes(app, db, config);
   locationRoutes(app, db);
   accessRoutes(app, db, config);
+  apiTokenRoutes(app, db, config);
   panelRoutes(app, db);
   generatorRoutes(app, db);
   topologyRoutes(app, db);
