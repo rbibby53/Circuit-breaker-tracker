@@ -36,6 +36,11 @@ ENV NODE_ENV=production \
     DATA_DIR=/data \
     WEB_DIST=/app/web
 WORKDIR /app
+# Pick up Debian security fixes newer than the base image, and drop npm/corepack: the
+# server only needs `node`, and npm's bundled modules are the bulk of the image's CVEs.
+RUN apt-get update && apt-get upgrade -y && rm -rf /var/lib/apt/lists/* \
+  && rm -rf /usr/local/lib/node_modules/npm /usr/local/lib/node_modules/corepack \
+     /usr/local/bin/npm /usr/local/bin/npx /usr/local/bin/corepack
 COPY --from=native /app/node_modules ./node_modules
 COPY --from=build /src/apps/server/dist ./
 COPY --from=build /src/apps/web/dist ./web
