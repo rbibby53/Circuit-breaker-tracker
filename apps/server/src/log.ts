@@ -67,7 +67,7 @@ export class LogStream {
   write(chunk: string): void {
     for (const raw of chunk.split('\n')) {
       if (!raw) continue;
-      let record: Record<string, unknown> | null = null;
+      let record: Record<string, unknown> | null;
       try {
         record = JSON.parse(raw) as Record<string, unknown>;
       } catch {

@@ -615,7 +615,7 @@ export function panelRoutes(app: FastifyInstance, db: DB): void {
       after: string | null;
     }[];
     return rows.map((r) => {
-      let details: string[] = [];
+      let details: string[];
       try {
         details = (r.after ? JSON.parse(r.after).details : null) ?? [];
       } catch {
