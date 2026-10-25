@@ -578,4 +578,19 @@ export const MIGRATIONS: string[] = [
   CREATE INDEX meters_breaker ON meters (breaker_id);
   CREATE INDEX meters_device ON meters (device_id);
   `,
+  `
+  -- Personal API tokens for scripts: read-only, with their owner's access. Only a hash is kept.
+  CREATE TABLE api_tokens (
+    id           INTEGER PRIMARY KEY,
+    user_id      INTEGER NOT NULL REFERENCES users (id) ON DELETE CASCADE,
+    name         TEXT NOT NULL,
+    token_hash   TEXT NOT NULL UNIQUE,
+    hint         TEXT NOT NULL,
+    created_at   TEXT NOT NULL,
+    expires_at   TEXT,
+    last_used_at TEXT,
+    last_used_ip TEXT
+  );
+  CREATE INDEX api_tokens_user ON api_tokens (user_id);
+  `,
 ];

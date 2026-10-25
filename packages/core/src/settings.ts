@@ -43,6 +43,7 @@ export interface Settings {
   gravatar: boolean;
   allowLocalLogin: boolean;
   sessionDays: number;
+  allowApiTokens: boolean;
   oidcIssuer: string;
   oidcClientId: string;
   oidcClientSecret: string;
@@ -121,6 +122,16 @@ export const SETTING_DEFS: SettingDef[] = [
     default: 30,
     min: 1,
     max: 365,
+  },
+  {
+    key: 'allowApiTokens',
+    group: 'signin',
+    label: 'Allow API tokens',
+    description:
+      'Let people make read-only tokens under Your account, so scripts can read what they can see. Turning this off stops every token working until it is turned back on.',
+    type: 'boolean',
+    env: 'ALLOW_API_TOKENS',
+    default: true,
   },
   {
     key: 'oidcIssuer',

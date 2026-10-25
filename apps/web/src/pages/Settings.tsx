@@ -14,6 +14,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { api } from '../api';
 import { useCurrentUser } from '../auth';
+import { AllApiTokens } from '../components/ApiTokens';
 import { useConfirm } from '../components/ConfirmDialog';
 import { GroupAccess } from '../components/GroupAccess';
 import { ErrorNote, formatDate } from '../components/ui';
@@ -74,7 +75,9 @@ export function SettingsPage() {
           title={g.title}
           defs={SETTING_DEFS.filter((d) => d.group === g.id)}
           current={byKey}
-          after={g.id === 'sso' ? <GroupAccess provider={s.ssoProvider} /> : undefined}
+          after={
+            g.id === 'sso' ? <GroupAccess provider={s.ssoProvider} /> : g.id === 'signin' ? <AllApiTokens /> : undefined
+          }
           extra={
             g.id === 'sso' ? (
               <SsoStatus data={s} />

@@ -45,6 +45,7 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     paperSize: config.settings.get('paperSize'),
     publicPanels: config.settings.get('publicPanels'),
     gravatar: config.settings.get('gravatar'),
+    apiTokens: config.settings.get('allowApiTokens'),
     oidc: { enabled: !!config.oidc, label: config.oidc?.label ?? '', provider: config.oidc?.provider ?? '' },
   }));
 

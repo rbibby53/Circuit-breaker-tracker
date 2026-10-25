@@ -5,6 +5,7 @@ import { getTheme, setTheme, type Theme } from '../lib/theme';
 import { useTitle } from '../lib/useTitle';
 import { api } from '../api';
 import { useAuthConfig, useCurrentUser } from '../auth';
+import { ApiTokensSection } from '../components/ApiTokens';
 import { Avatar } from '../components/Avatar';
 import { SessionsSection } from '../components/Sessions';
 import { TwoStepSettings } from '../components/TwoStep';
@@ -153,6 +154,8 @@ export function AccountPage() {
       <TwoStepSettings me={me} />
 
       <SessionsSection />
+
+      <ApiTokensSection enabled={config.data?.apiTokens ?? true} />
 
       {config.data?.oidc.enabled && (
         <section className="panel stack">

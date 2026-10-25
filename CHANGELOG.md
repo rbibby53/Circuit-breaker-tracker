@@ -4,6 +4,19 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+### Added
+
+- **API tokens for scripts** (under **Account → API tokens**): a read-only token lets a script
+  fetch the panel CSV or JSON you see in the browser, which also works for single sign-on
+  accounts. A token sees only what its owner can see, cannot change anything or reach
+  accounts and settings, and can expire. Each shows when it was last used, and admins see
+  and revoke everyone's under **Settings → Sign-in**, where **Allow API tokens** turns them
+  off. See "Scripts and API tokens" in the README for a Python example.
+
+### Upgrading
+
+- One database update runs on start: it adds a table for API tokens.
+
 ## 1.3.2 — 2026-10-25
 
 ### Changed

@@ -12,9 +12,14 @@ export interface AuthState {
   realUser: UserRow;
   /** The user whose permissions apply: the viewed user while viewing as someone. */
   user: UserRow;
-  /** True while viewing as someone else; every write is refused. */
+  /** True while viewing as someone else, or for an API token; every write is refused. */
   readOnly: boolean;
+  /** Set when a script signed in with an API token rather than a browser session. */
+  apiToken?: { id: number; name: string };
 }
+
+/** Whether an admin is viewing as someone else. */
+export const viewingAs = (auth: AuthState): boolean => auth.user.id !== auth.realUser.id;
 
 declare module 'fastify' {
   interface FastifyRequest {

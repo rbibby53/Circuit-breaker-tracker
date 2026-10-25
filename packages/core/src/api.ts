@@ -57,6 +57,8 @@ export interface AuthConfig {
   gravatar: boolean;
   /** Single sign-on: the button text and the provider's name ("Microsoft", "Authentik"…). */
   oidc: { enabled: boolean; label: string; provider: string };
+  /** Whether people may make API tokens for scripts. */
+  apiTokens: boolean;
 }
 
 export interface LocationDto {
@@ -632,6 +634,31 @@ export interface SessionInfo {
   createdAt: string;
   lastSeenAt: string | null;
   expiresAt: string;
+}
+
+/** A read-only API token under Your account. The token itself is only shown once, when made. */
+export interface ApiTokenInfo {
+  id: number;
+  name: string;
+  /** The token's last four characters, to tell tokens apart: "…x7Qa". */
+  hint: string;
+  createdAt: string;
+  /** Null when it never expires. */
+  expiresAt: string | null;
+  expired: boolean;
+  lastUsedAt: string | null;
+  lastUsedIp: string | null;
+}
+
+/** Every token, for admins under Settings → Sign-in. */
+export interface AdminApiTokenInfo extends ApiTokenInfo {
+  user: { id: number; username: string; displayName: string };
+}
+
+export interface CreatedApiToken {
+  /** The secret, e.g. "cbt_…". Shown once; only its hash is kept. */
+  token: string;
+  info: ApiTokenInfo;
 }
 
 /** The log viewer under Settings → Logging. */

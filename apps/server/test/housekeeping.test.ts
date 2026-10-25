@@ -40,7 +40,7 @@ describe('purgeExpired', () => {
     await admin.post(`/api/locations/${co}/invites`, { role: 'viewer' });
     const future = Date.now() + 40 * 86_400_000; // after the 7-day invite and 30-day keep window
     const nothing = purgeExpired(db);
-    expect(nothing).toEqual({ sessions: 0, states: 0, challenges: 0, invites: 0, resets: 0 });
+    expect(nothing).toEqual({ sessions: 0, states: 0, challenges: 0, invites: 0, resets: 0, tokens: 0 });
     const later = purgeExpired(db, future + 30 * 86_400_000);
     expect(later.sessions).toBe(1);
     expect(later.invites).toBe(1);
