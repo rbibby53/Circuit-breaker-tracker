@@ -308,6 +308,8 @@ breaker labels, Gravatar pictures, readable logs, automatic backups and signed-i
 
 ## After 1.0
 
+2.0 (live meters over BACnet/IP and BACnet/SC) is planned in [PLAN-2.0.md](PLAN-2.0.md).
+
 1.1 added standby generators (and the panels they back up), lighting relay panels such as
 nLight (each relay linked to the breaker it switches), and Authentik sign-in with access from
 single sign-on groups.
