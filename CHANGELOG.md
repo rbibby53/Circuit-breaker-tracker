@@ -4,6 +4,8 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.3.2 — 2026-10-25
+
 ### Changed
 
 - The Docker image now runs on Debian 13 (trixie) instead of Debian 12 (bookworm), still on
