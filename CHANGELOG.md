@@ -4,6 +4,13 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+### Changed
+
+- The Docker image now runs on Debian 13 (trixie) instead of Debian 12 (bookworm), still on
+  Node.js 24 LTS. Your data volume and settings carry over unchanged.
+- Dependencies updated to their latest releases, which also clears known advisories in
+  libraries the server uses (`fast-uri`, `ip-address`).
+
 ## 1.3.1 — 2026-10-13
 
 ### Added

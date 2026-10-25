@@ -28,7 +28,7 @@ export class Client {
     });
     const set = res.cookies.find((c) => c.name === 'cbt_session');
     if (set) this.cookie = set.value ? `cbt_session=${set.value}` : null;
-    let json: any = null;
+    let json: any;
     try {
       json = res.json();
     } catch {
