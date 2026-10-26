@@ -5,7 +5,8 @@ Thanks for helping. Bug reports, ideas and pull requests are all welcome.
 ## Before you start
 
 For anything bigger than a small fix, open an issue first so we can agree on the approach.
-[docs/PLAN.md](docs/PLAN.md) describes where the project is going.
+[docs/PLAN.md](docs/PLAN.md) describes where the project is going, and
+[docs/architecture.md](docs/architecture.md) how the code fits together.
 
 ## Set up
 
@@ -39,6 +40,9 @@ pnpm build
   automatically and can be pinned with their environment variable.
 - **Plain words in the UI.** Say what happened and what to do next. Avoid jargon where a
   homeowner would read it.
+- **Keep the docs true.** A change people will notice (a setting, a screen, an API endpoint)
+  updates the guide in `docs/` that describes it in the same pull request. New settings belong
+  in `docs/configuration.md`, and routes API tokens can read in `docs/api.md`.
 - Keep pull requests focused. Screenshots help for anything visual, in light and dark mode.
 
 ## Releasing
