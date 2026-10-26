@@ -16,7 +16,7 @@
     "check": "pnpm format:check && pnpm lint && pnpm typecheck && pnpm test",
     "release": "node scripts/release.mjs"
   },
-  "version": "1.3.2",
+  "version": "1.4.0",
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.13.0",

@@ -4,6 +4,8 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.4.0 — 2026-10-26
+
 ### Added
 
 - **API tokens for scripts** (under **Account → API tokens**): a read-only token lets a script
@@ -12,6 +14,12 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
   accounts and settings, and can expire. Each shows when it was last used, and admins see
   and revoke everyone's under **Settings → Sign-in**, where **Allow API tokens** turns them
   off. See "Scripts and API tokens" in the README for a Python example.
+
+### Changed
+
+- The Docker image applies Debian's latest security updates when it is built and no longer
+  ships `npm` or `corepack`, which the server never uses and which carried most of the
+  image's known vulnerabilities.
 
 ### Upgrading
 
