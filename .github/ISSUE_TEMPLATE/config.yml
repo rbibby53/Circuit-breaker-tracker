@@ -1,5 +1,8 @@
 blank_issues_enabled: true
 contact_links:
+  - name: Documentation
+    url: https://github.com/rbibby53/Circuit-breaker-tracker/tree/main/docs
+    about: Install, configuration, sign-in, the API and troubleshooting. Your answer may already be there.
   - name: Report a security problem
     url: https://github.com/rbibby53/Circuit-breaker-tracker/security/advisories/new
     about: Please report vulnerabilities privately rather than in a public issue.

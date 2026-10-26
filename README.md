@@ -8,13 +8,13 @@ A self-hosted web app for recreating your electrical panels, labelling what ever
 does, sharing them with the right people, and printing panel directories as PDFs. It runs
 as a single Docker container with its data in one SQLite file.
 
-> **Status: 1.3.1, stable.** Accounts with scoped access, Microsoft, Authentik and Keycloak
+> **Status: 1.4.0, stable.** Accounts with scoped access, Microsoft, Authentik and Keycloak
 > sign-in, the panel editor for load centers, 3-phase panelboards, switchboards, MCCs and
 > lighting relay panels, transformers and disconnects, generators and transfer switches, a power
 > flow map, connected load and capacity checks, an equipment register, field verification on a
 > phone (also offline), shutdown impact, spreadsheet import, printing, logs and automatic
-> backups. Upgrades are automatic; see [Upgrading](#upgrading). What could come next is in
-> [docs/PLAN.md](docs/PLAN.md).
+> backups, and read-only API tokens for scripts. Upgrades are automatic; see
+> [Upgrading](docs/install.md#upgrading). What could come next is in [docs/PLAN.md](docs/PLAN.md).
 
 ![The panel editor with a tandem breaker selected](docs/screenshots/editor.png)
 
@@ -33,7 +33,7 @@ as a single Docker container with its data in one SQLite file.
 - **Access from SSO groups:** give everyone in an Authentik (or Entra, Keycloak…) group
   access to a location, make members of an admin group admins, or only let certain groups
   sign in. Accounts are made on first sign-in for people whose groups give them access.
-  Nested groups count for the groups above them (see [Single sign-on and groups](#single-sign-on-and-groups)).
+  Nested groups count for the groups above them (see [Groups](docs/sign-in.md#groups)).
 - **Two-step sign-in** for password accounts: a code from an authenticator app, with
   one-time recovery codes. Whoever can send someone a reset link can also turn it off for
   them if they lose their phone.
@@ -181,7 +181,7 @@ as a single Docker container with its data in one SQLite file.
   Numbers or Google Sheets (from the same **Print & export** button).
 - **API tokens for scripts:** read-only tokens made under **Account**, so a script can fetch
   the same CSV or JSON you see in the browser, including with single sign-on accounts. See
-  [Scripts and API tokens](#scripts-and-api-tokens).
+  [API for scripts](docs/api.md).
 - **Duplicate a panel** into another room, e.g. for identical apartments. Room tags come
   along inside the same site.
 
@@ -251,277 +251,28 @@ volumes:
 docker compose up -d
 ```
 
-Image tags:
+Open `http://<server>:2757`, create the first admin account on the setup screen, then go to
+**Settings** to set the public address, reverse proxy, single sign-on and the rest. Upgrades are
+a `docker compose pull && docker compose up -d`; the database updates itself on start.
 
-| Tag      | What it is                                                         |
-| -------- | ------------------------------------------------------------------ |
-| `latest` | The newest release. Use this unless you have a reason not to.      |
-| `1`      | The newest 1.x release: updates, but never a breaking 2.0.         |
-| `1.1.0`  | Exactly that release.                                              |
-| `edge`   | The development build from `main`, between releases. May be rough. |
+## Documentation
 
-The app listens on port **2757** by default (it spells "BRKR" on a phone keypad, and little
-else uses it). To run with the host's network instead of port mapping, and pick any free port:
-
-```sh
-docker run -d --name breakers --network host -e PORT=2757 -v breakers-data:/data \
-  ghcr.io/rbibby53/circuit-breaker-tracker:latest
-```
-
-With `--network host`, `-p` mappings are ignored and `PORT` decides where it listens.
-
-Open the app and create the first admin account on the setup screen, then go to **Settings**
-to set the public address, reverse proxy, single sign-on and the rest. To build the image
-yourself, use `docker build -t circuit-breaker-tracker .` or set `build: .` in the compose
-file.
-
-### Unraid
-
-A template is in [`unraid/circuit-breaker-tracker.xml`](unraid/circuit-breaker-tracker.xml). It uses host networking
-on port 2757.
-
-1. In the Unraid terminal, create the data folder and give it to the container's user (uid 1000):
-   ```sh
-   mkdir -p /mnt/user/appdata/circuit-breaker-tracker && chown -R 1000:1000 /mnt/user/appdata/circuit-breaker-tracker
-   ```
-2. Save the template where Unraid looks for your own templates:
-   ```sh
-   curl -fsSL -o /boot/config/plugins/dockerMan/templates-user/my-circuit-breaker-tracker.xml \
-     https://raw.githubusercontent.com/rbibby53/Circuit-breaker-tracker/main/unraid/circuit-breaker-tracker.xml
-   ```
-3. **Docker** tab → **Add Container** → pick **circuit-breaker-tracker** under Template → **Apply**.
-4. Open `http://<server-ip>:2757`, create the first admin, then finish setup under **Settings**.
-
-### Upgrading
-
-Pull the new image and recreate the container (on Unraid: **Check for updates**, then
-**Apply update**). Keep the same `/data` volume. On start, the app updates its database
-in place, and the log says which schema it is on. A daily backup is in `/data/backups`
-already; take one from **Settings → Backup** first if you want to be extra safe. Browsers
-pick up the new version on their own, including tabs left open.
-
-Going back to an older version is not supported once the database has been updated. Restore
-the backup taken before the upgrade instead.
-
-### Configuration
-
-Docker only needs a port and a volume. Everything else is set by an admin on the **Settings**
-page and applies without a restart.
-
-| Docker variable                    | Default | Purpose                                                                                            |
-| ---------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| `PORT`                             | `2757`  | Port to listen on.                                                                                 |
-| `DATA_DIR`                         | `/data` | Where `breakers.db` lives. Mount a volume here.                                                    |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | (none)  | Create the first admin at startup instead of using the setup screen. Ignored once any user exists. |
-
-Any setting can also be pinned with an environment variable. It then wins over the Settings page
-and shows there as locked. This suits infrastructure-as-code setups:
-
-| Setting                    | Variable                                                                                |
-| -------------------------- | --------------------------------------------------------------------------------------- |
-| App name                   | `APP_NAME`                                                                              |
-| Public address             | `PUBLIC_URL`                                                                            |
-| Allow password sign-in     | `ALLOW_LOCAL_LOGIN`                                                                     |
-| Stay signed in for (days)  | `SESSION_DAYS`                                                                          |
-| Allow API tokens           | `ALLOW_API_TOKENS`                                                                      |
-| Single sign-on (OIDC)      | `OIDC_ISSUER`, `OIDC_CLIENT_ID`, `OIDC_CLIENT_SECRET`, `OIDC_SCOPES`                    |
-| SSO button text            | `OIDC_LABEL`                                                                            |
-| SSO groups                 | `OIDC_GROUPS_CLAIM`, `OIDC_ADMIN_GROUPS`, `OIDC_ALLOWED_GROUPS`, `OIDC_CREATE_ACCOUNTS` |
-| Invite / reset link expiry | `INVITE_DAYS`, `RESET_HOURS`                                                            |
-| New panel defaults         | `DEFAULT_PANEL_SPACES`, `DEFAULT_MAIN_AMPS`, `DEFAULT_VOLTAGE`                          |
-| Printing and QR codes      | `PAPER_SIZE` (`letter`, `a4`), `PRINT_QR`, `PRINT_NOTE`, `PUBLIC_PANELS`                |
-| Gravatar profile pictures  | `GRAVATAR`                                                                              |
-| Behind a reverse proxy     | `TRUST_PROXY`                                                                           |
-| HTTPS-only cookies         | `COOKIE_SECURE` (`auto`, `always`, `never`)                                             |
-| Log level                  | `LOG_LEVEL` (`error`, `warn`, `info`, `debug`)                                          |
-| Log format                 | `LOG_FORMAT` (`text`, `json`)                                                           |
-| Automatic backups          | `BACKUP_KEEP` (`0` = off, default 14), `BACKUP_HOUR` (0–23, default 3)                  |
-
-### Logs
-
-The container log (Unraid's log viewer, `docker logs`) has one readable line per event, in the
-container's time zone (`TZ`):
-
-```
-2026-10-11 14:05:09 INFO  Circuit Breaker Tracker 1.1.0 starting · Node v24.21.0 · times in this log are America/Chicago
-2026-10-11 14:05:09 INFO  Database /data/breakers.db (1.2 MB, schema 10): 4 people, 31 locations, 6 panels, 212 breakers
-2026-10-11 14:05:09 INFO  Sign-in: passwords, Authentik via auth.example.com (admin groups, 2 group access rules) · sessions last 30 days
-2026-10-11 14:06:41 INFO  Signed in: ryan (password and two-step code) from 192.168.1.20
-2026-10-11 14:07:02 INFO  ryan: Edited panel Main panel: Changed 14 label · Personal › Home › Basement › Utility room
-2026-10-11 14:09:15 WARN  POST /api/auth/login → 403 in 98 ms · 192.168.1.31 · Sign-in refused for "sam": wrong password
-```
-
-- **Info** (the default) shows the start-up summary, sign-ins and sign-outs, every change (the
-  same entries as the Activity page), clean-ups, and any problems with the reason.
-- **Debug** adds a line for every request, with who made it. Health checks and static files
-  are never logged.
-- Link tokens and query strings are never written to the log.
-- Set **Log format** to JSON for a log collector such as Loki or Graylog.
-
-Both are under Settings → Logging and take effect without a restart. **Show recent log** there
-lists the last 500 lines, so you can check what happened without opening the container console.
-
-### Behind a reverse proxy
-
-Point the proxy at port 2757, then turn on **Settings → Network and security → Behind a reverse
-proxy** and set the public address to the proxy's https:// address.
-
-Caddy:
-
-```
-breakers.example.com {
-  reverse_proxy breakers:2757
-}
-```
-
-Nginx:
-
-```nginx
-location / {
-  proxy_pass http://breakers:2757;
-  proxy_set_header Host $host;
-  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
-  proxy_set_header X-Forwarded-Proto $scheme;
-}
-```
-
-### Microsoft Entra ID sign-in
-
-1. In the Entra admin center, go to **App registrations** and choose **New registration**.
-   - **Supported account types:** accounts in this organizational directory only.
-   - **Redirect URI:** platform _Web_. The exact value is shown on the Settings page, e.g.
-     `https://breakers.example.com/api/auth/oidc/callback`.
-2. Under **Certificates & secrets**, create a client secret.
-3. In the app, open **Settings → Single sign-on** and fill in:
-   - **Issuer URL:** `https://login.microsoftonline.com/<directory-tenant-id>/v2.0`
-   - **Client ID:** the application (client) ID
-   - **Client secret:** the secret value
-4. Save, then press **Test connection**.
-
-To use Entra security groups, add a **groups claim** under **Token configuration** (Security
-groups, ID token). Entra sends group object IDs, so use those IDs as group names below.
-
-### Authentik sign-in
-
-1. In Authentik, open **Applications → Providers** and create an **OAuth2/OpenID Provider**:
-   - **Client type:** Confidential.
-   - **Redirect URIs:** _Strict_, the value shown on the Settings page, e.g.
-     `https://breakers.example.com/api/auth/oidc/callback`.
-   - Keep the default scopes (`openid`, `email`, `profile`). Authentik's `profile` scope
-     includes a `groups` claim with the names of the user's groups.
-2. Create an **Application** that uses this provider, e.g. with the slug `breakers`. Bind
-   groups or users to it under **Policy / Group / User Bindings** to decide who may use it.
-3. In the app, open **Settings → Single sign-on** and fill in:
-   - **Issuer URL:** the provider's _OpenID Configuration Issuer_, e.g.
-     `https://auth.example.com/application/o/breakers/` (keep the slash at the end).
-   - **Client ID** and **Client secret:** from the provider.
-4. Save, then press **Test connection**. The sign-in button reads **Sign in with Authentik**.
-
-### Single sign-on and groups
-
-Signing in with single sign-on does not give access to anything by itself. Someone gets in
-when any of these apply:
-
-- They accept an **invite link** with single sign-on instead of a password.
-- An existing local user links their single sign-on account from **Account**.
-- Their **groups** give them access (below). Their account is made the first time they sign
-  in, unless **Create accounts from groups** is off.
-
-Accounts are matched by the provider's subject ID, never by email.
-
-Groups come from the token's `groups` claim (change **Groups claim** for another, e.g.
-`realm_access.roles` for Keycloak roles; add `groups` to **Scopes** for Authelia or Keycloak).
-Group names are matched ignoring case. Under **Settings → Single sign-on**:
-
-- **Group access** gives everyone in a group a role on a location, just like a grant: for
-  example _Electricians_ → Editor on _KSU › Main campus_. It shows on People and Access as
-  "from the Electricians group" and is changed here or in the provider, not per person. Access
-  given by hand stays as it is, beside it.
-- **Admin groups** make their members admins, and take it away when they leave. Admins made by
-  hand are never changed, and the last admin is never removed.
-- **Only allow these groups** refuses single sign-on for anyone outside them.
-
-**Nested groups.** Someone in a group inside another group (_Electricians_ inside
-_Facilities_) gets the access of both, as long as the provider says so:
-
-- **Keycloak** sends full paths such as `/Facilities/Electricians` (the group mapper's _Full
-  group path_ setting). The app counts that as membership of `/Facilities` too, so group
-  access, admin groups and allowed groups can name either the full path or just the group's
-  name (`Facilities`, `Electricians`). Use the full path when two branches have groups with
-  the same name.
-- **Authentik** sends only the groups someone is directly in. To include the groups above
-  them, add a scope mapping under _Customization → Property Mappings_ (scope name
-  `all_groups`) with
-  `return {"all_groups": [g.name for g in request.user.all_groups()]}`, add it to the
-  provider's scopes, then set **Scopes** to include `all_groups` and **Groups claim** to
-  `all_groups` here.
-- **Microsoft Entra ID** already includes groups someone is in through other groups.
-
-People's groups are read each time they sign in with single sign-on, so a change in the
-provider applies at their next sign-in. To apply it sooner, use **People → Manage → Sign out
-everywhere**. Someone who also has a password keeps the groups from their last single sign-on
-while they use the password. Changes to group access in the app apply straight away.
-
-Local passwords keep working alongside SSO. To make everyone except admins use single sign-on,
-turn off **Settings → Sign-in → Allow password sign-in**. Admins always keep their password, so
-you cannot lock yourself out.
-
-### Backups
-
-Everything is in `/data/breakers.db`.
-
-- **Automatic backups:** a copy is saved every day in `/data/backups`, at 03:00 in the
-  container's time zone. The newest 14 are kept. Change the time and the number kept under
-  **Settings → Automatic backups** (`BACKUP_HOUR`, `BACKUP_KEEP`; `0` turns them off). A
-  backup missed while the server was off runs as soon as it is back. Each one is logged.
-- **Saved backups** are listed under Settings, where you can download one, restore from it, or
-  save one now. Your usual Unraid appdata backup picks up the folder as well.
-- **Download a copy** from **Settings → Backup** at any time, even while people are using the
-  app.
-
-To restore, pick a saved backup or upload a backup file. The app shows what is in it before
-anything changes, saves the current data as `breakers-before-restore-<date>.db` in the data
-folder, then swaps the data in without a restart. Backups from older versions are upgraded
-on the way in. Everyone is signed out and signs in with an account from the backup.
+| Guide                                      | For                                                                         |
+| ------------------------------------------ | --------------------------------------------------------------------------- |
+| [Install and upgrade](docs/install.md)     | Docker, Compose, Unraid, image tags, reverse proxies, upgrading             |
+| [Configuration](docs/configuration.md)     | Every setting and its environment variable, logs, backups and restores      |
+| [Sign-in](docs/sign-in.md)                 | Passwords, two-step codes, Microsoft Entra ID, Authentik, Keycloak, groups  |
+| [User guide](docs/guide.md)                | Locations, panels, breakers, the power path, printing, field checks, import |
+| [Access and roles](docs/access.md)         | Viewer, Editor, Manager and Admin; invites; what others see                 |
+| [API for scripts](docs/api.md)             | Read-only API tokens, every endpoint, examples                              |
+| [Troubleshooting](docs/troubleshooting.md) | When something doesn't work                                                 |
+| [Architecture](docs/architecture.md)       | How the code fits together, for contributors                                |
 
 ### Scripts and API tokens
 
-A script can read what you can see without a browser. Under **Account → API tokens**, name a
-token (say "SysON export"), choose when it expires, and copy it. It is shown once; only a hash
-is kept. Send it in an `Authorization: Bearer` header:
-
-```python
-import json
-import os
-import urllib.request
-
-BASE = "https://breakers.example.com"
-TOKEN = os.environ["CBT_TOKEN"]  # keep it out of your code
-PANEL = 12  # the number in the panel's address: /panels/12
-
-
-def get(path):
-    req = urllib.request.Request(BASE + path, headers={"Authorization": f"Bearer {TOKEN}"})
-    with urllib.request.urlopen(req) as res:
-        return res.read()
-
-
-open("panel.csv", "wb").write(get(f"/api/panels/{PANEL}/csv"))  # the same file as Print & export
-panel = json.loads(get(f"/api/panels/{PANEL}"))  # or the panel and its breakers as JSON
-print(panel["name"], len(panel["breakers"]), "breakers")
-```
-
-`/api/locations/<id>/csv` gives every breaker under a location, and `/api/auth/me` says whose
-token it is.
-
-- **Read-only.** A token cannot change anything. It cannot open accounts, people, access
-  lists, invites or settings either, even an admin's.
-- **Your access, nothing more.** It sees what its owner sees, and stops working when the
-  account is disabled or deleted. Access from single sign-on groups is as of the owner's last
-  sign-in.
-- **Revoke** a token from **Account** at any time. Each one shows when and from where it was
-  last used. Admins see and revoke everyone's under **Settings → Sign-in**, where **Allow API
-  tokens** (`ALLOW_API_TOKENS`) turns them all off.
+A script can read panels, breakers and locations with a read-only API token from **Your account
+→ API tokens**. Every endpoint, with examples in Python, PowerShell and curl, is in
+[docs/api.md](docs/api.md).
 
 ## Develop
 
@@ -541,11 +292,12 @@ Layout:
 packages/core   Shared types, validation schemas and access rules (used by server and web)
 apps/server     Fastify API, SQLite, sessions, SSO; serves the built web app
 apps/web        React UI
-docs/PLAN.md    The plan and milestones
+docs/           User and admin guides, the plan and milestones
 ```
 
 The access rules live in `packages/core/src/access.ts` and are covered by
-`access.test.ts`. The server re-checks every request against them.
+`access.test.ts`. The server re-checks every request against them. How the rest fits together
+is in [docs/architecture.md](docs/architecture.md).
 
 ## Contributing
 

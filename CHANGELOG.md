@@ -4,6 +4,13 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+### Added
+
+- **Documentation** in [`docs/`](docs/README.md): install and upgrade, every setting with its
+  environment variable, sign-in (including Keycloak), a user guide, access and roles, the API
+  for scripts with every endpoint a token can read, troubleshooting, and the architecture for
+  contributors. The README now links to them instead of holding everything.
+
 ## 1.4.0 — 2026-10-26
 
 ### Added
