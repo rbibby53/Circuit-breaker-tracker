@@ -43,7 +43,7 @@ async function discoverIssuer(oidc: OidcConfig): Promise<client.Configuration> {
   }
 }
 
-export const redirectUri = (config: Config) => `${config.publicUrl}/api/auth/oidc/callback`;
+export const redirectUri = (config: Config) => `${config.appUrl}/api/auth/oidc/callback`;
 
 const STATE_TTL_MS = 10 * 60_000;
 

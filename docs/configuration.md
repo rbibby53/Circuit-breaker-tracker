@@ -13,12 +13,13 @@ page, and applies straight away without a restart.
 
 These are read only from the container's environment:
 
-| Variable                           | Default | Purpose                                                                                            |
-| ---------------------------------- | ------- | -------------------------------------------------------------------------------------------------- |
-| `PORT`                             | `2757`  | Port to listen on.                                                                                 |
-| `DATA_DIR`                         | `/data` | Where `breakers.db` and the `backups` folder live. Mount a volume here.                            |
-| `TZ`                               | `UTC`   | Time zone for the log and for when daily backups run, e.g. `America/Chicago`.                      |
-| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | (none)  | Create the first admin at startup instead of using the setup screen. Ignored once any user exists. |
+| Variable                           | Default | Purpose                                                                                                                                                 |
+| ---------------------------------- | ------- | ------------------------------------------------------------------------------------------------------------------------------------------------------- |
+| `PORT`                             | `2757`  | Port to listen on.                                                                                                                                      |
+| `DATA_DIR`                         | `/data` | Where `breakers.db` and the `backups` folder live. Mount a volume here.                                                                                 |
+| `BASE_PATH`                        | (none)  | Serve the app under a path, e.g. `/breakers`, behind a proxy that forwards the full path. See [Under a path](install.md#under-a-path-such-as-breakers). |
+| `TZ`                               | `UTC`   | Time zone for the log and for when daily backups run, e.g. `America/Chicago`.                                                                           |
+| `ADMIN_USERNAME`, `ADMIN_PASSWORD` | (none)  | Create the first admin at startup instead of using the setup screen. Ignored once any user exists.                                                      |
 
 ## Settings
 
@@ -34,7 +35,8 @@ Every setting below is on the **Settings** page, grouped the same way. Each can 
 | Show Gravatar pictures | `GRAVATAR`   | on                        | People with a picture on gravatar.com show it instead of initials. Browsers fetch it from Gravatar, which learns a hash of each email shown. |
 
 While the public address is blank, links and QR codes use whatever address each browser used,
-and the log says so at start-up.
+and the log says so at start-up. With `BASE_PATH` set, the public address can include the path
+or leave it out (`https://host` and `https://host/breakers` give the same links).
 
 ### Sign-in
 

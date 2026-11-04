@@ -28,6 +28,12 @@ apps/web        React 19 + React Router + TanStack Query, built with Vite.
 In production it is one Node process (`node server.mjs`) serving the API under `/api/` and the
 web app's static files for everything else, with its data in `$DATA_DIR/breakers.db`.
 
+With `BASE_PATH` set (e.g. `/breakers`), Fastify's `rewriteUrl` takes the prefix off before
+routing (`apps/server/src/basePath.ts`), so routes stay registered at the root. The web app is
+built with relative file names (Vite `base: './'`); the server makes them absolute in
+`index.html` and writes the prefix into a `cbt-base-path` meta tag, which `apps/web/src/lib/base.ts`
+reads for the router's basename, the API client and plain links.
+
 `packages/core` is the contract between the two: request bodies are validated with its zod
 schemas (`schemas.ts`), responses are typed with its interfaces (`api.ts`), and both sides use
 the same access rules and panel calculations, so the UI and the server cannot disagree about

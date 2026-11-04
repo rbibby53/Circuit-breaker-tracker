@@ -30,7 +30,7 @@ import { daysFromNow, hoursFromNow, newToken } from '../tokens';
 import { adminCount } from '../users';
 
 function baseUrl(config: Config, req: FastifyRequest): string {
-  return config.publicUrl ?? `${req.protocol}://${req.host}`;
+  return config.appUrl ?? `${req.protocol}://${req.host}${config.basePath}`;
 }
 
 export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void {

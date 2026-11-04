@@ -5,18 +5,22 @@
 const VERSION = 'cbt-1';
 const SHELL = `${VERSION}-shell`;
 const DATA = `${VERSION}-data`;
+// Where the app lives, with a trailing slash: '/' at the root, '/breakers/' under BASE_PATH.
+const BASE = new URL(self.registration.scope).pathname;
 
-// Reads field mode needs offline: who is signed in, the location tree, panel lists and panels.
-const DATA_PATHS = [/^\/api\/auth\/(me|config)$/, /^\/api\/locations$/, /^\/api\/panels$/, /^\/api\/panels\/\d+$/];
+// Reads field mode needs offline (paths after BASE): who is signed in, the location tree, panel
+// lists and panels.
+const DATA_PATHS = [/^api\/auth\/(me|config)$/, /^api\/locations$/, /^api\/panels$/, /^api\/panels\/\d+$/];
 
 /** The app page and the built files it loads first, so it opens with no connection. */
 async function precache() {
   const cache = await caches.open(SHELL);
-  const res = await fetch('/', { cache: 'no-cache' });
+  const res = await fetch(BASE, { cache: 'no-cache' });
   if (!res.ok) return;
   const html = await res.clone().text();
-  await cache.put('/', res);
-  const assets = [...html.matchAll(/(?:src|href)="(\/assets\/[^"]+)"/g)].map((m) => m[1]);
+  await cache.put(BASE, res);
+  const prefix = `${BASE}assets/`;
+  const assets = [...html.matchAll(/(?:src|href)="([^"]+)"/g)].map((m) => m[1]).filter((u) => u.startsWith(prefix));
   await cache.addAll([...new Set(assets)]);
 }
 
@@ -70,11 +74,15 @@ self.addEventListener('fetch', (event) => {
   if (url.origin !== self.location.origin) return;
   if (request.mode === 'navigate') {
     // Every page is the same app; keep one copy of it.
-    event.respondWith(networkFirst(request, SHELL, '/'));
-  } else if (url.pathname.startsWith('/assets/')) {
+    event.respondWith(networkFirst(request, SHELL, BASE));
+  } else if (url.pathname.startsWith(`${BASE}assets/`)) {
     // Built files have content hashes in their names, so a copy never goes stale.
     event.respondWith(cacheFirst(request));
-  } else if (DATA_PATHS.some((re) => re.test(url.pathname)) && !url.search) {
+  } else if (
+    url.pathname.startsWith(BASE) &&
+    DATA_PATHS.some((re) => re.test(url.pathname.slice(BASE.length))) &&
+    !url.search
+  ) {
     event.respondWith(networkFirst(request, DATA));
   }
 });

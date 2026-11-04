@@ -19,6 +19,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { GroupAccess } from '../components/GroupAccess';
 import { ErrorNote, formatDate } from '../components/ui';
 import { useTitle } from '../lib/useTitle';
+import { withBase } from '../lib/base';
 
 export function SettingsPage() {
   useTitle('Settings');
@@ -99,7 +100,7 @@ export function SettingsPage() {
           take while people are using the app. Keep it somewhere private, since it includes account details.
         </p>
         <div>
-          <a className="btn btn-dark" href="/api/admin/backup" download>
+          <a className="btn btn-dark" href={withBase('/api/admin/backup')} download>
             Download backup
           </a>
         </div>
@@ -302,7 +303,7 @@ function SettingField({
         disabled={locked}
         maxLength={def.maxLength}
         value={String(value)}
-        placeholder={def.key === 'publicUrl' ? window.location.origin : undefined}
+        placeholder={def.key === 'publicUrl' ? appOrigin() : undefined}
         onChange={(e) => onChange(e.target.value)}
       />
     );
@@ -316,7 +317,7 @@ function SettingField({
       <div className="setting-row">
         {input}
         {def.key === 'publicUrl' && !locked && (
-          <button type="button" className="btn btn-sm" onClick={() => onChange(window.location.origin)}>
+          <button type="button" className="btn btn-sm" onClick={() => onChange(appOrigin())}>
             Use this address
           </button>
         )}
@@ -391,7 +392,7 @@ function RestoreBackup({
   const apply = useMutation({
     mutationFn: (id: string) => api.post<{ ok: true; safetyCopy: string }>(`/api/admin/restore/${id}`),
     // Everyone is signed out by a restore; the sign-in page explains why.
-    onSuccess: () => window.location.assign('/login?restored=1'),
+    onSuccess: () => window.location.assign(withBase('/login?restored=1')),
   });
 
   const c = pending?.summary.counts;
@@ -578,7 +579,7 @@ function SavedBackups({ onRestore }: { onRestore: (p: RestoreUpload) => void }) 
                 </span>
               </span>
               <span className="row">
-                <a className="btn btn-sm" href={`/api/admin/backups/${f.name}`} download>
+                <a className="btn btn-sm" href={withBase(`/api/admin/backups/${f.name}`)} download>
                   Download
                 </a>
                 <button
@@ -619,3 +620,6 @@ function formatBytes(n: number): string {
   if (n < 1024 * 1024) return `${(n / 1024).toFixed(0)} KB`;
   return `${(n / 1024 / 1024).toFixed(1)} MB`;
 }
+
+/** This app's address as the browser sees it, including any base path: a suggestion for the public address. */
+const appOrigin = () => `${window.location.origin}${withBase('/')}`.replace(/\/$/, '');

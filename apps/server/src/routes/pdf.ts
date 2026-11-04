@@ -37,7 +37,7 @@ const locationQuery = z.object({
 export function pdfRoutes(app: FastifyInstance, db: DB, config: Config): void {
   const context = (tz: string | undefined, auth: AuthState): PrintContext => {
     const wantQr = config.settings.get('printQr');
-    const base = config.publicUrl;
+    const base = config.appUrl;
     return {
       appName: config.settings.get('appName'),
       note: config.settings.get('printNote'),
