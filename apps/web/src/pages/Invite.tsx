@@ -8,6 +8,7 @@ import { useAuthConfig, useMe } from '../auth';
 import { AuthShell } from '../components/AuthShell';
 import { ErrorNote, Field, formatDate } from '../components/ui';
 import { SsoIcon, ssoName } from './Login';
+import { withBase } from '../lib/base';
 
 const ROLE_BLURB = {
   viewer: 'see panels and print labels',
@@ -103,7 +104,7 @@ export function InvitePage() {
               <>
                 <a
                   className="btn btn-outline btn-block btn-lg"
-                  href={`/api/auth/oidc/start?invite=${encodeURIComponent(token)}`}
+                  href={withBase(`/api/auth/oidc/start?invite=${encodeURIComponent(token)}`)}
                 >
                   <SsoIcon provider={config.data.oidc.provider} />
                   Accept with {ssoName(config.data.oidc.provider)}
@@ -155,8 +156,8 @@ export function InvitePage() {
             </form>
             <p className="muted small">
               Already have an account?{' '}
-              <a href={`/login?next=${encodeURIComponent(`/invite/${token}`)}`}>Sign in first</a>, then come back to
-              this link.
+              <a href={withBase(`/login?next=${encodeURIComponent(`/invite/${token}`)}`)}>Sign in first</a>, then come
+              back to this link.
             </p>
           </>
         )}

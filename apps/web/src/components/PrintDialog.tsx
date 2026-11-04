@@ -1,6 +1,7 @@
 import { PAPER_SIZES, type PaperSize } from '@cbt/core';
 import { useEffect, useRef, useState } from 'react';
 import { useAuthConfig } from '../auth';
+import { withBase } from '../lib/base';
 
 interface PrintStyle {
   value: string;
@@ -93,7 +94,7 @@ export function PrintButton({
     if ((style === 'labels' || style === 'qr') && skip > 0) q.set('skip', String(skip));
     if (style === 'strips') q.set('pitch', pitch);
     if (download) q.set('download', '1');
-    return `${endpoint}?${q}`;
+    return withBase(`${endpoint}?${q}`);
   };
 
   return (
@@ -201,7 +202,7 @@ export function PrintButton({
             </div>
             <p className="small muted">
               Need it in a spreadsheet?{' '}
-              <a href={csv} download onClick={() => setOpen(false)}>
+              <a href={withBase(csv)} download onClick={() => setOpen(false)}>
                 Download every breaker as CSV
               </a>
               , for Excel, Numbers or Google Sheets.

@@ -5,6 +5,7 @@ import { api } from '../api';
 import { useAuthConfig } from '../auth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { ErrorNote } from '../components/ui';
+import { withBase } from '../lib/base';
 
 /** Turn the panel's public page (opened from its QR code without signing in) on or off. */
 export function SharePanel({ panel }: { panel: PanelDetail }) {
@@ -13,7 +14,7 @@ export function SharePanel({ panel }: { panel: PanelDetail }) {
   const [publicPath, setPublicPath] = useState(panel.publicPath);
   const [copied, setCopied] = useState(false);
   const allowed = config.data?.publicPanels ?? true;
-  const url = publicPath ? `${window.location.origin}${publicPath}` : null;
+  const url = publicPath ? `${window.location.origin}${withBase(publicPath)}` : null;
 
   const change = useMutation({
     mutationFn: (body: { enabled: boolean; renew?: boolean }) =>
@@ -61,7 +62,7 @@ export function SharePanel({ panel }: { panel: PanelDetail }) {
               >
                 {copied ? 'Copied' : 'Copy link'}
               </button>
-              <a className="btn btn-sm" href={publicPath!} target="_blank" rel="noopener">
+              <a className="btn btn-sm" href={withBase(publicPath!)} target="_blank" rel="noopener">
                 Open
               </a>
               <button

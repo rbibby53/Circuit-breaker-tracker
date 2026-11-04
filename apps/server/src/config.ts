@@ -1,5 +1,6 @@
 import path from 'node:path';
 import { ssoButtonLabel, ssoProviderName } from '@cbt/core';
+import { normaliseBasePath, withBasePath } from './basePath';
 import type { SettingsStore } from './settings';
 
 // Replaced at build time by esbuild (see build.mjs); undefined when running from source.
@@ -11,6 +12,8 @@ export interface StartupConfig {
   host: string;
   dataDir: string;
   webDist: string | null;
+  /** The path prefix the app is served under, e.g. `/breakers`; '' at the root. */
+  basePath: string;
   bootstrapAdmin: { username: string; password: string } | null;
   version: string;
   /** Kept for the settings store: environment variables pin settings. */
@@ -21,6 +24,8 @@ export interface StartupConfig {
 export interface Config extends StartupConfig {
   settings: SettingsStore;
   readonly publicUrl: string | null;
+  /** The public address including the base path (no trailing slash), for links and QR codes. */
+  readonly appUrl: string | null;
   readonly cookieSecure: boolean;
   readonly sessionDays: number;
   readonly oidc: { issuer: string; clientId: string; clientSecret: string; label: string; provider: string } | null;
@@ -49,6 +54,7 @@ export function loadConfig(env: NodeJS.ProcessEnv = process.env): StartupConfig 
     host: text(env.HOST) ?? '0.0.0.0',
     dataDir: path.resolve(text(env.DATA_DIR) ?? './data'),
     webDist: text(env.WEB_DIST) ? path.resolve(text(env.WEB_DIST)!) : null,
+    basePath: normaliseBasePath(env.BASE_PATH),
     bootstrapAdmin: adminUser && adminPassword ? { username: adminUser, password: adminPassword } : null,
     version: text(env.APP_VERSION) ?? (typeof __APP_VERSION__ === 'string' ? __APP_VERSION__ : 'dev'),
     env,
@@ -61,6 +67,10 @@ export function withSettings(startup: StartupConfig, settings: SettingsStore): C
     settings,
     get publicUrl() {
       return settings.get('publicUrl') || null;
+    },
+    get appUrl() {
+      const url = settings.get('publicUrl');
+      return url ? withBasePath(url, startup.basePath) : null;
     },
     get cookieSecure() {
       const mode = settings.get('cookieSecure');

@@ -41,9 +41,15 @@ export function startupLines(db: DB, config: Config, env: NodeJS.ProcessEnv = pr
   const publicUrl = s.get('publicUrl');
   info(
     publicUrl
-      ? `Public address ${publicUrl}`
+      ? `Public address ${publicUrl}` + (config.appUrl !== publicUrl ? ` (links use ${config.appUrl})` : '')
       : 'Public address not set: links and QR codes use the address each browser used. Set it under Settings if this is reached from outside your network.',
   );
+
+  if (config.basePath) {
+    info(
+      `Base path ${config.basePath}: the web UI and API answer under ${config.basePath}/ (health check also at /healthz)`,
+    );
+  }
 
   const ways: string[] = [];
   ways.push(s.get('allowLocalLogin') ? 'passwords' : 'passwords (admins only)');

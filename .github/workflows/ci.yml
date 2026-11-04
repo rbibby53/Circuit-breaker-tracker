@@ -49,6 +49,27 @@ jobs:
           done
           docker logs cbt
           exit 1
+      - name: Start the image under BASE_PATH and check it
+        run: |
+          set -euo pipefail
+          docker run -d --name cbt-prefix -p 2758:2757 -e BASE_PATH=/breakers circuit-breaker-tracker:ci
+          for i in $(seq 1 30); do
+            if curl -sf http://localhost:2758/healthz > /dev/null; then break; fi
+            sleep 1
+          done
+          fail() { echo "::error::$1"; docker logs cbt-prefix; exit 1; }
+          # The image's own HEALTHCHECK command, run inside the container.
+          docker exec cbt-prefix node -e "fetch('http://127.0.0.1:' + (process.env.PORT || 2757) + '/healthz').then((r) => process.exit(r.ok ? 0 : 1)).catch(() => process.exit(1))" \
+            || fail 'healthcheck failed under BASE_PATH'
+          [ "$(curl -s -o /dev/null -w '%{http_code} %{redirect_url}' http://localhost:2758/breakers)" = "301 http://localhost:2758/breakers/" ] \
+            || fail '/breakers does not redirect to /breakers/'
+          page=$(curl -sf http://localhost:2758/breakers/panels/1/field)
+          echo "$page" | grep -q 'content="/breakers"' || fail 'page has no base path'
+          asset=$(echo "$page" | grep -o 'src="/breakers/assets/[^"]*"' | head -1 | cut -d'"' -f2)
+          [ -n "$asset" ] || fail 'page has no prefixed script'
+          curl -sf -o /dev/null "http://localhost:2758$asset" || fail "$asset not served"
+          curl -sf http://localhost:2758/breakers/api/auth/config > /dev/null || fail 'API not served under the prefix'
+          docker logs cbt-prefix 2>&1 | grep -q 'listening at .*/breakers/' || fail 'base path not logged'
       - name: Print a PDF from the image
         run: |
           set -euo pipefail

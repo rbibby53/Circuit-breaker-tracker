@@ -7,6 +7,7 @@ import { api } from '../api';
 import { useAuthConfig } from '../auth';
 import { AuthShell } from '../components/AuthShell';
 import { ErrorNote, Field } from '../components/ui';
+import { withBase } from '../lib/base';
 
 /** The single sign-on button's icon: Microsoft's four squares, or a key for other providers. */
 export function SsoIcon({ provider }: { provider: string | undefined }) {
@@ -115,7 +116,7 @@ export function LoginPage() {
         )}
         {config.data?.oidc.enabled && (
           <>
-            <a className="btn btn-outline btn-block btn-lg" href="/api/auth/oidc/start">
+            <a className="btn btn-outline btn-block btn-lg" href={withBase('/api/auth/oidc/start')}>
               <SsoIcon provider={config.data.oidc.provider} />
               {config.data.oidc.label}
             </a>

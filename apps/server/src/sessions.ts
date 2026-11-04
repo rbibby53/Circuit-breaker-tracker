@@ -40,6 +40,9 @@ export interface SessionRow {
   method: string | null;
 }
 
+/** Under BASE_PATH the session cookie is only sent to this app, not others on the same host. */
+const cookiePath = (config: Config) => config.basePath || '/';
+
 /** Start a session. `how` says how they signed in, for the log: "password", "Authentik"… */
 export function createSession(
   db: DB,
@@ -56,7 +59,7 @@ export function createSession(
      VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
   ).run(hash, userId, at, daysFromNow(config.sessionDays), userAgent?.slice(0, 300) ?? null, at, reply.request.ip, how);
   reply.setCookie(SESSION_COOKIE, token, {
-    path: '/',
+    path: cookiePath(config),
     httpOnly: true,
     sameSite: 'lax',
     secure: config.cookieSecure,
@@ -67,7 +70,12 @@ export function createSession(
 }
 
 export function clearSessionCookie(config: Config, reply: FastifyReply): void {
-  reply.clearCookie(SESSION_COOKIE, { path: '/', httpOnly: true, sameSite: 'lax', secure: config.cookieSecure });
+  reply.clearCookie(SESSION_COOKIE, {
+    path: cookiePath(config),
+    httpOnly: true,
+    sameSite: 'lax',
+    secure: config.cookieSecure,
+  });
 }
 
 export function destroySession(db: DB, sessionId: string): void {

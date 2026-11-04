@@ -28,6 +28,7 @@ Then open the web UI and create the first admin account. Everything else (public
   <Requires/>
   <Config Name="Web UI port" Target="PORT" Default="2757" Mode="" Description="Port the web UI listens on. With host networking this must be free on the server. If you change it, open the UI at that port." Type="Variable" Display="always" Required="true" Mask="false">2757</Config>
   <Config Name="Data" Target="/data" Default="/mnt/user/appdata/circuit-breaker-tracker" Mode="rw" Description="Holds the database (breakers.db). Must be owned by 1000:1000 (see Overview)." Type="Path" Display="always" Required="true" Mask="false">/mnt/user/appdata/circuit-breaker-tracker</Config>
+  <Config Name="Base path" Target="BASE_PATH" Default="" Mode="" Description="Optional. Serve the app under a path such as /breakers, behind a reverse proxy that forwards the full path. Blank serves it at the root." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="First admin username" Target="ADMIN_USERNAME" Default="" Mode="" Description="Optional. Creates the first admin at startup instead of using the setup screen. Ignored once any user exists." Type="Variable" Display="advanced" Required="false" Mask="false"></Config>
   <Config Name="First admin password" Target="ADMIN_PASSWORD" Default="" Mode="" Description="Optional, with the username above. At least 10 characters." Type="Variable" Display="advanced" Required="false" Mask="true"></Config>
 </Container>

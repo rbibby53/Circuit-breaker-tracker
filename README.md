@@ -255,6 +255,10 @@ Open `http://<server>:2757`, create the first admin account on the setup screen,
 **Settings** to set the public address, reverse proxy, single sign-on and the rest. Upgrades are
 a `docker compose pull && docker compose up -d`; the database updates itself on start.
 
+To serve it under a path such as `http://<host>/breakers/` (sharing a host with other apps, for
+example behind IIS), add `BASE_PATH: /breakers` to `environment` and have the proxy forward the
+full path; see [Under a path](docs/install.md#under-a-path-such-as-breakers).
+
 ## Documentation
 
 | Guide                                      | For                                                                         |

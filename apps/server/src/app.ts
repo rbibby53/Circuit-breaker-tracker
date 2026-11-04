@@ -1,10 +1,12 @@
 import fs from 'node:fs';
+import type { IncomingMessage } from 'node:http';
 import path from 'node:path';
 import cookie from '@fastify/cookie';
 import rateLimit from '@fastify/rate-limit';
 import fastifyStatic from '@fastify/static';
 import Fastify, { LogController, type FastifyInstance } from 'fastify';
 import { bearerToken, loadTokenAuth, tokenCanRead } from './apiTokens';
+import { outsideBase, renderIndex, stripBasePath } from './basePath';
 import { withSettings, type StartupConfig } from './config';
 import type { DB } from './db';
 import { HttpError } from './errors';
@@ -78,6 +80,8 @@ export async function buildApp(
     logController: new LogController({ disableRequestLogging: true }),
     // A function so the admin page can switch it without a restart.
     trustProxy: () => settings.get('trustProxy'),
+    // Under BASE_PATH the proxy passes the full path; routes see it without the prefix.
+    rewriteUrl: (raw: IncomingMessage) => stripBasePath(config.basePath, raw.url ?? '/'),
   });
   setLogger(logging ? app.log : null);
   settings.onChange((key, value) => {
@@ -85,6 +89,15 @@ export async function buildApp(
     if (key === 'logLevel') app.log.level = String(value);
     if (key === 'logFormat') stream.format = value === 'json' ? 'json' : 'text';
   });
+
+  // Outside the prefix: add the missing trailing slash, or answer 404 (except /healthz).
+  if (config.basePath) {
+    app.addHook('onRequest', async (req, reply) => {
+      const outside = outsideBase(config.basePath, req.originalUrl);
+      if (outside === 'not_found') return reply.code(404).send({ error: 'not_found', message: 'Not found.' });
+      if (outside) return reply.redirect(outside.redirect, outside.permanent ? 301 : 302);
+    });
+  }
 
   await app.register(cookie);
   await app.register(rateLimit, {
@@ -205,9 +218,13 @@ export async function buildApp(
 
   const webDist = config.webDist;
   if (webDist && fs.existsSync(path.join(webDist, 'index.html'))) {
+    // The page itself is sent below, with the base path filled in.
+    const indexHtml = renderIndex(fs.readFileSync(path.join(webDist, 'index.html'), 'utf8'), config.basePath);
     await app.register(fastifyStatic, {
       root: webDist,
       wildcard: false,
+      index: false,
+      globIgnore: ['index.html'],
       // Built assets have content hashes in their names; everything else must revalidate.
       setHeaders: (reply, filePath) => {
         reply.header(
@@ -220,7 +237,7 @@ export async function buildApp(
       // Missing built files are a real 404, so a stale page sees "not found" rather than HTML.
       if (req.method === 'GET' && !req.url.startsWith('/api/') && !req.url.startsWith('/assets/')) {
         // Always revalidate the page, so an upgrade is picked up and old file names are not asked for.
-        return reply.header('Cache-Control', 'no-cache').sendFile('index.html');
+        return reply.header('Cache-Control', 'no-cache').type('text/html; charset=utf-8').send(indexHtml);
       }
       return reply.code(404).send({ error: 'not_found', message: 'Not found.' });
     });

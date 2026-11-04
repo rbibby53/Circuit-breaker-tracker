@@ -3,6 +3,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { api } from '../api';
 import { useConfirm } from './ConfirmDialog';
 import { ErrorNote, relativeTime } from './ui';
+import { withBase } from '../lib/base';
 
 /** "Where you're signed in": every browser with a live session, and a way to end each one. */
 export function SessionsSection() {
@@ -12,7 +13,7 @@ export function SessionsSection() {
   const refresh = () => qc.invalidateQueries({ queryKey: ['sessions'] });
   const end = useMutation({
     mutationFn: (s: SessionInfo) => api.del(`/api/me/sessions/${s.id}`),
-    onSuccess: (_r, s) => (s.current ? window.location.assign('/login') : refresh()),
+    onSuccess: (_r, s) => (s.current ? window.location.assign(withBase('/login')) : refresh()),
   });
   const others = useMutation({ mutationFn: () => api.post('/api/me/sessions/sign-out-others'), onSuccess: refresh });
   const sessions = list.data ?? [];

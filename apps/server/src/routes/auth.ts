@@ -272,7 +272,8 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
 
   app.get('/api/auth/oidc/callback', async (req, reply) => {
     if (!config.oidc) throw notFound('Single sign-on is not configured.');
-    const callbackUrl = new URL(req.url, config.publicUrl!);
+    // req.url is without the base path, which appUrl adds back, so this matches redirectUri().
+    const callbackUrl = new URL(`${config.appUrl!}${req.url}`);
     try {
       const { claims, state } = await finishOidc(db, config, callbackUrl);
       const result = await completeOidcLogin(db, claims, state, ssoRules(config));
@@ -285,13 +286,13 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
         req.headers['user-agent'],
         state.linkUserId ? `${provider}, linking it to their account` : provider,
       );
-      return reply.redirect(result.redirect);
+      return reply.redirect(`${config.basePath}${result.redirect}`);
     } catch (err) {
       req.log.warn(
         `${config.oidc.provider} sign-in failed from ${req.ip}: ${err instanceof Error ? err.message : String(err)}`,
       );
       const message = err instanceof Error ? err.message : 'Sign-in failed.';
-      return reply.redirect(`/login?error=${encodeURIComponent(message)}`);
+      return reply.redirect(`${config.basePath}/login?error=${encodeURIComponent(message)}`);
     }
   });
 }

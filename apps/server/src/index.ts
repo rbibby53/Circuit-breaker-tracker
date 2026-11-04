@@ -67,5 +67,7 @@ process.on('unhandledRejection', (err) => {
 await app.listen({
   port: config.port,
   host: config.host,
-  listenTextResolver: (address) => `Web UI listening at ${address}`,
+  listenTextResolver: (address) =>
+    `Web UI listening at ${address}${config.basePath}/` +
+    (config.basePath ? ` (base path ${config.basePath}, from BASE_PATH)` : ''),
 });

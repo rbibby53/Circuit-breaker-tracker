@@ -11,6 +11,7 @@ import { SessionsSection } from '../components/Sessions';
 import { TwoStepSettings } from '../components/TwoStep';
 import { ErrorNote, Field } from '../components/ui';
 import { SsoIcon, ssoName } from './Login';
+import { withBase } from '../lib/base';
 
 export function AccountPage() {
   useTitle('Account');
@@ -170,7 +171,7 @@ export function AccountPage() {
               </div>
             ))
           ) : (
-            <a className="btn btn-outline" href="/api/auth/oidc/start?link=1">
+            <a className="btn btn-outline" href={withBase('/api/auth/oidc/start?link=1')}>
               <SsoIcon provider={config.data.oidc.provider} />
               Link your {ssoName(config.data.oidc.provider)} account
             </a>

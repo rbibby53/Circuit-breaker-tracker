@@ -10,6 +10,7 @@ import { ApiError } from './api';
 import { RequireAuth } from './auth';
 import { ConfirmProvider } from './components/ConfirmDialog';
 import { Layout } from './components/Layout';
+import { BASE_PATH, withBase } from './lib/base';
 import { applyTheme } from './lib/theme';
 import { LoginPage } from './pages/Login';
 import { NotFoundPage } from './pages/NotFound';
@@ -146,7 +147,7 @@ applyTheme();
 // Field mode works without signal through a service worker (production builds only).
 if ('serviceWorker' in navigator && import.meta.env.PROD) {
   window.addEventListener('load', () => {
-    navigator.serviceWorker.register('/sw.js').catch(() => undefined);
+    navigator.serviceWorker.register(withBase('/sw.js'), { scope: withBase('/') }).catch(() => undefined);
   });
 }
 
@@ -167,7 +168,8 @@ createRoot(document.getElementById('root')!).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
       <ConfirmProvider>
-        <BrowserRouter>
+        {/* With the trailing slash, home is /breakers/: inside the service worker's scope. */}
+        <BrowserRouter basename={BASE_PATH ? `${BASE_PATH}/` : undefined}>
           <Suspense fallback={<div className="page-loading">Loading…</div>}>
             <Routes>
               <Route path="/setup" element={<SetupPage />} />

@@ -1,3 +1,5 @@
+import { withBase } from './lib/base';
+
 export class ApiError extends Error {
   constructor(
     readonly status: number,
@@ -10,7 +12,7 @@ export class ApiError extends Error {
 
 async function request<T>(method: string, url: string, body?: unknown): Promise<T> {
   const raw = body instanceof Blob;
-  const res = await fetch(url, {
+  const res = await fetch(withBase(url), {
     method,
     credentials: 'same-origin',
     headers: {

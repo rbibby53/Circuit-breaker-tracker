@@ -10,6 +10,10 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
   environment variable, sign-in (including Keycloak), a user guide, access and roles, the API
   for scripts with every endpoint a token can read, troubleshooting, and the architecture for
   contributors. The README now links to them instead of holding everything.
+- **Serve under a path** with `BASE_PATH` (e.g. `/breakers`), for a reverse proxy such as IIS
+  that shares one host name between apps and forwards the full path. The web UI, API,
+  downloads, invite links and QR codes all use the prefix, and the sign-in cookie is limited
+  to it. Read at start-up, so the same image works at the root; unset changes nothing.
 
 ## 1.4.0 — 2026-10-26
 

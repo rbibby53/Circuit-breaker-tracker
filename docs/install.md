@@ -9,6 +9,7 @@ port and a folder (or volume) for `/data`. Nothing else: no database server, no 
 - [First start](#first-start)
 - [Image tags](#image-tags)
 - [Behind a reverse proxy](#behind-a-reverse-proxy)
+- [Under a path such as /breakers](#under-a-path-such-as-breakers)
 - [Upgrading](#upgrading)
 - [Building the image yourself](#building-the-image-yourself)
 
@@ -166,6 +167,54 @@ Nginx Proxy Manager, SWAG and Traefik need nothing special: a plain HTTP upstrea
 
 **HTTPS matters for phones.** Field mode's **Save for offline** only works on HTTPS (or on
 `localhost`), because browsers allow offline storage only there.
+
+## Under a path such as /breakers
+
+To share a host name with other apps (`http://plant-ops/breakers/` next to
+`http://plant-ops/SensorView/`), set `BASE_PATH` and have the proxy forward the **full path,
+without stripping the prefix**:
+
+```sh
+docker run -d --name breakers -p 2757:2757 -e BASE_PATH=/breakers -v breakers-data:/data \
+  ghcr.io/rbibby53/circuit-breaker-tracker:latest
+```
+
+- Everything answers under the prefix: the web UI, `/breakers/api/…`, downloads, invite links
+  and QR codes. `/breakers` redirects to `/breakers/`; other paths outside it are 404s, except
+  `/healthz`, which also answers at the root for the container health check.
+- The sign-in cookie is limited to `/breakers`, so other apps on the host never see it.
+- It is read at start-up, so one image works at the root and under a path. Leave it unset (or
+  blank) to serve at the root as before. The log shows it: `Web UI listening at
+http://0.0.0.0:2757/breakers/ (base path /breakers, from BASE_PATH)`.
+- Set the **Public address** too (with or without the path). It is needed when the proxy does
+  not pass the original host name on, as IIS does by default.
+
+Nginx (no trailing slash on `proxy_pass`, so the path is passed as it is):
+
+```nginx
+location /breakers/ {
+  proxy_pass http://breakers:2757;
+  proxy_set_header Host $host;
+  proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;
+  proxy_set_header X-Forwarded-Proto $scheme;
+}
+```
+
+IIS, with URL Rewrite and Application Request Routing (proxy enabled under **ARR → Server
+Proxy Settings**), in the site's `web.config`:
+
+```xml
+<system.webServer>
+  <rewrite>
+    <rules>
+      <rule name="Circuit Breaker Tracker" stopProcessing="true">
+        <match url="^breakers(/.*)?$" />
+        <action type="Rewrite" url="http://localhost:2757/breakers{R:1}" />
+      </rule>
+    </rules>
+  </rewrite>
+</system.webServer>
+```
 
 ## Upgrading
 
