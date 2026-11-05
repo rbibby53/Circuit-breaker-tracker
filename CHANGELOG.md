@@ -4,6 +4,8 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.6.0 — 2026-11-05
+
 ### Added
 
 - **Email** (optional, under **Settings → Email**, or `SMTP_*` variables): invites and password
