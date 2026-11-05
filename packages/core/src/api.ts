@@ -149,6 +149,23 @@ export interface InviteInfo {
   invitedBy: string;
 }
 
+/** An invite link that has not been used yet and has not expired. */
+export interface PendingInvite {
+  id: number;
+  locationId: number;
+  /** "KSU › Kennesaw campus". */
+  locationPath: string;
+  role: Role;
+  inviteLimit: Role | null;
+  /** Who it is for: the note, or the address it was emailed to. */
+  note: string | null;
+  createdAt: string;
+  expiresAt: string;
+  createdBy: string | null;
+  /** Whether the person asking may revoke it (it is within their invite limit). */
+  canRevoke: boolean;
+}
+
 export interface CreatedLink {
   url: string;
   expiresAt: string;

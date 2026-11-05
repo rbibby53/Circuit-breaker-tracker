@@ -8,6 +8,7 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { useTitle } from '../lib/useTitle';
 import { Avatar } from '../components/Avatar';
 import { InviteDialog, ManageAccess } from '../components/ManageAccess';
+import { PendingInvites } from '../components/PendingInvites';
 import { ErrorNote, LinkBox, relativeTime } from '../components/ui';
 import { useViewAs } from './Access';
 import { ssoName } from './Login';
@@ -90,6 +91,7 @@ export function UsersPage() {
       <ErrorNote
         error={users.error ?? resetLink.error ?? update.error ?? remove.error ?? totpOff.error ?? viewAs.error}
       />
+      <PendingInvites />
       <input
         type="search"
         className="people-search"

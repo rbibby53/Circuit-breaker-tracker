@@ -21,8 +21,9 @@ import { useConfirm } from '../components/ConfirmDialog';
 import { useTitle } from '../lib/useTitle';
 import { Avatar } from '../components/Avatar';
 import { LocationTree } from '../components/LocationTree';
+import { PendingInvites } from '../components/PendingInvites';
 import { Sidebar } from '../components/Sidebar';
-import { ErrorNote, Field, LinkBox, formatDate } from '../components/ui';
+import { ErrorNote, Field, LinkBox } from '../components/ui';
 import { buildTree, flatten } from '../tree';
 import { useLocations } from '../queries';
 
@@ -374,7 +375,7 @@ export function InviteForm({
       setLink(l);
       setNote('');
       setEmail('');
-      void qc.invalidateQueries({ queryKey: ['invites', locationId] });
+      void qc.invalidateQueries({ queryKey: ['invites'] });
     },
   });
   const submit = (e: FormEvent) => {
@@ -467,48 +468,6 @@ function AddExistingForm({
       </div>
       <ErrorNote error={add.error} />
     </form>
-  );
-}
-
-function PendingInvites({ locationId }: { locationId: number }) {
-  const qc = useQueryClient();
-  const invites = useQuery({
-    queryKey: ['invites', locationId],
-    queryFn: () =>
-      api.get<
-        {
-          id: number;
-          role: Role;
-          inviteLimit: Role | null;
-          note: string | null;
-          expiresAt: string;
-          createdBy: string | null;
-        }[]
-      >(`/api/locations/${locationId}/invites`),
-  });
-  const revoke = useMutation({
-    mutationFn: (id: number) => api.del(`/api/invites/${id}`),
-    onSuccess: () => qc.invalidateQueries({ queryKey: ['invites', locationId] }),
-  });
-  if (!invites.data?.length) return null;
-  return (
-    <div className="stack">
-      <h3>Unused invite links</h3>
-      <ul className="plain-list">
-        {invites.data.map((i) => (
-          <li key={i.id} className="row-between">
-            <span>
-              {ROLE_LABELS[i.role]}
-              {i.note ? ` for ${i.note}` : ''} · by {i.createdBy ?? 'someone'} · expires {formatDate(i.expiresAt)}
-            </span>
-            <button className="btn btn-sm" onClick={() => revoke.mutate(i.id)}>
-              Revoke
-            </button>
-          </li>
-        ))}
-      </ul>
-      <ErrorNote error={revoke.error} />
-    </div>
   );
 }
 

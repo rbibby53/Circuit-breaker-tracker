@@ -16,7 +16,10 @@ import {
   updateUserSchema,
   type AccessResponse,
   type ActivityItem,
+  type Actor,
   type CreatedLink,
+  type PendingInvite,
+  type Role,
   type UserListItem,
 } from '@cbt/core';
 import type { FastifyInstance, FastifyRequest } from 'fastify';
@@ -55,6 +58,54 @@ function assertEmail(config: Config): void {
 
 function baseUrl(config: Config, req: FastifyRequest): string {
   return config.appUrl ?? `${req.protocol}://${req.host}${config.basePath}`;
+}
+
+/**
+ * Unused, unexpired invites the actor manages: at one location, or everywhere. Uses the same
+ * rules as revoking, so `canRevoke` matches what DELETE /api/invites/:id allows.
+ */
+function pendingInvites(db: DB, actor: Actor, access: AccessData, locationId?: number): PendingInvite[] {
+  const rows = db
+    .prepare(
+      `SELECT i.id, i.location_id, i.role, i.invite_limit, i.note, i.created_at, i.expires_at,
+              u.display_name AS created_by_name
+       FROM invites i LEFT JOIN users u ON u.id = i.created_by
+       WHERE i.used_at IS NULL AND i.expires_at > ? ${locationId === undefined ? '' : 'AND i.location_id = ?'}
+       ORDER BY i.created_at DESC, i.id DESC`,
+    )
+    .all(...(locationId === undefined ? [now()] : [now(), locationId])) as {
+    id: number;
+    location_id: number;
+    role: Role;
+    invite_limit: Role | null;
+    note: string | null;
+    created_at: string;
+    expires_at: string;
+    created_by_name: string | null;
+  }[];
+  const out: PendingInvite[] = [];
+  for (const r of rows) {
+    const node = access.node(r.location_id);
+    if (!node || !canView(actor, node, access.grants) || !grantCeiling(actor, node, access.grants)) continue;
+    out.push({
+      id: r.id,
+      locationId: r.location_id,
+      locationPath: access.pathLabel(r.location_id),
+      role: r.role,
+      inviteLimit: r.invite_limit,
+      note: r.note,
+      createdAt: r.created_at,
+      expiresAt: r.expires_at,
+      createdBy: r.created_by_name,
+      canRevoke: canManageGrant(
+        actor,
+        node,
+        { userId: -1, locationId: r.location_id, role: r.role, inviteLimit: r.invite_limit },
+        access.grants,
+      ).ok,
+    });
+  }
+  return out;
 }
 
 export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void {
@@ -282,37 +333,25 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     );
   });
 
-  app.get('/api/locations/:id/invites', async (req) => {
+  app.get('/api/locations/:id/invites', async (req): Promise<PendingInvite[]> => {
     const auth = requireAuth(req);
     const actor = actorOf(auth);
     const id = idParam((req.params as { id: string }).id);
     const access = new AccessData(db);
     const node = access.node(id);
     if (!node || !canView(actor, node, access.grants) || !grantCeiling(actor, node, access.grants)) throw notFound();
-    const rows = db
-      .prepare(
-        `SELECT i.id, i.role, i.invite_limit, i.note, i.created_at, i.expires_at, u.display_name AS created_by_name
-         FROM invites i LEFT JOIN users u ON u.id = i.created_by
-         WHERE i.location_id = ? AND i.used_at IS NULL AND i.expires_at > ? ORDER BY i.created_at DESC`,
-      )
-      .all(id, now()) as {
-      id: number;
-      role: string;
-      invite_limit: string | null;
-      note: string | null;
-      created_at: string;
-      expires_at: string;
-      created_by_name: string | null;
-    }[];
-    return rows.map((r) => ({
-      id: r.id,
-      role: r.role,
-      inviteLimit: r.invite_limit,
-      note: r.note,
-      createdAt: r.created_at,
-      expiresAt: r.expires_at,
-      createdBy: r.created_by_name,
-    }));
+    return pendingInvites(db, actor, access, id);
+  });
+
+  /** Every unused invite in the locations the person manages, newest first. */
+  app.get('/api/invites', async (req): Promise<PendingInvite[]> => {
+    const auth = requireAuth(req);
+    const actor = actorOf(auth);
+    const access = new AccessData(db);
+    if (!actor.isAdmin && managerScopes(actor, access.grants).length === 0) {
+      throw forbidden('Only managers can see pending invites.');
+    }
+    return pendingInvites(db, actor, access);
   });
 
   app.delete('/api/invites/:id', async (req) => {

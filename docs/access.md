@@ -54,6 +54,12 @@ choose the role. With email set up, fill in **Their email** and press **Email in
 otherwise press **Create invite link**, copy the link and send it to them. They set a password,
 or sign in with single sign-on.
 
+**Invites nobody has used yet** are listed under **Pending invites** at the top of **People**:
+every one in the places you manage, with where it is for, who made it and when it expires.
+**Access** shows the ones for the selected location. **Revoke** stops a link working straight
+away. A manager can revoke any invite within their invite limit, including ones others made;
+stronger ones show "Beyond your invite limit". Used and expired invites drop off the list.
+
 **To someone who already has an account:** open **People**, press **Manage** beside them, and
 use **Give access somewhere**. The same panel shows everywhere they have access, lets you
 change a role or remove access, and sets their name and email.
