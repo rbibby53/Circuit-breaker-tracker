@@ -4,6 +4,17 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+### Added
+
+- **Pending invites** at the top of **People**: every invite link nobody has used yet, across
+  all the places you manage, with where it is for, who made it, when it expires, and **Revoke**
+  (after a confirmation). Before, they were only listed location by location under **Access**.
+
+### Fixed
+
+- **Revoke** no longer shows on invites stronger than your invite limit, which the server
+  refused to revoke anyway.
+
 ## 1.6.0 — 2026-11-05
 
 ### Added
