@@ -20,12 +20,34 @@ export function Field({ label, children, hint }: { label: string; children: Reac
   );
 }
 
-/** A created invite or reset link, with a copy button. */
-export function LinkBox({ url, expiresAt, onClose }: { url: string; expiresAt: string; onClose?: () => void }) {
+/** A created invite or reset link, with a copy button, and whether it was also emailed. */
+export function LinkBox({
+  url,
+  expiresAt,
+  emailedTo,
+  emailError,
+  onClose,
+}: {
+  url: string;
+  expiresAt: string;
+  emailedTo?: string;
+  emailError?: string;
+  onClose?: () => void;
+}) {
   const [copied, setCopied] = useState(false);
   return (
     <div className="linkbox" role="status">
-      <span className="field-label">Copy this link and send it however you like</span>
+      {emailedTo && (
+        <p className="notice">
+          Emailed to <strong>{emailedTo}</strong>. The link is below too, in case it doesn&apos;t arrive.
+        </p>
+      )}
+      {emailError && (
+        <p className="error">Could not email it. {emailError} Copy the link and send it yourself instead.</p>
+      )}
+      <span className="field-label">
+        {emailedTo ? 'Or copy the link' : 'Copy this link and send it however you like'}
+      </span>
       <div className="linkbox-row">
         <input readOnly value={url} onFocus={(e) => e.currentTarget.select()} aria-label="Link" />
         <button

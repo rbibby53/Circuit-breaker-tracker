@@ -59,6 +59,10 @@ export interface AuthConfig {
   oidc: { enabled: boolean; label: string; provider: string };
   /** Whether people may make API tokens for scripts. */
   apiTokens: boolean;
+  /** Whether the server can send email (invites and reset links can be emailed). */
+  email: boolean;
+  /** Whether the sign-in page offers "Forgot your password?" (a reset link by email). */
+  passwordResetEmail: boolean;
 }
 
 export interface LocationDto {
@@ -148,6 +152,10 @@ export interface InviteInfo {
 export interface CreatedLink {
   url: string;
   expiresAt: string;
+  /** Set when the link was also emailed. */
+  emailedTo?: string;
+  /** Set when emailing it failed: the link still works and can be copied. */
+  emailError?: string;
 }
 
 export interface ActivityItem {
@@ -580,6 +588,8 @@ export interface AdminSettingsResponse {
   ssoProvider: string;
   /** What to register as the redirect URI with the identity provider. */
   redirectUri: string | null;
+  /** Whether email is set up, and what is missing when it is not. */
+  email: { enabled: boolean; problem: string | null };
   about: {
     version: string;
     nodeVersion: string;

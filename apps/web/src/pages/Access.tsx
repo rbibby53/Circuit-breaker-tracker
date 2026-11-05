@@ -16,7 +16,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { useEffect, useState, type FormEvent } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { api } from '../api';
-import { useCurrentUser } from '../auth';
+import { useAuthConfig, useCurrentUser } from '../auth';
 import { useConfirm } from '../components/ConfirmDialog';
 import { useTitle } from '../lib/useTitle';
 import { Avatar } from '../components/Avatar';
@@ -359,6 +359,8 @@ export function InviteForm({
   const [role, setRole] = useState<Role>('viewer');
   const [limit, setLimit] = useState<Role>('viewer');
   const [note, setNote] = useState('');
+  const [email, setEmail] = useState('');
+  const canEmail = !!useAuthConfig().data?.email;
   const [link, setLink] = useState<CreatedLink | null>(null);
   const create = useMutation({
     mutationFn: () =>
@@ -366,10 +368,12 @@ export function InviteForm({
         role,
         inviteLimit: role === 'manager' ? limit : null,
         note: note || undefined,
+        email: (canEmail && email.trim()) || undefined,
       }),
     onSuccess: (l) => {
       setLink(l);
       setNote('');
+      setEmail('');
       void qc.invalidateQueries({ queryKey: ['invites', locationId] });
     },
   });
@@ -381,19 +385,34 @@ export function InviteForm({
     <form className="form-band" onSubmit={submit}>
       <h3>Invite someone new</h3>
       <div className="form-row">
+        {canEmail && (
+          <Field label="Their email (optional)">
+            <input
+              type="email"
+              value={email}
+              onChange={(e) => setEmail(e.target.value)}
+              placeholder="To email the invite"
+              autoComplete="off"
+            />
+          </Field>
+        )}
         <Field label="Who is it for? (optional, for your records)">
           <input value={note} onChange={(e) => setNote(e.target.value)} placeholder="e.g. Mum, or a coworker's name" />
         </Field>
         <RoleFields choices={choices} role={role} limit={limit} setRole={setRole} setLimit={setLimit} />
         <button className="btn btn-dark" disabled={create.isPending}>
-          Create invite link
+          {create.isPending && email.trim()
+            ? 'Sending…'
+            : canEmail && email.trim()
+              ? 'Email invite'
+              : 'Create invite link'}
         </button>
       </div>
       <p className="muted small">
         Applies to {locationName} and everything inside it. They can create a password or use single sign-on.
       </p>
       <ErrorNote error={create.error} />
-      {link && <LinkBox url={link.url} expiresAt={link.expiresAt} onClose={() => setLink(null)} />}
+      {link && <LinkBox {...link} onClose={() => setLink(null)} />}
     </form>
   );
 }

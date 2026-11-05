@@ -50,8 +50,9 @@ further than you intended.
 ## Giving access
 
 **To someone new:** open **Access**, pick the location, and under **Invite someone new**
-choose the role and press **Create invite link**. Copy the link and send it to them. They set
-a password, or sign in with single sign-on.
+choose the role. With email set up, fill in **Their email** and press **Email invite**;
+otherwise press **Create invite link**, copy the link and send it to them. They set a password,
+or sign in with single sign-on.
 
 **To someone who already has an account:** open **People**, press **Manage** beside them, and
 use **Give access somewhere**. The same panel shows everywhere they have access, lets you

@@ -25,6 +25,7 @@ export const SETTING_GROUPS = [
   { id: 'signin', title: 'Sign-in' },
   { id: 'sso', title: 'Single sign-on' },
   { id: 'links', title: 'Invite and reset links' },
+  { id: 'email', title: 'Email' },
   { id: 'panels', title: 'New panel defaults' },
   { id: 'printing', title: 'Printing and QR codes' },
   { id: 'network', title: 'Network and security' },
@@ -36,6 +37,8 @@ export type SettingGroup = (typeof SETTING_GROUPS)[number]['id'];
 export const LOG_LEVELS = ['error', 'warn', 'info', 'debug'] as const;
 export const PAPER_SIZES = ['letter', 'a4'] as const;
 export type PaperSize = (typeof PAPER_SIZES)[number];
+export const SMTP_SECURITY = ['starttls', 'tls', 'none'] as const;
+export type SmtpSecurity = (typeof SMTP_SECURITY)[number];
 
 export interface Settings {
   appName: string;
@@ -55,6 +58,13 @@ export interface Settings {
   oidcCreateAccounts: boolean;
   inviteDays: number;
   resetHours: number;
+  smtpHost: string;
+  smtpPort: number;
+  smtpSecurity: SmtpSecurity;
+  smtpUsername: string;
+  smtpPassword: string;
+  smtpFrom: string;
+  selfServiceReset: boolean;
   defaultSpaces: number;
   defaultMainAmps: number;
   defaultVoltage: string;
@@ -250,6 +260,83 @@ export const SETTING_DEFS: SettingDef[] = [
     default: 48,
     min: 1,
     max: 720,
+  },
+  {
+    key: 'smtpHost',
+    group: 'email',
+    label: 'SMTP server',
+    description:
+      'The mail server that sends invites and password reset links, e.g. smtp.office365.com or your campus relay. Blank turns email off: links are copied and sent by hand.',
+    type: 'text',
+    env: 'SMTP_HOST',
+    default: '',
+    maxLength: 253,
+  },
+  {
+    key: 'smtpPort',
+    group: 'email',
+    label: 'Port',
+    description: 'Usually 587 with STARTTLS, 465 with TLS, or 25 for an internal relay.',
+    type: 'int',
+    env: 'SMTP_PORT',
+    default: 587,
+    min: 1,
+    max: 65535,
+  },
+  {
+    key: 'smtpSecurity',
+    group: 'email',
+    label: 'Encryption',
+    description:
+      'STARTTLS upgrades the connection and refuses to send if the server cannot. None sends in the clear, for a relay on a trusted network only.',
+    type: 'enum',
+    env: 'SMTP_SECURITY',
+    default: 'starttls',
+    options: [
+      { value: 'starttls', label: 'STARTTLS (usually port 587)' },
+      { value: 'tls', label: 'TLS from the start (usually port 465)' },
+      { value: 'none', label: 'None (usually port 25)' },
+    ],
+  },
+  {
+    key: 'smtpUsername',
+    group: 'email',
+    label: 'Username',
+    description: 'Blank for a relay that does not ask for one.',
+    type: 'text',
+    env: 'SMTP_USERNAME',
+    default: '',
+    maxLength: 254,
+  },
+  {
+    key: 'smtpPassword',
+    group: 'email',
+    label: 'Password',
+    description: 'Stored in the database; never shown again.',
+    type: 'secret',
+    env: 'SMTP_PASSWORD',
+    default: '',
+  },
+  {
+    key: 'smtpFrom',
+    group: 'email',
+    label: 'Send as',
+    description:
+      'The sender people see, e.g. breakers@example.com or "Breaker Tracker <breakers@example.com>". The mail server must allow sending as this address.',
+    type: 'text',
+    env: 'SMTP_FROM',
+    default: '',
+    maxLength: 320,
+  },
+  {
+    key: 'selfServiceReset',
+    group: 'email',
+    label: 'Let people reset their own password by email',
+    description:
+      'Adds "Forgot your password?" to the sign-in page. Only for accounts with a password and an email address; the link goes only to that address.',
+    type: 'boolean',
+    env: 'SELF_SERVICE_RESET',
+    default: true,
   },
   {
     key: 'defaultSpaces',

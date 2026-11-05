@@ -17,18 +17,25 @@ by itself: access comes from grants on locations (see [Access and roles](access.
 
 ## Passwords and links
 
-There is no email server to set up. Invite and reset links are one-time links that you copy
-and send yourself, by email, Teams, a text, whatever suits.
+Invite and reset links are one-time links. Copy one and send it however suits (Teams, a text,
+your own email), or, once [email is set up](configuration.md#email), have the app email it.
 
-- **Invite someone** from **Access** on a location, or from **People**. Choose their role, copy
-  the link, and send it. They choose a username and password, or sign in with single sign-on
+- **Invite someone** from **Access** on a location, or from **People**. Choose their role, and
+  either fill in **Their email** and press **Email invite**, or press **Create invite link** and
+  send the link yourself. They choose a username and password, or sign in with single sign-on
   instead, and get the access you chose. Invite links last 7 days by default.
-- **Reset a password** with **Reset link** beside the person on **People**. It makes a link to
-  send them, valid for 48 hours by default. A manager can only do this for someone whose access is all inside what
-  the manager looks after, so a manager cannot take over an account that reaches further.
+- **Reset a password** from **People**: **Email reset link** sends it to the address on their
+  account (shown when email is set up and they have one), and **Reset link** makes one to copy.
+  Links last 48 hours by default. A manager can only do this for someone whose access is all
+  inside what the manager looks after, so a manager cannot take over an account that reaches
+  further.
+- **Forgot your password?** on the sign-in page (when email is set up) emails a reset link to
+  the address on the account. Without email, people ask whoever invited them for a link.
+- If an email cannot be sent, the link is shown anyway with what the mail server said, so it
+  can still be copied.
 - Passwords are at least 10 characters.
 
-Link lifetimes are under **Settings → Invite and reset links**.
+Link lifetimes are under **Settings → Invite and reset links**; email under **Settings → Email**.
 
 ## Two-step sign-in
 

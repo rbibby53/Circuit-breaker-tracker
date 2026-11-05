@@ -77,7 +77,14 @@ export function SettingsPage() {
           defs={SETTING_DEFS.filter((d) => d.group === g.id)}
           current={byKey}
           after={
-            g.id === 'sso' ? <GroupAccess provider={s.ssoProvider} /> : g.id === 'signin' ? <AllApiTokens /> : undefined
+            g.id === 'sso' ? (
+              <GroupAccess provider={s.ssoProvider} />
+            ) : g.id === 'signin' ? (
+              <AllApiTokens />
+            ) : g.id === 'email' ? (
+              // Below the settings form: the test has a form of its own.
+              <EmailStatus data={s} />
+            ) : undefined
           }
           extra={
             g.id === 'sso' ? (
@@ -359,6 +366,52 @@ function SsoStatus({ data }: { data: AdminSettingsResponse }) {
         </div>
       )}
       <ErrorNote error={check.error} />
+    </div>
+  );
+}
+
+function EmailStatus({ data }: { data: AdminSettingsResponse }) {
+  const me = useCurrentUser();
+  const [to, setTo] = useState('');
+  const test = useMutation({
+    mutationFn: () => api.post<{ ok: boolean; to?: string; message?: string }>('/api/admin/email-test', { to }),
+  });
+  const { enabled, problem } = data.email;
+  return (
+    <div className="subtle-box">
+      <span className="strong">
+        Email is {enabled ? 'on' : 'off'}
+        {enabled
+          ? ': invites and password reset links can be emailed.'
+          : problem
+            ? '.'
+            : ': links are copied and sent by hand.'}
+      </span>
+      {problem && <span className="error">{problem}</span>}
+      {enabled && (
+        <form
+          className="row"
+          onSubmit={(e) => {
+            e.preventDefault();
+            test.mutate();
+          }}
+        >
+          <input
+            type="email"
+            value={to}
+            onChange={(e) => setTo(e.target.value)}
+            placeholder={me.realUser.email ?? 'Send to…'}
+            aria-label="Send a test email to"
+            required={!me.realUser.email}
+          />
+          <button className="btn btn-sm" disabled={test.isPending}>
+            {test.isPending ? 'Sending…' : 'Send test email'}
+          </button>
+          {test.data?.ok && <span className="ok">Sent to {test.data.to}</span>}
+          {test.data && !test.data.ok && <span className="error">{test.data.message}</span>}
+        </form>
+      )}
+      <ErrorNote error={test.error} />
     </div>
   );
 }

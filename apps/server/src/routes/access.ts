@@ -11,6 +11,7 @@ import {
   isWithin,
   managerScopes,
   pathIds,
+  resetLinkSchema,
   updateGrantSchema,
   updateUserSchema,
   type AccessResponse,
@@ -25,9 +26,32 @@ import { actorOf, requireAdmin, requireAuth, requireRealAdmin } from '../context
 import { now, type DB } from '../db';
 import { assertCheck, badRequest, conflict, forbidden, idParam, notFound, parse } from '../errors';
 import { AccessData, getUser, ssoGroupsOf, toActor, toSummary, type GrantRow, type UserRow } from '../repo';
+import { emailStatus, inviteMessage, resetMessage, sendMail } from '../mail';
 import { destroyUserSessions } from '../sessions';
 import { daysFromNow, hoursFromNow, newToken } from '../tokens';
 import { adminCount } from '../users';
+
+/** Email a link that has just been made. A failure is reported, not thrown: the link still works. */
+async function emailLink(link: CreatedLink, send: () => Promise<void>, to: string): Promise<CreatedLink> {
+  try {
+    await send();
+    return { ...link, emailedTo: to };
+  } catch (err) {
+    return { ...link, emailError: err instanceof Error ? err.message : 'Sending failed.' };
+  }
+}
+
+/** Refuse before making a link that was asked to go by email when email cannot be sent. */
+function assertEmail(config: Config): void {
+  const status = emailStatus(config);
+  if (!status.enabled) {
+    throw badRequest(
+      status.problem
+        ? `Email is not working yet: ${status.problem}`
+        : 'Email is not set up here. Copy the link instead, or ask an admin to set up email under Settings.',
+    );
+  }
+}
 
 function baseUrl(config: Config, req: FastifyRequest): string {
   return config.appUrl ?? `${req.protocol}://${req.host}${config.basePath}`;
@@ -215,13 +239,16 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     const node = access.node(id);
     if (!node || !canView(actor, node, access.grants)) throw notFound();
     assertCheck(canGrant(actor, node, { userId: -1, role: body.role, inviteLimit: body.inviteLimit }, access.grants));
+    if (body.email) assertEmail(config);
+    // An emailed invite is listed under the address it went to, unless it has a note.
+    const note = body.note || body.email || null;
     const { token, hash } = newToken();
     const expiresAt = daysFromNow(config.settings.get('inviteDays'));
     const r = db
       .prepare(
         'INSERT INTO invites (token_hash, location_id, role, invite_limit, note, created_by, created_at, expires_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)',
       )
-      .run(hash, id, body.role, body.inviteLimit, body.note ?? null, auth.user.id, now(), expiresAt);
+      .run(hash, id, body.role, body.inviteLimit, note, auth.user.id, now(), expiresAt);
     audit(
       db,
       auth,
@@ -230,12 +257,29 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
         entity: 'invite',
         entityId: Number(r.lastInsertRowid),
         locationId: id,
-        summary: `Created a ${ROLE_LABELS[body.role]} invite${body.note ? ` for ${body.note}` : ''}`,
+        summary: `${body.email ? 'Emailed' : 'Created'} a ${ROLE_LABELS[body.role]} invite${note ? ` for ${note}` : ''}`,
         after: body,
       },
       access,
     );
-    return { url: `${baseUrl(config, req)}/invite/${token}`, expiresAt };
+    const link: CreatedLink = { url: `${baseUrl(config, req)}/invite/${token}`, expiresAt };
+    if (!body.email) return link;
+    const to = body.email;
+    return emailLink(
+      link,
+      () =>
+        sendMail(
+          config,
+          inviteMessage(config, to, {
+            ...link,
+            invitedBy: auth.realUser.display_name,
+            locationPath: access.pathLabel(id),
+            roleLabel: ROLE_LABELS[body.role],
+          }),
+          'an invite',
+        ),
+      to,
+    );
   });
 
   app.get('/api/locations/:id/invites', async (req) => {
@@ -503,6 +547,12 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
     const theirs = access.grants.filter((g) => g.userId === id);
     if (!actor.isAdmin && !canSeeUser(actor, theirs, access.nodes, access.grants)) throw notFound();
     assertCheck(canResetUser(actor, toActor(user), theirs, access.nodes, access.grants));
+    const { email } = parse(resetLinkSchema, req.body ?? {});
+    if (email) {
+      assertEmail(config);
+      if (!user.email)
+        throw badRequest(`${user.display_name} has no email address. Add one, or copy the link instead.`);
+    }
     const { token, hash } = newToken();
     const expiresAt = hoursFromNow(config.settings.get('resetHours'));
     db.prepare(
@@ -512,9 +562,26 @@ export function accessRoutes(app: FastifyInstance, db: DB, config: Config): void
       action: 'user.reset_link',
       entity: 'user',
       entityId: id,
-      summary: `Created a password reset link for ${user.display_name}`,
+      summary: `${email ? 'Emailed' : 'Created'} a password reset link for ${user.display_name}`,
     });
-    return { url: `${baseUrl(config, req)}/reset/${token}`, expiresAt };
+    const link: CreatedLink = { url: `${baseUrl(config, req)}/reset/${token}`, expiresAt };
+    if (!email) return link;
+    const to = user.email!;
+    return emailLink(
+      link,
+      () =>
+        sendMail(
+          config,
+          resetMessage(config, to, {
+            ...link,
+            displayName: user.display_name,
+            username: user.username,
+            requestedBy: auth.realUser.display_name,
+          }),
+          `a password reset link for ${user.username}`,
+        ),
+      to,
+    );
   });
 
   // ---- View as ----------------------------------------------------------------------

@@ -5,6 +5,7 @@ import {
   parseGroupList,
   updateMeSchema,
   changePasswordSchema,
+  forgotPasswordSchema,
   loginSchema,
   resetPasswordSchema,
   setupSchema,
@@ -24,12 +25,17 @@ import { hashPassword, verifyPassword } from '../passwords';
 import { countUsers, findUserByLogin, getUser, type UserRow } from '../repo';
 import { deviceName } from '../device';
 import { clearSessionCookie, createSession, destroySession, destroyUserSessions, type SessionRow } from '../sessions';
-import { hashToken, isExpired } from '../tokens';
+import { hashToken, hoursFromNow, isExpired, newToken } from '../tokens';
 import { adminCount, createUser, meResponse, uniqueUsername } from '../users';
 import { logger } from '../log';
+import { emailStatus, resetMessage, selfServiceResetOn, sendMail } from '../mail';
 import { startTotpChallenge } from './totp';
 
 const strictLimit = { rateLimit: { max: 10, timeWindow: '1 minute' } };
+/** "Forgot your password?" sends email, so it is held back harder than signing in. */
+const forgotLimit = { rateLimit: { max: 5, timeWindow: '15 minutes' } };
+/** One emailed reset per account per this long, so the form cannot flood someone's inbox. */
+const FORGOT_GAP_MS = 5 * 60_000;
 
 export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
   app.get('/api/auth/config', async (): Promise<AuthConfig> => ({
@@ -46,6 +52,8 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     publicPanels: config.settings.get('publicPanels'),
     gravatar: config.settings.get('gravatar'),
     apiTokens: config.settings.get('allowApiTokens'),
+    email: emailStatus(config).enabled,
+    passwordResetEmail: selfServiceResetOn(config),
     oidc: { enabled: !!config.oidc, label: config.oidc?.label ?? '', provider: config.oidc?.provider ?? '' },
   }));
 
@@ -231,6 +239,52 @@ export function authRoutes(app: FastifyInstance, db: DB, config: Config): void {
     if (!user || user.disabled) throw gone('This account is not active.');
     return { row, user };
   };
+
+  // ---- Forgot your password? (a reset link by email) --------------------------------
+
+  app.post('/api/auth/forgot', { config: forgotLimit }, async (req) => {
+    if (!selfServiceResetOn(config)) throw notFound('Password reset by email is not available here.');
+    const { login } = parse(forgotPasswordSchema, req.body);
+    const user = findUserByLogin(db, login);
+    // The answer is the same whether or not anything is sent, so the form cannot be used to
+    // find out who has an account. Why nothing was sent goes to the log for admins.
+    const skip = (why: string) => {
+      req.log.info(`Password reset by email not sent for ${JSON.stringify(login)}: ${why}`);
+      return { ok: true };
+    };
+    if (!user) return skip('no such account');
+    if (user.disabled) return skip('account is disabled');
+    if (!user.email) return skip('account has no email address');
+    if (!user.password_hash) return skip('account signs in with single sign-on only');
+    if (!config.settings.get('allowLocalLogin') && !user.is_admin) return skip('password sign-in is turned off');
+    const recent = db
+      .prepare('SELECT 1 FROM reset_tokens WHERE user_id = ? AND created_by IS NULL AND created_at > ?')
+      .get(user.id, new Date(Date.now() - FORGOT_GAP_MS).toISOString());
+    if (recent) return skip('a link was emailed in the last few minutes');
+
+    const { token, hash } = newToken();
+    const expiresAt = hoursFromNow(config.settings.get('resetHours'));
+    db.prepare(
+      'INSERT INTO reset_tokens (token_hash, user_id, created_by, created_at, expires_at) VALUES (?, ?, NULL, ?, ?)',
+    ).run(hash, user.id, now(), expiresAt);
+    audit(db, null, {
+      action: 'user.reset_email',
+      entity: 'user',
+      entityId: user.id,
+      summary: `${user.username} asked for a password reset link by email`,
+    });
+    // Not awaited: a slow mail server must not make "has an account" answer slower than
+    // "has none". sendMail logs a failure.
+    const message = resetMessage(config, user.email, {
+      url: `${config.appUrl}/reset/${token}`,
+      expiresAt,
+      displayName: user.display_name,
+      username: user.username,
+      requestedBy: null,
+    });
+    void sendMail(config, message, `a password reset link for ${user.username}`).catch(() => undefined);
+    return { ok: true };
+  });
 
   app.get('/api/reset/:token', async (req) => {
     const { user, row } = usableReset((req.params as { token: string }).token);

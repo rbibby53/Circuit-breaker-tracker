@@ -252,7 +252,7 @@ docker compose up -d
 ```
 
 Open `http://<server>:2757`, create the first admin account on the setup screen, then go to
-**Settings** to set the public address, reverse proxy, single sign-on and the rest. Upgrades are
+**Settings** to set the public address, reverse proxy, single sign-on, email and the rest. Upgrades are
 a `docker compose pull && docker compose up -d`; the database updates itself on start.
 
 To serve it under a path such as `http://<host>/breakers/` (sharing a host with other apps, for

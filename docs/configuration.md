@@ -75,6 +75,35 @@ database and has no environment variable.
 | Invite links last (days)          | `INVITE_DAYS` | `7`     | 1–90. How long a new invite link works.          |
 | Password reset links last (hours) | `RESET_HOURS` | `48`    | 1–720. How long a new password reset link works. |
 
+### Email
+
+Optional. With it, invites and password reset links can be emailed as well as copied, and
+people can reset their own password from the sign-in page. Without it, everything works as
+before: links are copied and sent by hand.
+
+| Setting                                      | Variable                         | Default    | What it does                                                                                           |
+| -------------------------------------------- | -------------------------------- | ---------- | ------------------------------------------------------------------------------------------------------ |
+| SMTP server                                  | `SMTP_HOST`                      | (blank)    | The mail server, e.g. your campus relay or `smtp.example.com`. Blank turns email off.                  |
+| Port                                         | `SMTP_PORT`                      | `587`      | Usually 587 with STARTTLS, 465 with TLS, 25 for an internal relay.                                     |
+| Encryption                                   | `SMTP_SECURITY`                  | `starttls` | `starttls` (refuses to send if the server cannot upgrade), `tls` (from the start), or `none`.          |
+| Username, Password                           | `SMTP_USERNAME`, `SMTP_PASSWORD` | (blank)    | For a server that asks for them. Leave blank for a relay that accepts mail from your network.          |
+| Send as                                      | `SMTP_FROM`                      | (blank)    | `breakers@example.com` or `Breaker Tracker <breakers@example.com>`. The server must allow this sender. |
+| Let people reset their own password by email | `SELF_SERVICE_RESET`             | on         | Adds **Forgot your password?** to the sign-in page.                                                    |
+
+- Email also needs the **Public address** (under General), because the links in emails are
+  opened on other devices. Settings says what is missing, and **Send test email** checks the
+  whole thing. The start-up log has an `Email:` line too.
+- A mail server with a certificate from your own certificate authority: mount the CA's PEM
+  file into the container and set `NODE_EXTRA_CA_CERTS` to its path, e.g.
+  `NODE_EXTRA_CA_CERTS=/certs/campus-ca.pem`. There is no option to skip certificate checks.
+- Microsoft 365 and Google Workspace have been moving away from username-and-password SMTP.
+  If your organisation uses them, ask your email admins for the supported route; an internal
+  relay is often simplest.
+- **Forgot your password?** only sends to the email address already on the account, only for
+  accounts with a password, at most once every 5 minutes per account, and answers the same
+  whether or not an account exists. With **Allow password sign-in** off, it works for admins
+  only. A reset link never gets around two-step sign-in.
+
 ### New panel defaults
 
 Pre-filled when someone adds a panel. People can change them for each panel.

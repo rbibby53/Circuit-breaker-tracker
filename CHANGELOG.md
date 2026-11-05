@@ -4,6 +4,15 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+### Added
+
+- **Email** (optional, under **Settings → Email**, or `SMTP_*` variables): invites and password
+  reset links can be emailed as well as copied, with **Send test email** to check the setup.
+  If sending fails, the link is still shown to copy.
+- **Forgot your password?** on the sign-in page, once email is set up: it emails a reset link
+  to the address on the account. It answers the same whether or not the account exists,
+  sends at most once every 5 minutes per account, and can be turned off.
+
 ## 1.5.0 — 2026-11-05
 
 ### Added

@@ -6,6 +6,7 @@ import path from 'node:path';
 import { SETTING_DEFS, parseGroupList } from '@cbt/core';
 import type { Config } from './config';
 import type { DB } from './db';
+import { describeEmail } from './mail';
 
 export interface StartupLine {
   level: 'info' | 'warn';
@@ -73,6 +74,10 @@ export function startupLines(db: DB, config: Config, env: NodeJS.ProcessEnv = pr
         : 'Single sign-on needs the public address to be set, so it is off.',
     );
   }
+
+  const email = describeEmail(config);
+  if (email.startsWith('Email: not working')) warn(email);
+  else info(email);
 
   info(
     `Network: behind a reverse proxy ${s.get('trustProxy') ? 'yes' : 'no'} · HTTPS-only cookies ${config.cookieSecure ? 'yes' : 'no'}`,
