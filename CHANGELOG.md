@@ -4,6 +4,8 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.5.0 — 2026-11-05
+
 ### Added
 
 - **Documentation** in [`docs/`](docs/README.md): install and upgrade, every setting with its
@@ -14,6 +16,10 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
   that shares one host name between apps and forwards the full path. The web UI, API,
   downloads, invite links and QR codes all use the prefix, and the sign-in cookie is limited
   to it. Read at start-up, so the same image works at the root; unset changes nothing.
+
+### Changed
+
+- Dependencies updated to their latest minor and patch releases.
 
 ## 1.4.0 — 2026-10-26
 
