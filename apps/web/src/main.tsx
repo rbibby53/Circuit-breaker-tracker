@@ -125,6 +125,10 @@ const PublicPanelPage = lazyPage(
   () => import('./pages/PublicPanel'),
   (m) => m.PublicPanelPage,
 );
+const ForgotPage = lazyPage(
+  () => import('./pages/Forgot'),
+  (m) => m.ForgotPage,
+);
 const ResetPage = lazyPage(
   () => import('./pages/Reset'),
   (m) => m.ResetPage,
@@ -175,6 +179,7 @@ createRoot(document.getElementById('root')!).render(
               <Route path="/setup" element={<SetupPage />} />
               <Route path="/login" element={<LoginPage />} />
               <Route path="/invite/:token" element={<InvitePage />} />
+              <Route path="/forgot" element={<ForgotPage />} />
               <Route path="/reset/:token" element={<ResetPage />} />
               <Route path="/p/:token" element={<PublicPanelPage />} />
               <Route

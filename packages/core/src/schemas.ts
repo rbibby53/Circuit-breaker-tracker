@@ -91,6 +91,23 @@ export const inviteInputSchema = z.object({
   role: roleSchema,
   inviteLimit: roleSchema.nullable().default(null),
   note: z.string().trim().max(200).optional(),
+  /** Email the link to this address too (needs email set up under Settings). */
+  email: z.string().trim().toLowerCase().email().max(200).optional(),
+});
+
+/** A reset link for someone; `email: true` also sends it to their email address. */
+export const resetLinkSchema = z.object({
+  email: z.boolean().default(false),
+});
+
+/** "Forgot your password?": a username or email address. */
+export const forgotPasswordSchema = z.object({
+  login: z.string().trim().min(1).max(200),
+});
+
+/** Send a test email (to the admin's own address when blank). */
+export const testEmailSchema = z.object({
+  to: z.union([z.literal(''), z.string().trim().toLowerCase().email().max(200)]).default(''),
 });
 
 export const acceptInviteSchema = z.object({

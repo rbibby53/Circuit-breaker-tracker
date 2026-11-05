@@ -28,10 +28,13 @@ export function UsersPage() {
   const invalidate = () => qc.invalidateQueries({ queryKey: ['users'] });
 
   const resetLink = useMutation({
-    mutationFn: (u: UserListItem) =>
-      api.post<CreatedLink>(`/api/users/${u.id}/reset-link`).then((l) => ({ name: u.displayName, link: l })),
+    mutationFn: (v: { user: UserListItem; email: boolean }) =>
+      api
+        .post<CreatedLink>(`/api/users/${v.user.id}/reset-link`, { email: v.email })
+        .then((l) => ({ name: v.user.displayName, link: l })),
     onSuccess: setLink,
   });
+  const canEmail = !!config.data?.email;
   const update = useMutation({
     mutationFn: (v: { id: number; body: object }) => api.patch(`/api/users/${v.id}`, v.body),
     onSuccess: invalidate,
@@ -81,7 +84,7 @@ export function UsersPage() {
       {link && (
         <div className="panel stack">
           <span className="strong">Password reset link for {link.name}</span>
-          <LinkBox url={link.link.url} expiresAt={link.link.expiresAt} onClose={() => setLink(null)} />
+          <LinkBox {...link.link} onClose={() => setLink(null)} />
         </div>
       )}
       <ErrorNote
@@ -185,9 +188,19 @@ export function UsersPage() {
                       View as
                     </button>
                   )}
+                  {u.canReset && u.id !== me.realUser.id && !me.viewingAs && canEmail && u.email && (
+                    <button
+                      className="btn btn-sm"
+                      title={`Email a password reset link to ${u.email}`}
+                      disabled={resetLink.isPending}
+                      onClick={() => resetLink.mutate({ user: u, email: true })}
+                    >
+                      Email reset link
+                    </button>
+                  )}
                   {u.canReset && u.id !== me.realUser.id && !me.viewingAs && (
-                    <button className="btn btn-sm" onClick={() => resetLink.mutate(u)}>
-                      Reset link
+                    <button className="btn btn-sm" onClick={() => resetLink.mutate({ user: u, email: false })}>
+                      {canEmail && u.email ? 'Copy reset link' : 'Reset link'}
                     </button>
                   )}
                   {u.canReset && u.totp && u.id !== me.realUser.id && !me.viewingAs && (

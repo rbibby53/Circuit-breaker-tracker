@@ -18,6 +18,7 @@
     "@node-rs/argon2": "^2.2.2",
     "better-sqlite3": "^13.0.3",
     "fastify": "^5.12.7",
+    "nodemailer": "^10.3.1",
     "openid-client": "^6.8.8",
     "pdfkit": "^0.20.2",
     "qrcode": "^1.5.4",
@@ -26,9 +27,12 @@
   "devDependencies": {
     "@types/better-sqlite3": "^9.6.0",
     "@types/node": "^26.6.6",
+    "@types/nodemailer": "^8.0.2",
     "@types/pdfkit": "^0.17.7",
     "@types/qrcode": "^1.5.6",
+    "@types/smtp-server": "^3.5.13",
     "esbuild": "^0.28.2",
+    "smtp-server": "^3.21.3",
     "tsx": "^4.23.15",
     "typescript": "~6.0.3",
     "vitest": "^5.0.5"

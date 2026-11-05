@@ -1,6 +1,6 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { useState, type FormEvent } from 'react';
-import { Navigate, useNavigate, useSearchParams } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useTitle } from '../lib/useTitle';
 import type { LoginResponse } from '@cbt/core';
 import { api } from '../api';
@@ -153,7 +153,17 @@ export function LoginPage() {
             Admin sign-in with a password
           </button>
         )}
-        {!adminsOnly && <p className="muted small">Forgot your password? Ask whoever invited you for a reset link.</p>}
+        {config.data?.passwordResetEmail
+          ? (!adminsOnly || showPassword) && (
+              <p className="muted small">
+                <Link to={`/forgot${form.username ? `?login=${encodeURIComponent(form.username)}` : ''}`}>
+                  Forgot your password?
+                </Link>
+              </p>
+            )
+          : !adminsOnly && (
+              <p className="muted small">Forgot your password? Ask whoever invited you for a reset link.</p>
+            )}
       </section>
     </AuthShell>
   );

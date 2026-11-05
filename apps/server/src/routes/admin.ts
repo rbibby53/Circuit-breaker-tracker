@@ -10,6 +10,7 @@ import {
   type LogLines,
   type RestoreUpload,
   type SettingKey,
+  testEmailSchema,
 } from '@cbt/core';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
@@ -21,6 +22,7 @@ import type { Config } from '../config';
 import { requireAdmin, requireAuth } from '../context';
 import type { DB } from '../db';
 import { badRequest, notFound, parse } from '../errors';
+import { emailStatus, sendMail, testMessage } from '../mail';
 import { discover, redirectUri } from '../oidc';
 import { inspectBackup, restoreFrom } from '../restore';
 import { clearSessionCookie } from '../sessions';
@@ -51,6 +53,7 @@ export function adminRoutes(app: FastifyInstance, db: DB, config: Config, backup
       ssoEnabled: !!config.oidc,
       ssoProvider: config.oidc?.provider ?? 'single sign-on',
       redirectUri: config.publicUrl ? redirectUri(config) : null,
+      email: emailStatus(config),
       about: {
         version: config.version,
         nodeVersion: process.version,
@@ -116,6 +119,21 @@ export function adminRoutes(app: FastifyInstance, db: DB, config: Config, backup
       return { ok: true, issuer: found.serverMetadata().issuer };
     } catch (err) {
       return { ok: false, message: err instanceof Error ? err.message : 'Could not reach the identity provider.' };
+    }
+  });
+
+  /** Send a test email with the saved settings, to the admin's own address unless another is given. */
+  app.post('/api/admin/email-test', { config: { rateLimit: { max: 10, timeWindow: '1 minute' } } }, async (req) => {
+    const auth = requireAuth(req);
+    requireAdmin(auth);
+    const { to: given } = parse(testEmailSchema, req.body ?? {});
+    const to = given || auth.realUser.email;
+    if (!to) throw badRequest('Type an address to send to, or add your own email address under Account.');
+    try {
+      await sendMail(config, testMessage(config, to, auth.realUser.display_name), 'a test email');
+      return { ok: true, to };
+    } catch (err) {
+      return { ok: false, message: err instanceof Error ? err.message : 'Sending failed.' };
     }
   });
 

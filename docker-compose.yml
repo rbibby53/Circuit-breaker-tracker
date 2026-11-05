@@ -15,7 +15,7 @@ services:
       # http://<host>/breakers/ (see docs/install.md). Unset means the site root.
       # BASE_PATH: '/breakers'
       # Everything else is set in the app under Settings. Any of those can also be pinned
-      # here, e.g. PUBLIC_URL, TRUST_PROXY or OIDC_ISSUER (see README).
+      # here, e.g. PUBLIC_URL, TRUST_PROXY, OIDC_ISSUER or SMTP_HOST (see docs/configuration.md).
       # Optional: create the first admin automatically instead of using the setup screen.
       # ADMIN_USERNAME: 'admin'
       # ADMIN_PASSWORD: 'change-me-to-something-long'

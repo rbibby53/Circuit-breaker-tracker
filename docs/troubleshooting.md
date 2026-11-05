@@ -7,6 +7,7 @@ per request while you look into something.
 - [Starting up](#starting-up)
 - [Reverse proxy and addresses](#reverse-proxy-and-addresses)
 - [Single sign-on](#single-sign-on)
+- [Email](#email)
 - [Access](#access)
 - [Phones and field mode](#phones-and-field-mode)
 - [Printing](#printing)
@@ -80,10 +81,34 @@ and they are in none of them.
 new secret and paste it into **Settings → Single sign-on**. Admins can still sign in with their
 password meanwhile.
 
-**The only admin forgot their password.** Another admin can send them a reset link from
-**People**. If there is no other admin but single sign-on is set up with **Admin groups**, add
+**The only admin forgot their password.** With email set up and an email address on their
+account, **Forgot your password?** on the sign-in page sends them a link. Otherwise another
+admin can send them a reset link from **People**. If there is no other admin but single sign-on is set up with **Admin groups**, add
 yourself to an admin group in the provider and sign in with single sign-on. Keep a second
 admin account so this never comes up.
+
+## Email
+
+Start with **Settings → Email → Send test email**: it shows what the mail server said.
+
+**Settings says email is off, or what is missing.** It needs the SMTP server, **Send as**, and
+the **Public address** under General.
+
+**"self-signed certificate" or "unable to verify the first certificate".** The mail server uses
+a certificate from your own certificate authority. Mount the CA's PEM file and set
+`NODE_EXTRA_CA_CERTS` to its path (see [Email settings](configuration.md#email)).
+
+**Authentication or "relay denied" errors.** Check the username and password, or ask whoever
+runs the mail server to allow relaying from this server's address and sending as the **Send
+as** address.
+
+**The test works but people do not get the email.** Ask them to check junk mail. Mail from an
+address your domain does not authorise (SPF, DKIM) is often filtered; use an address your mail
+server is allowed to send as.
+
+**Forgot your password? says a link is on its way, but nothing arrives.** On purpose, the page
+looks the same either way. The log says why nothing was sent: no such account, no email address
+on it, single sign-on only, or a link was already sent in the last 5 minutes.
 
 ## Access
 
