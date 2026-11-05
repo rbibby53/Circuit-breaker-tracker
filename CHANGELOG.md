@@ -4,6 +4,8 @@ Notable changes to Circuit Breaker Tracker. Versions follow [semantic versioning
 
 ## Unreleased
 
+## 1.7.0 — 2026-11-05
+
 ### Added
 
 - **Pending invites** at the top of **People**: every invite link nobody has used yet, across
